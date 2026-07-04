@@ -2,7 +2,7 @@ import { STAT_META, type Quest } from "@/lib/game";
 
 interface Props {
   quest: Quest;
-  onToggle: (id: string) => void;
+  onToggle: (id: string, e: React.MouseEvent) => void;
   onDelete: (id: string) => void;
 }
 

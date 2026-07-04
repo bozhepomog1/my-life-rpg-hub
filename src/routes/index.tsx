@@ -136,9 +136,7 @@ function Home() {
               </div>
             )}
             {activeQuests.map((q) => (
-              <div key={q.id} onClick={(e) => toggleQuest(q.id, e)}>
-                <QuestItem quest={q} onToggle={() => {}} onDelete={deleteQuest} />
-              </div>
+              <QuestItem key={q.id} quest={q} onToggle={toggleQuest} onDelete={deleteQuest} />
             ))}
           </div>
 

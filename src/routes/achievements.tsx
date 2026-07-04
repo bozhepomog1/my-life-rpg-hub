@@ -1,6 +1,6 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useGameState } from "@/lib/use-game-state";
-import { STAT_META, type StatKey } from "@/lib/game";
+import { computeDiscipline, defaultState, STAT_META, type StatKey } from "@/lib/game";
 import { TabNav } from "./index";
 
 export const Route = createFileRoute("/achievements")({
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/achievements")({
 });
 
 function Achievements() {
-  const { state, update, hydrated } = useGameState();
+  const { state, setState, hydrated } = useGameState();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (!hydrated) return null;
@@ -24,33 +24,33 @@ function Achievements() {
     .sort((a, b) => b.total - a.total);
 
   const completed = state.quests.filter((q) => q.done).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+  const disc = computeDiscipline(state);
 
   function resetAll() {
     if (!confirm("Сбросить весь прогресс? Это нельзя отменить.")) return;
-    update(() => ({
-      avatar: state.avatar,
-      name: state.name,
-      totalXp: 0,
-      level: 1,
-      stats: { strength: { level: 0, xp: 0 }, intellect: { level: 0, xp: 0 }, will: { level: 0, xp: 0 } },
-      quests: [],
-      completedCount: 0,
-    }));
+    setState(defaultState());
+  }
+  function restartDeposit() {
+    if (!confirm("Перезапустить залог? Отсчёт 30 дней начнётся заново.")) return;
+    setState({ ...state, depositStartAt: Date.now(), dailyCompletions: {}, depositLost: false });
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:pt-10">
+    <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
       <TabNav pathname={pathname} />
 
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatCard label="Уровень героя" value={state.level} accent="var(--color-primary)" />
-          <StatCard label="Общий XP" value={state.totalXp} accent="var(--color-accent)" />
-          <StatCard label="Выполнено квестов" value={state.completedCount} accent="var(--will)" />
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+          <StatCard label="Уровень героя" value={state.level} accent="#22d3ee" />
+          <StatCard label="Общий XP" value={state.totalXp} accent="#f0abfc" />
+          <StatCard label="Квесты" value={state.completedCount} accent="#a3e635" />
+          <StatCard label="Прогресс залога" value={`${disc.progress}%`} accent="#f59e0b" />
         </div>
 
-        <section className="card-elevated p-5">
-          <h2 className="mb-4 font-display text-lg uppercase tracking-wider">Топ характеристик</h2>
+        <section className="panel p-5">
+          <h2 className="mb-4 font-display text-sm tracking-[0.25em]" style={{ color: "#22d3ee" }}>
+            ТОП ХАРАКТЕРИСТИК
+          </h2>
           <div className="space-y-3">
             {stats.map((s, i) => {
               const meta = STAT_META[s.key];
@@ -64,14 +64,14 @@ function Achievements() {
                       <span>{meta.icon}</span>
                       <span style={{ color: meta.color }}>{meta.label}</span>
                     </span>
-                    <span className="text-muted-foreground">
-                      Ур. {state.stats[s.key].level} · {s.total} XP
+                    <span className="font-display text-xs text-muted-foreground">
+                      LV {state.stats[s.key].level} · {s.total} XP
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="bar-track">
                     <div
-                      className="h-full rounded-full transition-[width] duration-700"
-                      style={{ width: `${pct}%`, backgroundColor: meta.color, boxShadow: `0 0 10px ${meta.color}` }}
+                      className="bar-fill"
+                      style={{ width: `${pct}%`, background: meta.gradient, color: meta.color }}
                     />
                   </div>
                 </div>
@@ -80,13 +80,15 @@ function Achievements() {
           </div>
         </section>
 
-        <section className="card-elevated p-5">
-          <h2 className="mb-4 font-display text-lg uppercase tracking-wider">История квестов</h2>
+        <section className="panel p-5">
+          <h2 className="mb-4 font-display text-sm tracking-[0.25em]" style={{ color: "#22d3ee" }}>
+            ИСТОРИЯ КВЕСТОВ
+          </h2>
           {completed.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ты ещё не выполнил ни одного квеста. Вперёд!</p>
+            <p className="text-sm text-muted-foreground">Ещё нет выполненных квестов.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {completed.slice(0, 50).map((q) => {
+              {completed.slice(0, 100).map((q) => {
                 const meta = STAT_META[q.stat];
                 return (
                   <li key={q.id} className="flex items-center justify-between gap-2 py-2 text-sm">
@@ -94,8 +96,8 @@ function Achievements() {
                       <span>{meta.icon}</span>
                       <span className="truncate">{q.title}</span>
                     </div>
-                    <div className="shrink-0 text-xs" style={{ color: meta.color }}>
-                      +{q.reward} {meta.label}
+                    <div className="shrink-0 font-display text-[11px]" style={{ color: meta.color }}>
+                      +{q.reward}
                     </div>
                   </li>
                 );
@@ -104,22 +106,37 @@ function Achievements() {
           )}
         </section>
 
-        <button
-          onClick={resetAll}
-          className="w-full rounded-md border border-destructive/40 px-4 py-2 text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground"
-        >
-          Сбросить прогресс
-        </button>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            onClick={restartDeposit}
+            className="rounded-md border px-4 py-2 font-display text-xs tracking-wider"
+            style={{ borderColor: "rgba(34,211,238,0.4)", color: "#22d3ee" }}
+          >
+            ПЕРЕЗАПУСТИТЬ ЗАЛОГ
+          </button>
+          <button
+            onClick={resetAll}
+            className="rounded-md border border-destructive/40 px-4 py-2 font-display text-xs tracking-wider text-destructive hover:bg-destructive hover:text-destructive-foreground"
+          >
+            СБРОСИТЬ ПРОГРЕСС
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
   return (
-    <div className="card-elevated p-4">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 font-display text-3xl" style={{ color: accent }}>
+    <div
+      className="panel corner-cut p-4"
+      style={{ borderColor: `${accent}40`, boxShadow: `0 0 20px -8px ${accent}` }}
+    >
+      <div className="font-display text-[10px] tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div
+        className="mt-1 font-display text-2xl sm:text-3xl neon-text"
+        style={{ color: accent }}
+      >
         {value}
       </div>
     </div>

@@ -15,7 +15,7 @@ export function QuestItem({ quest, onToggle, onDelete }: Props) {
       }`}
     >
       <button
-        onClick={() => !quest.done && onToggle(quest.id)}
+        onClick={(e) => !quest.done && onToggle(quest.id, e)}
         disabled={quest.done}
         className="relative grid h-8 w-8 shrink-0 place-items-center rounded-md border-2 transition-colors"
         style={{

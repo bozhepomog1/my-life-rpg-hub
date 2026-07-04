@@ -1,99 +1,125 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
-import { QuestItem } from "@/components/QuestItem";
-import { AddQuestForm } from "@/components/AddQuestForm";
+import { QuestCard } from "@/components/QuestCard";
+import { DepositWidget } from "@/components/DepositWidget";
+import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { useGameState } from "@/lib/use-game-state";
-import { applyReward, STAT_META, type StatKey } from "@/lib/game";
+import {
+  applyReward,
+  CATEGORY_META,
+  computeDiscipline,
+  resetDailyIfNeeded,
+  STAT_META,
+  todayKey,
+  type QuestCategory,
+  type StatKey,
+} from "@/lib/game";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Life RPG — Геймификация жизни" },
+      { name: "description", content: "Личный RPG-трекер: квесты, залог $1000 и календарь дисциплины." },
+    ],
+  }),
   component: Home,
 });
 
-interface FloatXp {
-  id: number;
-  text: string;
-  color: string;
-  x: number;
-  y: number;
-}
+interface FloatXp { id: number; text: string; color: string; x: number; y: number }
 
 function Home() {
   const { state, update, hydrated } = useGameState();
-  const [showForm, setShowForm] = useState(false);
   const [floats, setFloats] = useState<FloatXp[]>([]);
   const [levelPulse, setLevelPulse] = useState(false);
+  const [tab, setTab] = useState<QuestCategory>("daily");
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const activeQuests = state.quests.filter((q) => !q.done);
-  const doneToday = state.quests.filter((q) => q.done);
+  // Reset daily quests at midnight
+  useEffect(() => {
+    if (!hydrated) return;
+    update((s) => resetDailyIfNeeded(s));
+    const t = setInterval(() => update((s) => resetDailyIfNeeded(s)), 60_000);
+    return () => clearInterval(t);
+  }, [hydrated, update]);
 
-  function addQuest(title: string, stat: StatKey, reward: number) {
-    update((s) => ({
-      ...s,
-      quests: [
-        { id: crypto.randomUUID(), title, stat, reward, done: false, createdAt: Date.now() },
-        ...s.quests,
-      ],
-    }));
-    setShowForm(false);
-  }
+  const disc = useMemo(() => (hydrated ? computeDiscipline(state) : null), [state, hydrated]);
 
-  function toggleQuest(id: string, e?: React.MouseEvent) {
+  function completeQuest(id: string, _photo: string | undefined, e?: React.MouseEvent) {
     const quest = state.quests.find((q) => q.id === id);
     if (!quest || quest.done) return;
     const meta = STAT_META[quest.stat];
-
-    // spawn floating xp near the click
     const rect = (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect();
-    const id2 = ++floatId.current;
+    const fid = ++floatId.current;
     setFloats((f) => [
       ...f,
       {
-        id: id2,
+        id: fid,
         text: `+${quest.reward} ${meta.label}`,
         color: meta.color,
         x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
         y: rect ? rect.top : window.innerHeight / 2,
       },
     ]);
-    setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id2)), 1000);
+    setTimeout(() => setFloats((f) => f.filter((x) => x.id !== fid)), 1100);
 
     update((s) => {
-      const prevLevel = s.level;
-      const withReward = applyReward(s, quest.stat, quest.reward);
-      if (withReward.level > prevLevel) {
-        setTimeout(() => {
-          setLevelPulse(true);
-          setTimeout(() => setLevelPulse(false), 700);
-        }, 200);
+      const prev = s.level;
+      const rewarded = applyReward(s, quest.stat, quest.reward);
+      if (rewarded.level > prev) {
+        setTimeout(() => { setLevelPulse(true); setTimeout(() => setLevelPulse(false), 700); }, 200);
+      }
+      // record daily completion
+      const dailyCompletions = { ...rewarded.dailyCompletions };
+      if (quest.category === "daily") {
+        const k = todayKey();
+        const arr = dailyCompletions[k] ? [...dailyCompletions[k]] : [];
+        if (!arr.includes(quest.id)) arr.push(quest.id);
+        dailyCompletions[k] = arr;
       }
       return {
-        ...withReward,
-        quests: withReward.quests.map((q) =>
-          q.id === id ? { ...q, done: true, completedAt: Date.now() } : q
+        ...rewarded,
+        dailyCompletions,
+        quests: rewarded.quests.map((q) =>
+          q.id === id ? { ...q, done: true, completedAt: Date.now(), lastResetDate: todayKey() } : q
         ),
       };
     });
+  }
+
+  function togglChecklist(qid: string, itemId: string) {
+    update((s) => ({
+      ...s,
+      quests: s.quests.map((q) =>
+        q.id === qid && q.checklist
+          ? { ...q, checklist: q.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c)) }
+          : q
+      ),
+    }));
+  }
+
+  function setPhoto(id: string, data: string) {
+    update((s) => ({ ...s, quests: s.quests.map((q) => (q.id === id ? { ...q, photoData: data } : q)) }));
   }
 
   function deleteQuest(id: string) {
     update((s) => ({ ...s, quests: s.quests.filter((q) => q.id !== id) }));
   }
 
-  useEffect(() => {
-    // no-op: hydration handled by hook
-  }, []);
-
   if (!hydrated) return null;
 
+  const questsByCat = state.quests.filter((q) => q.category === tab);
+  const active = questsByCat.filter((q) => !q.done);
+  const done = questsByCat.filter((q) => q.done);
+  const lost = disc?.lost;
+
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:pt-10">
+    <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
       <TabNav pathname={pathname} />
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <ProfileHeader
           state={state}
           onChangeAvatar={(a) => update((s) => ({ ...s, avatar: a }))}
@@ -101,53 +127,84 @@ function Home() {
           levelUpPulse={levelPulse}
         />
 
+        <DepositWidget state={state} />
+
         <section>
-          <h2 className="mb-3 font-display text-lg uppercase tracking-wider text-muted-foreground">
-            Характеристики
+          <h2 className="mb-3 font-display text-xs tracking-[0.25em] text-muted-foreground">
+            ХАРАКТЕРИСТИКИ
           </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
             {(Object.keys(state.stats) as StatKey[]).map((k) => (
               <StatBar key={k} stat={k} level={state.stats[k].level} xp={state.stats[k].xp} />
             ))}
           </div>
         </section>
 
+        <DisciplineCalendar state={state} />
+
         <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg uppercase tracking-wider text-muted-foreground">
-              Квесты на сегодня
-            </h2>
-            {!showForm && (
-              <button
-                onClick={() => setShowForm(true)}
-                className="rounded-md bg-primary px-3 py-1.5 font-display text-xs uppercase tracking-wider text-primary-foreground hover:brightness-110"
-              >
-                + Добавить квест
-              </button>
-            )}
+          <h2 className="mb-3 font-display text-xs tracking-[0.25em] text-muted-foreground">
+            КВЕСТЫ
+          </h2>
+          <div className="mb-3 grid grid-cols-3 gap-1.5 sm:gap-2">
+            {(Object.keys(CATEGORY_META) as QuestCategory[]).map((c) => {
+              const active = tab === c;
+              const meta = CATEGORY_META[c];
+              return (
+                <button
+                  key={c}
+                  onClick={() => setTab(c)}
+                  className="rounded-md border px-2 py-2 text-left transition-all"
+                  style={{
+                    borderColor: active ? "#22d3ee" : "var(--color-border)",
+                    background: active ? "rgba(34,211,238,0.08)" : "transparent",
+                    boxShadow: active ? "0 0 14px rgba(34,211,238,0.25)" : "none",
+                  }}
+                >
+                  <div className="font-display text-[10px] tracking-wider" style={{ color: active ? "#22d3ee" : "var(--color-muted-foreground)" }}>
+                    {meta.icon} {meta.label.replace(" квесты", "")}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">
+                    {meta.description}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {showForm && <AddQuestForm onAdd={addQuest} onCancel={() => setShowForm(false)} />}
-
-          <div className="mt-3 space-y-2">
-            {activeQuests.length === 0 && !showForm && (
-              <div className="card-elevated p-6 text-center text-sm text-muted-foreground">
-                Нет активных квестов. Добавь первый и начни прокачку!
+          <div className="space-y-2.5">
+            {active.length === 0 && (
+              <div className="panel p-6 text-center text-sm text-muted-foreground">
+                Все квесты этой категории выполнены. Легенда.
               </div>
             )}
-            {activeQuests.map((q) => (
-              <QuestItem key={q.id} quest={q} onToggle={toggleQuest} onDelete={deleteQuest} />
+            {active.map((q) => (
+              <QuestCard
+                key={q.id}
+                quest={q}
+                onComplete={completeQuest}
+                onToggleChecklist={togglChecklist}
+                onDelete={deleteQuest}
+                onPhoto={setPhoto}
+              />
             ))}
           </div>
 
-          {doneToday.length > 0 && (
+          {done.length > 0 && (
             <div className="mt-6">
-              <h3 className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                Выполнено ({doneToday.length})
+              <h3 className="mb-2 font-display text-[11px] tracking-[0.25em] text-muted-foreground">
+                ВЫПОЛНЕНО ({done.length})
               </h3>
               <div className="space-y-2">
-                {doneToday.map((q) => (
-                  <QuestItem key={q.id} quest={q} onToggle={() => {}} onDelete={deleteQuest} />
+                {done.map((q) => (
+                  <QuestCard
+                    key={q.id}
+                    quest={q}
+                    onComplete={() => {}}
+                    onToggleChecklist={togglChecklist}
+                    onDelete={deleteQuest}
+                    onPhoto={setPhoto}
+                  />
                 ))}
               </div>
             </div>
@@ -155,18 +212,35 @@ function Home() {
         </section>
       </div>
 
-      {/* floating xp popups */}
       <div className="pointer-events-none fixed inset-0 z-50">
         {floats.map((f) => (
           <div
             key={f.id}
-            className="animate-xp-pop absolute font-display text-lg font-bold"
+            className="animate-xp-pop absolute font-display text-lg font-bold neon-text"
             style={{ left: f.x, top: f.y, color: f.color, transform: "translate(-50%, -100%)" }}
           >
             {f.text}
           </div>
         ))}
       </div>
+
+      {lost && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/85 p-6 backdrop-blur">
+          <div className="panel-glow max-w-md p-8 text-center" style={{ borderColor: "rgba(239,68,68,0.6)" }}>
+            <div className="font-display text-xs tracking-[0.3em] text-destructive">GAME OVER</div>
+            <div className="mt-2 font-display text-4xl neon-text text-destructive">ВЫ ПРОИГРАЛИ</div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              $1000 сгорели. Ты не выполнил условия 30-дневного залога.
+            </p>
+            <Link
+              to="/achievements"
+              className="mt-6 inline-block rounded-md border border-destructive/50 px-4 py-2 font-display text-xs tracking-wider text-destructive hover:bg-destructive/10"
+            >
+              К ДОСТИЖЕНИЯМ
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -177,18 +251,20 @@ export function TabNav({ pathname }: { pathname: string }) {
     { to: "/achievements", label: "Достижения" },
   ] as const;
   return (
-    <div className="mb-6 flex gap-2">
+    <div className="mb-4 flex gap-2 sm:mb-6">
       {tabs.map((t) => {
         const active = pathname === t.to;
         return (
           <Link
             key={t.to}
             to={t.to}
-            className="rounded-full border px-4 py-1.5 font-display text-xs uppercase tracking-wider transition-colors"
+            className="rounded-md border px-4 py-1.5 font-display text-[11px] tracking-wider transition-all"
             style={{
-              borderColor: active ? "var(--color-primary)" : "var(--color-border)",
-              color: active ? "var(--color-primary)" : "var(--color-muted-foreground)",
-              backgroundColor: active ? "oklch(0 0 0 / 0.25)" : "transparent",
+              borderColor: active ? "#22d3ee" : "var(--color-border)",
+              color: active ? "#22d3ee" : "var(--color-muted-foreground)",
+              background: active ? "rgba(34,211,238,0.08)" : "transparent",
+              boxShadow: active ? "0 0 14px rgba(34,211,238,0.3)" : "none",
+              textShadow: active ? "0 0 8px rgba(34,211,238,0.6)" : "none",
             }}
           >
             {t.label}

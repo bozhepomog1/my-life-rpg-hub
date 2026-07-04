@@ -97,10 +97,9 @@ function makeChecklist(items: string[]): ChecklistItem[] {
 
 function seedQuests(): Quest[] {
   const now = Date.now();
-  const q = (partial: Omit<Quest, "id" | "createdAt" | "done">): Quest => ({
+  const q = (partial: Omit<Quest, "id" | "createdAt">): Quest => ({
     id: uid(),
     createdAt: now,
-    done: false,
     ...partial,
   });
 

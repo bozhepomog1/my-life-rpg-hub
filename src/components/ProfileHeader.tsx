@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
+import { useAuthContext } from "@/lib/auth-context";
+import { signOut } from "@/lib/auth";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
 
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPulse }: Props) {
+  const { user } = useAuthContext();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(state.name);
@@ -26,6 +29,19 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
   return (
     <div className={`panel-glow corner-cut relative overflow-hidden p-5 ${levelUpPulse ? "animate-level-up" : ""}`}>
       <div className="pointer-events-none absolute inset-0 grid-lines opacity-40" />
+
+      {user && (
+        <div className="relative mb-2 flex items-center justify-end gap-2 text-[11px] text-muted-foreground">
+          <span className="truncate">{user.email}</span>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 font-display text-[9px] tracking-wider hover:border-destructive/50 hover:text-destructive"
+          >
+            ВЫЙТИ
+          </button>
+        </div>
+      )}
       <div className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:flex sm:justify-between">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <button

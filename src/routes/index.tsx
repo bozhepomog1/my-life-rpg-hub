@@ -47,7 +47,7 @@ function Home() {
 
   const disc = useMemo(() => (hydrated ? computeDiscipline(state) : null), [state, hydrated]);
 
-  function completeQuest(id: string, _photo: string | undefined, e?: React.MouseEvent) {
+  function completeQuest(id: string, _photoPath: string | undefined, e?: React.MouseEvent) {
     const quest = state.quests.find((q) => q.id === id);
     if (!quest || quest.done) return;
     const meta = STAT_META[quest.stat];
@@ -100,8 +100,8 @@ function Home() {
     }));
   }
 
-  function setPhoto(id: string, data: string) {
-    update((s) => ({ ...s, quests: s.quests.map((q) => (q.id === id ? { ...q, photoData: data } : q)) }));
+  function setPhoto(id: string, path: string) {
+    update((s) => ({ ...s, quests: s.quests.map((q) => (q.id === id ? { ...q, photoPath: path } : q)) }));
   }
 
   function deleteQuest(id: string) {

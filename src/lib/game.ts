@@ -15,7 +15,7 @@ export interface Quest {
   category: QuestCategory;
   requiresPhoto?: boolean;
   photoHint?: string;
-  photoData?: string; // base64 dataURL
+  photoPath?: string; // path within the "quest-photos" Storage bucket (private; resolve via signed URL)
   done: boolean;
   mandatory?: boolean; // for daily → discipline calendar
   checklist?: ChecklistItem[];
@@ -47,6 +47,11 @@ export interface GameState {
 }
 
 const KEY = "rpg-life-state-v2";
+
+/** Per-user local cache key, so multiple accounts on one browser don't collide. */
+export function localCacheKey(userId: string) {
+  return `${KEY}:${userId}`;
+}
 
 export const STAT_META: Record<StatKey, { label: string; color: string; glow: string; icon: string; gradient: string }> = {
   strength: {
@@ -239,11 +244,17 @@ export function defaultState(): GameState {
   };
 }
 
-export function loadState(): GameState {
-  if (typeof window === "undefined") return defaultState();
+/**
+ * Reads cached game state from localStorage.
+ * Pass a userId to read that user's cache; omit it to read the legacy
+ * pre-auth anonymous cache (used only for one-time migration on first login).
+ */
+export function loadState(userId?: string): GameState | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return defaultState();
+    const key = userId ? localCacheKey(userId) : KEY;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
     const base = defaultState();
     return {
@@ -253,16 +264,26 @@ export function loadState(): GameState {
       dailyCompletions: parsed.dailyCompletions || {},
     };
   } catch {
-    return defaultState();
+    return null;
   }
 }
 
-export function saveState(s: GameState) {
+export function saveState(s: GameState, userId?: string) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(s));
+    const key = userId ? localCacheKey(userId) : KEY;
+    window.localStorage.setItem(key, JSON.stringify(s));
   } catch (e) {
     console.warn("save failed", e);
+  }
+}
+
+export function clearLegacyLocalState() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -301,7 +322,7 @@ export function resetDailyIfNeeded(state: GameState): GameState {
     if (q.category !== "daily") return q;
     if (q.lastResetDate !== today && q.done) {
       changed = true;
-      return { ...q, done: false, photoData: undefined, lastResetDate: today, completedAt: undefined };
+      return { ...q, done: false, photoPath: undefined, lastResetDate: today, completedAt: undefined };
     }
     if (!q.lastResetDate) {
       changed = true;

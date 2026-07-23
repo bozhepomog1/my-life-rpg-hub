@@ -1,42 +1,54 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { STAT_META, type Quest } from "@/lib/game";
+import { useAuthContext } from "@/lib/auth-context";
+import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
 
 interface Props {
   quest: Quest;
-  onComplete: (id: string, photoData: string | undefined, e?: React.MouseEvent) => void;
+  onComplete: (id: string, photoPath: string | undefined, e?: React.MouseEvent) => void;
   onToggleChecklist?: (questId: string, itemId: string) => void;
   onDelete: (id: string) => void;
-  onPhoto: (id: string, data: string) => void;
+  onPhoto: (id: string, path: string) => void;
 }
 
 export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPhoto }: Props) {
   const meta = STAT_META[quest.stat];
+  const { user } = useAuthContext();
   const fileRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   const checklistDone = quest.checklist ? quest.checklist.every((c) => c.done) : true;
-  const canComplete = (!quest.requiresPhoto || !!quest.photoData) && checklistDone;
+  const canComplete = (!quest.requiresPhoto || !!quest.photoPath) && checklistDone;
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // downscale via canvas
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxW = 640;
-        const scale = Math.min(1, maxW / img.width);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        onPhoto(quest.id, canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.src = result;
+  useEffect(() => {
+    let cancelled = false;
+    if (!quest.photoPath) {
+      setPhotoUrl(null);
+      return;
+    }
+    getQuestPhotoUrl(quest.photoPath).then((url) => {
+      if (!cancelled) setPhotoUrl(url);
+    });
+    return () => {
+      cancelled = true;
     };
-    reader.readAsDataURL(f);
+  }, [quest.photoPath]);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f || !user) return;
+    setUploading(true);
+    try {
+      const path = await uploadQuestPhoto(user.id, quest.id, f);
+      onPhoto(quest.id, path);
+    } catch (err) {
+      console.warn("photo upload failed", err);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   return (
@@ -88,19 +100,20 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
               />
               <button
                 type="button"
+                disabled={uploading}
                 onClick={() => fileRef.current?.click()}
-                className="rounded-md border border-border bg-black/40 px-2.5 py-1 font-display text-[10px] tracking-wider text-muted-foreground hover:text-foreground"
+                className="rounded-md border border-border bg-black/40 px-2.5 py-1 font-display text-[10px] tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-50"
               >
-                📷 {quest.photoData ? "Заменить фото" : "Загрузить фото"}
+                📷 {uploading ? "Загрузка…" : quest.photoPath ? "Заменить фото" : "Загрузить фото"}
               </button>
               <span className="text-[11px] text-muted-foreground">
                 {quest.photoHint || "Требуется подтверждение"}
               </span>
             </div>
           )}
-          {quest.photoData && (
+          {photoUrl && (
             <img
-              src={quest.photoData}
+              src={photoUrl}
               alt=""
               className="mt-2 h-20 rounded-md border border-border object-cover"
             />
@@ -141,7 +154,7 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
 
         <div className="flex shrink-0 flex-col items-end gap-1">
           <button
-            onClick={(e) => !quest.done && canComplete && onComplete(quest.id, quest.photoData, e)}
+            onClick={(e) => !quest.done && canComplete && onComplete(quest.id, quest.photoPath, e)}
             disabled={quest.done || !canComplete}
             className="grid h-11 w-11 place-items-center rounded-md border-2 transition-all disabled:cursor-not-allowed disabled:opacity-40"
             style={{

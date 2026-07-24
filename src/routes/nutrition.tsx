@@ -1,5 +1,5 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
-import { useGameState } from "@/lib/use-game-state";
+import { useGameStateContext } from "@/lib/use-game-state-context";
 import { NutritionCalculator } from "@/components/NutritionCalculator";
 import { TabNav } from "./index";
 
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/nutrition")({
 });
 
 function NutritionPage() {
-  const { state, update, hydrated } = useGameState();
+  const { state, update, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (!hydrated) return null;

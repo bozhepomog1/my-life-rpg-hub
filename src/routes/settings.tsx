@@ -1,5 +1,5 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
-import { useGameState } from "@/lib/use-game-state";
+import { useGameStateContext } from "@/lib/use-game-state-context";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { TabNav } from "./index";
 
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { state, update, setState, hydrated } = useGameState();
+  const { state, update, setState, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (!hydrated) return null;

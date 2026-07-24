@@ -1,5 +1,5 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
-import { useGameState } from "@/lib/use-game-state";
+import { useGameStateContext } from "@/lib/use-game-state-context";
 import { computeDiscipline, defaultState, STAT_META, type StatKey } from "@/lib/game";
 import { TabNav } from "./index";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/achievements")({
 });
 
 function Achievements() {
-  const { state, setState, hydrated } = useGameState();
+  const { state, setState, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (!hydrated) return null;
@@ -24,7 +24,9 @@ function Achievements() {
     .map((k) => ({ key: k, total: state.stats[k].level * 100 + state.stats[k].xp }))
     .sort((a, b) => b.total - a.total);
 
-  const completed = state.quests.filter((q) => q.done).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+  const completed = state.quests
+    .filter((q) => q.done)
+    .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
   const disc = computeDiscipline(state);
 
   function resetAll() {

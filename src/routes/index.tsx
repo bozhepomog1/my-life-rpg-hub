@@ -7,7 +7,7 @@ import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
-import { useGameState } from "@/lib/use-game-state";
+import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
   applyReward,
   CATEGORY_META,
@@ -41,7 +41,7 @@ interface FloatXp {
 }
 
 function Home() {
-  const { state, update, hydrated } = useGameState();
+  const { state, update, hydrated } = useGameStateContext();
   const [floats, setFloats] = useState<FloatXp[]>([]);
   const [levelPulse, setLevelPulse] = useState(false);
   const [tab, setTab] = useState<QuestCategory>("daily");

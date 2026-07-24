@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthGate } from "../components/AuthGate";
 import { AuthProvider } from "../lib/auth-context";
+import { GameStateProvider } from "../lib/game-state-context";
 
 function NotFoundComponent() {
   return (
@@ -80,9 +81,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Life RPG — Геймификация жизни" },
-      { name: "description", content: "Личный RPG-трекер жизни: квесты, характеристики и уровни героя." },
+      {
+        name: "description",
+        content: "Личный RPG-трекер жизни: квесты, характеристики и уровни героя.",
+      },
       { property: "og:title", content: "Life RPG — Геймификация жизни" },
-      { property: "og:description", content: "Личный RPG-трекер жизни: квесты, характеристики и уровни героя." },
+      {
+        property: "og:description",
+        content: "Личный RPG-трекер жизни: квесты, характеристики и уровни героя.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -136,8 +143,10 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AuthGate>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
+          <GameStateProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </GameStateProvider>
         </AuthGate>
       </AuthProvider>
     </QueryClientProvider>

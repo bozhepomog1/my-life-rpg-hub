@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { STAT_META, type Quest } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
@@ -180,16 +181,18 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
         </div>
       </div>
 
-      {modalOpen && (
-        <QuestConfirmModal
-          quest={quest}
-          uploading={uploading}
-          photoUrl={photoUrl}
-          onAttachPhoto={attachPhoto}
-          onConfirm={handleConfirm}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
+      {modalOpen &&
+        createPortal(
+          <QuestConfirmModal
+            quest={quest}
+            uploading={uploading}
+            photoUrl={photoUrl}
+            onAttachPhoto={attachPhoto}
+            onConfirm={handleConfirm}
+            onClose={() => setModalOpen(false)}
+          />,
+          document.body
+        )}
     </div>
   );
 }

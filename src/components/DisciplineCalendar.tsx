@@ -3,15 +3,13 @@ import { computeDiscipline, type GameState } from "@/lib/game";
 export function DisciplineCalendar({ state }: Props) {
   const { days } = computeDiscipline(state);
   return (
-    <div className="panel p-4 sm:p-5">
+    <div className="panel p-5 sm:p-6">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-display text-sm" style={{ color: "#22d3ee" }}>
-          Календарь дисциплины
-        </h3>
-        <div className="flex gap-2 font-display text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><Dot c="#a3e635" /> закрыт</span>
-          <span className="flex items-center gap-1"><Dot c="#ef4444" /> пропуск</span>
-          <span className="flex items-center gap-1"><Dot c="#22d3ee" /> сегодня</span>
+        <h3 className="text-sm font-semibold">Календарь дисциплины</h3>
+        <div className="flex gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><Dot c="var(--color-success)" /> закрыт</span>
+          <span className="flex items-center gap-1"><Dot c="var(--color-destructive)" /> пропуск</span>
+          <span className="flex items-center gap-1"><Dot c="var(--color-primary)" /> сегодня</span>
         </div>
       </div>
       <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-10">
@@ -21,15 +19,10 @@ export function DisciplineCalendar({ state }: Props) {
             <div
               key={d.date}
               title={d.date}
-              className="relative aspect-square rounded-md border grid place-items-center font-display text-xs"
-              style={{
-                borderColor: cfg.border,
-                background: cfg.bg,
-                color: cfg.color,
-                boxShadow: cfg.glow,
-              }}
+              className="relative aspect-square grid place-items-center rounded-lg border text-xs"
+              style={{ borderColor: cfg.border, background: cfg.bg, color: cfg.color }}
             >
-              <span className="text-[10px] absolute top-0.5 left-1 text-muted-foreground">
+              <span className="absolute left-1 top-0.5 text-[10px] text-muted-foreground">
                 {i + 1}
               </span>
               <span className="text-sm">{cfg.icon}</span>
@@ -44,36 +37,32 @@ export function DisciplineCalendar({ state }: Props) {
 interface Props { state: GameState }
 
 function Dot({ c }: { c: string }) {
-  return <span className="inline-block h-2 w-2 rounded-full" style={{ background: c, boxShadow: `0 0 6px ${c}` }} />;
+  return <span className="inline-block h-2 w-2 rounded-full" style={{ background: c }} />;
 }
 
-const STYLE: Record<string, { bg: string; border: string; color: string; glow: string; icon: string }> = {
+const STYLE: Record<string, { bg: string; border: string; color: string; icon: string }> = {
   green: {
-    bg: "linear-gradient(135deg, rgba(163,230,53,0.25), rgba(163,230,53,0.05))",
-    border: "rgba(163,230,53,0.6)",
-    color: "#a3e635",
-    glow: "0 0 12px rgba(163,230,53,0.35), inset 0 0 12px rgba(163,230,53,0.15)",
+    bg: "color-mix(in srgb, var(--color-success) 14%, transparent)",
+    border: "color-mix(in srgb, var(--color-success) 45%, transparent)",
+    color: "var(--color-success)",
     icon: "✓",
   },
   red: {
-    bg: "linear-gradient(135deg, rgba(239,68,68,0.25), rgba(239,68,68,0.05))",
-    border: "rgba(239,68,68,0.6)",
-    color: "#ef4444",
-    glow: "0 0 12px rgba(239,68,68,0.35), inset 0 0 12px rgba(239,68,68,0.15)",
+    bg: "color-mix(in srgb, var(--color-destructive) 12%, transparent)",
+    border: "color-mix(in srgb, var(--color-destructive) 40%, transparent)",
+    color: "var(--color-destructive)",
     icon: "✕",
   },
   pending: {
-    bg: "linear-gradient(135deg, rgba(34,211,238,0.25), rgba(34,211,238,0.05))",
-    border: "rgba(34,211,238,0.6)",
-    color: "#22d3ee",
-    glow: "0 0 14px rgba(34,211,238,0.4), inset 0 0 12px rgba(34,211,238,0.15)",
+    bg: "color-mix(in srgb, var(--color-primary) 12%, transparent)",
+    border: "color-mix(in srgb, var(--color-primary) 40%, transparent)",
+    color: "var(--color-primary)",
     icon: "●",
   },
   future: {
-    bg: "#0f1117",
-    border: "#262a37",
-    color: "#8b93a7",
-    glow: "none",
+    bg: "var(--color-muted)",
+    border: "var(--color-border)",
+    color: "var(--color-muted-foreground)",
     icon: "·",
   },
 };

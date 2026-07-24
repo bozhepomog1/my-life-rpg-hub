@@ -53,34 +53,22 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
 
   return (
     <div
-      className="panel corner-cut group relative overflow-hidden p-4 transition-all"
-      style={{
-        borderColor: quest.done ? `${meta.color}60` : "var(--color-border)",
-        opacity: quest.done ? 0.75 : 1,
-      }}
+      className="panel group relative overflow-hidden p-5 transition-opacity"
+      style={{ opacity: quest.done ? 0.6 : 1 }}
     >
-      <div
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ background: meta.gradient, boxShadow: `0 0 12px ${meta.glow}` }}
-      />
+      <div className="absolute inset-y-0 left-0 w-1" style={{ background: meta.color }} />
       <div className="flex items-start gap-3 pl-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span
-              className="font-display text-[10px] tracking-[0.2em]"
-              style={{ color: meta.color, textShadow: `0 0 8px ${meta.glow}` }}
-            >
+            <span className="text-xs font-medium" style={{ color: meta.color }}>
               {meta.icon} {meta.label}
             </span>
             {quest.mandatory && (
-              <span className="rounded-sm border border-destructive/50 px-1 font-display text-[9px] text-destructive">
-                ОБЯЗ.
+              <span className="rounded-full border border-destructive/40 px-1.5 py-0.5 text-[10px] text-destructive">
+                Обязательно
               </span>
             )}
-            <span
-              className="ml-auto shrink-0 font-display text-sm"
-              style={{ color: meta.color, textShadow: `0 0 8px ${meta.glow}` }}
-            >
+            <span className="ml-auto shrink-0 text-sm font-medium text-primary">
               +{quest.reward} XP
             </span>
           </div>
@@ -102,11 +90,11 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
                 type="button"
                 disabled={uploading}
                 onClick={() => fileRef.current?.click()}
-                className="rounded-md border border-border bg-black/40 px-2.5 py-1 font-display text-[10px] tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
               >
                 📷 {uploading ? "Загрузка…" : quest.photoPath ? "Заменить фото" : "Загрузить фото"}
               </button>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {quest.photoHint || "Требуется подтверждение"}
               </span>
             </div>
@@ -115,7 +103,7 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
             <img
               src={photoUrl}
               alt=""
-              className="mt-2 h-20 rounded-md border border-border object-cover"
+              className="mt-2 h-20 rounded-lg border border-border object-cover"
             />
           )}
 
@@ -124,9 +112,9 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
               <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="font-display text-[10px] tracking-wider text-muted-foreground hover:text-foreground"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
-                {expanded ? "▾" : "▸"} ЧЕК-ЛИСТ ({quest.checklist.filter((c) => c.done).length}/{quest.checklist.length})
+                {expanded ? "▾" : "▸"} Чек-лист ({quest.checklist.filter((c) => c.done).length}/{quest.checklist.length})
               </button>
               {expanded && (
                 <ul className="mt-2 space-y-1">
@@ -152,20 +140,19 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           <button
             onClick={(e) => !quest.done && canComplete && onComplete(quest.id, quest.photoPath, e)}
             disabled={quest.done || !canComplete}
-            className="grid h-11 w-11 place-items-center rounded-md border-2 transition-all disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             style={{
-              borderColor: quest.done ? meta.color : canComplete ? meta.color : "var(--color-border)",
-              background: quest.done ? meta.color : canComplete ? `${meta.color}20` : "transparent",
-              color: quest.done ? "#0d0e12" : meta.color,
-              boxShadow: canComplete && !quest.done ? `0 0 14px ${meta.glow}` : "none",
+              borderColor: quest.done || canComplete ? "var(--color-primary)" : "var(--color-border)",
+              background: quest.done ? "var(--color-primary)" : "transparent",
+              color: quest.done ? "var(--color-primary-foreground)" : "var(--color-primary)",
             }}
             aria-label="Выполнить"
           >
-            <span className="text-lg leading-none">{quest.done ? "✓" : "▶"}</span>
+            <span className="text-base leading-none">{quest.done ? "✓" : "▶"}</span>
           </button>
           <button
             onClick={() => onDelete(quest.id)}

@@ -39,18 +39,16 @@ function Achievements() {
     <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
       <TabNav pathname={pathname} />
 
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
-          <StatCard label="Уровень героя" value={state.level} accent="#22d3ee" />
-          <StatCard label="Общий XP" value={state.totalXp} accent="#f0abfc" />
-          <StatCard label="Квесты" value={state.completedCount} accent="#a3e635" />
-          <StatCard label="Прогресс залога" value={`${disc.progress}%`} accent="#f59e0b" />
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <StatCard label="Уровень героя" value={state.level} />
+          <StatCard label="Общий XP" value={state.totalXp} />
+          <StatCard label="Квесты" value={state.completedCount} />
+          <StatCard label="Прогресс залога" value={`${disc.progress}%`} />
         </div>
 
-        <section className="panel p-5">
-          <h2 className="mb-4 font-display text-sm tracking-[0.25em]" style={{ color: "#22d3ee" }}>
-            ТОП ХАРАКТЕРИСТИК
-          </h2>
+        <section className="panel p-6">
+          <h2 className="mb-4 text-sm font-semibold">Топ характеристик</h2>
           <div className="space-y-3">
             {stats.map((s, i) => {
               const meta = STAT_META[s.key];
@@ -60,19 +58,16 @@ function Achievements() {
                 <div key={s.key}>
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="font-display text-muted-foreground">#{i + 1}</span>
+                      <span className="text-muted-foreground">#{i + 1}</span>
                       <span>{meta.icon}</span>
                       <span style={{ color: meta.color }}>{meta.label}</span>
                     </span>
-                    <span className="font-display text-xs text-muted-foreground">
-                      LV {state.stats[s.key].level} · {s.total} XP
+                    <span className="text-xs text-muted-foreground">
+                      Ур. {state.stats[s.key].level} · {s.total} XP
                     </span>
                   </div>
                   <div className="bar-track">
-                    <div
-                      className="bar-fill"
-                      style={{ width: `${pct}%`, background: meta.gradient, color: meta.color }}
-                    />
+                    <div className="bar-fill" style={{ width: `${pct}%`, background: meta.color }} />
                   </div>
                 </div>
               );
@@ -80,10 +75,8 @@ function Achievements() {
           </div>
         </section>
 
-        <section className="panel p-5">
-          <h2 className="mb-4 font-display text-sm tracking-[0.25em]" style={{ color: "#22d3ee" }}>
-            ИСТОРИЯ КВЕСТОВ
-          </h2>
+        <section className="panel p-6">
+          <h2 className="mb-4 text-sm font-semibold">История квестов</h2>
           {completed.length === 0 ? (
             <p className="text-sm text-muted-foreground">Ещё нет выполненных квестов.</p>
           ) : (
@@ -91,12 +84,12 @@ function Achievements() {
               {completed.slice(0, 100).map((q) => {
                 const meta = STAT_META[q.stat];
                 return (
-                  <li key={q.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                  <li key={q.id} className="flex items-center justify-between gap-2 py-2.5 text-sm">
                     <div className="flex min-w-0 items-center gap-2">
                       <span>{meta.icon}</span>
                       <span className="truncate">{q.title}</span>
                     </div>
-                    <div className="shrink-0 font-display text-[11px]" style={{ color: meta.color }}>
+                    <div className="shrink-0 text-xs font-medium" style={{ color: meta.color }}>
                       +{q.reward}
                     </div>
                   </li>
@@ -109,16 +102,15 @@ function Achievements() {
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             onClick={restartDeposit}
-            className="rounded-md border px-4 py-2 font-display text-xs tracking-wider"
-            style={{ borderColor: "rgba(34,211,238,0.4)", color: "#22d3ee" }}
+            className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
           >
-            ПЕРЕЗАПУСТИТЬ ЗАЛОГ
+            Перезапустить залог
           </button>
           <button
             onClick={resetAll}
-            className="rounded-md border border-destructive/40 px-4 py-2 font-display text-xs tracking-wider text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
           >
-            СБРОСИТЬ ПРОГРЕСС
+            Сбросить прогресс
           </button>
         </div>
       </div>
@@ -126,19 +118,11 @@ function Achievements() {
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div
-      className="panel corner-cut p-4"
-      style={{ borderColor: `${accent}40`, boxShadow: `0 0 20px -8px ${accent}` }}
-    >
-      <div className="font-display text-[10px] tracking-[0.2em] text-muted-foreground">{label}</div>
-      <div
-        className="mt-1 font-display text-2xl sm:text-3xl neon-text"
-        style={{ color: accent }}
-      >
-        {value}
-      </div>
+    <div className="panel p-5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-2xl font-semibold text-primary sm:text-3xl">{value}</div>
     </div>
   );
 }

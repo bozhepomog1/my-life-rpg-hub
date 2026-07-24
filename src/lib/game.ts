@@ -53,35 +53,11 @@ export function localCacheKey(userId: string) {
   return `${KEY}:${userId}`;
 }
 
-export const STAT_META: Record<StatKey, { label: string; color: string; glow: string; icon: string; gradient: string }> = {
-  strength: {
-    label: "Сила",
-    color: "#f59e0b",
-    glow: "rgba(245,158,11,0.55)",
-    icon: "⚔️",
-    gradient: "linear-gradient(90deg, #b45309, #f59e0b, #fde68a)",
-  },
-  intellect: {
-    label: "Интеллект",
-    color: "#22d3ee",
-    glow: "rgba(34,211,238,0.55)",
-    icon: "🧠",
-    gradient: "linear-gradient(90deg, #0e7490, #22d3ee, #a5f3fc)",
-  },
-  will: {
-    label: "Воля",
-    color: "#a3e635",
-    glow: "rgba(163,230,53,0.55)",
-    icon: "🔥",
-    gradient: "linear-gradient(90deg, #4d7c0f, #a3e635, #d9f99d)",
-  },
-  appearance: {
-    label: "Внешность",
-    color: "#f0abfc",
-    glow: "rgba(240,171,252,0.55)",
-    icon: "💎",
-    gradient: "linear-gradient(90deg, #a21caf, #d946ef, #f5d0fe)",
-  },
+export const STAT_META: Record<StatKey, { label: string; color: string; icon: string }> = {
+  strength: { label: "Сила", color: "#b8925a", icon: "⚔️" },
+  intellect: { label: "Интеллект", color: "#5c8b99", icon: "🧠" },
+  will: { label: "Воля", color: "#7a9471", icon: "🔥" },
+  appearance: { label: "Внешность", color: "#9b7a96", icon: "💎" },
 };
 
 export const CATEGORY_META: Record<QuestCategory, { label: string; icon: string; description: string }> = {

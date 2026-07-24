@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
@@ -119,7 +120,7 @@ function Home() {
     <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
       <TabNav pathname={pathname} />
 
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-5 sm:space-y-7">
         <ProfileHeader
           state={state}
           onChangeAvatar={(a) => update((s) => ({ ...s, avatar: a }))}
@@ -130,10 +131,10 @@ function Home() {
         <DepositWidget state={state} />
 
         <section>
-          <h2 className="mb-3 font-display text-xs tracking-[0.25em] text-muted-foreground">
-            ХАРАКТЕРИСТИКИ
+          <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
+            Характеристики
           </h2>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             {(Object.keys(state.stats) as StatKey[]).map((k) => (
               <StatBar key={k} stat={k} level={state.stats[k].level} xp={state.stats[k].xp} />
             ))}
@@ -143,8 +144,8 @@ function Home() {
         <DisciplineCalendar state={state} />
 
         <section>
-          <h2 className="mb-3 font-display text-xs tracking-[0.25em] text-muted-foreground">
-            КВЕСТЫ
+          <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
+            Квесты
           </h2>
           <div className="mb-3 grid grid-cols-3 gap-1.5 sm:gap-2">
             {(Object.keys(CATEGORY_META) as QuestCategory[]).map((c) => {
@@ -154,17 +155,14 @@ function Home() {
                 <button
                   key={c}
                   onClick={() => setTab(c)}
-                  className="rounded-md border px-2 py-2 text-left transition-all"
-                  style={{
-                    borderColor: active ? "#22d3ee" : "var(--color-border)",
-                    background: active ? "rgba(34,211,238,0.08)" : "transparent",
-                    boxShadow: active ? "0 0 14px rgba(34,211,238,0.25)" : "none",
-                  }}
+                  className={`rounded-xl border px-2.5 py-2 text-left transition-colors duration-200 ${
+                    active ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
+                  }`}
                 >
-                  <div className="font-display text-[10px] tracking-wider" style={{ color: active ? "#22d3ee" : "var(--color-muted-foreground)" }}>
+                  <div className={`text-xs font-medium ${active ? "text-primary" : "text-muted-foreground"}`}>
                     {meta.icon} {meta.label.replace(" квесты", "")}
                   </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">
+                  <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
                     {meta.description}
                   </div>
                 </button>
@@ -172,7 +170,7 @@ function Home() {
             })}
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {active.length === 0 && (
               <div className="panel p-6 text-center text-sm text-muted-foreground">
                 Все квесты этой категории выполнены. Легенда.
@@ -192,8 +190,8 @@ function Home() {
 
           {done.length > 0 && (
             <div className="mt-6">
-              <h3 className="mb-2 font-display text-[11px] tracking-[0.25em] text-muted-foreground">
-                ВЫПОЛНЕНО ({done.length})
+              <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
+                Выполнено ({done.length})
               </h3>
               <div className="space-y-2">
                 {done.map((q) => (
@@ -216,7 +214,7 @@ function Home() {
         {floats.map((f) => (
           <div
             key={f.id}
-            className="animate-xp-pop absolute font-display text-lg font-bold neon-text"
+            className="animate-xp-pop absolute text-lg font-semibold"
             style={{ left: f.x, top: f.y, color: f.color, transform: "translate(-50%, -100%)" }}
           >
             {f.text}
@@ -225,18 +223,18 @@ function Home() {
       </div>
 
       {lost && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/85 p-6 backdrop-blur">
-          <div className="panel-glow max-w-md p-8 text-center" style={{ borderColor: "rgba(239,68,68,0.6)" }}>
-            <div className="font-display text-xs tracking-[0.3em] text-destructive">GAME OVER</div>
-            <div className="mt-2 font-display text-4xl neon-text text-destructive">ВЫ ПРОИГРАЛИ</div>
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-background/80 p-6 backdrop-blur-sm">
+          <div className="panel-glow max-w-md p-8 text-center">
+            <div className="text-xs font-medium tracking-wide text-destructive">Игра окончена</div>
+            <div className="mt-2 text-3xl font-semibold text-destructive">Ты проиграл</div>
             <p className="mt-4 text-sm text-muted-foreground">
               $1000 сгорели. Ты не выполнил условия 30-дневного залога.
             </p>
             <Link
               to="/achievements"
-              className="mt-6 inline-block rounded-md border border-destructive/50 px-4 py-2 font-display text-xs tracking-wider text-destructive hover:bg-destructive/10"
+              className="mt-6 inline-block rounded-full border border-destructive/40 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/10"
             >
-              К ДОСТИЖЕНИЯМ
+              К достижениям
             </Link>
           </div>
         </div>
@@ -251,26 +249,26 @@ export function TabNav({ pathname }: { pathname: string }) {
     { to: "/achievements", label: "Достижения" },
   ] as const;
   return (
-    <div className="mb-4 flex gap-2 sm:mb-6">
-      {tabs.map((t) => {
-        const active = pathname === t.to;
-        return (
-          <Link
-            key={t.to}
-            to={t.to}
-            className="rounded-md border px-4 py-1.5 font-display text-[11px] tracking-wider transition-all"
-            style={{
-              borderColor: active ? "#22d3ee" : "var(--color-border)",
-              color: active ? "#22d3ee" : "var(--color-muted-foreground)",
-              background: active ? "rgba(34,211,238,0.08)" : "transparent",
-              boxShadow: active ? "0 0 14px rgba(34,211,238,0.3)" : "none",
-              textShadow: active ? "0 0 8px rgba(34,211,238,0.6)" : "none",
-            }}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
+    <div className="mb-4 flex items-center justify-between sm:mb-6">
+      <div className="inline-flex rounded-full border border-border bg-secondary p-1">
+        {tabs.map((t) => {
+          const active = pathname === t.to;
+          return (
+            <Link
+              key={t.to}
+              to={t.to}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
+      </div>
+      <ThemeToggle />
     </div>
   );
 }

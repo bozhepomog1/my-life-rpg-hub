@@ -1,6 +1,12 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useGameStateContext } from "@/lib/use-game-state-context";
-import { computeDiscipline, defaultState, STAT_META, type StatKey } from "@/lib/game";
+import {
+  CATEGORY_META,
+  computeDiscipline,
+  defaultState,
+  STAT_META,
+  type StatKey,
+} from "@/lib/game";
 import { TabNav } from "./index";
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -27,6 +33,10 @@ function Achievements() {
   const completed = state.quests
     .filter((q) => q.done)
     .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+  // Large one-off quests (story/purchase) don't just vanish into the log —
+  // they get a dedicated trophy shelf. Daily quests reset every day so they
+  // don't belong here.
+  const hallOfFame = completed.filter((q) => q.category !== "daily");
   const disc = computeDiscipline(state);
 
   function resetAll() {
@@ -74,6 +84,51 @@ function Achievements() {
               );
             })}
           </div>
+        </section>
+
+        <section className="panel p-6">
+          <h2 className="mb-1 text-sm font-semibold">🏆 Зал славы</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Крупные разовые квесты, которые ты завершил — остаются здесь навсегда.
+          </p>
+          {hallOfFame.length === 0 ? (
+            <div className="py-6 text-center">
+              <div className="text-3xl">🏆</div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Пока пусто — заверши сюжетный или закупочный квест, и он попадёт в зал славы.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {hallOfFame.map((q) => {
+                const meta = STAT_META[q.stat];
+                const date = q.completedAt ? new Date(q.completedAt) : null;
+                return (
+                  <div
+                    key={q.id}
+                    className="relative overflow-hidden rounded-xl border border-primary/30 bg-secondary/60 p-4"
+                  >
+                    <div
+                      className="absolute inset-y-0 left-0 w-1"
+                      style={{ background: meta.color }}
+                    />
+                    <div className="flex items-start gap-2 pl-2">
+                      <span className="text-2xl leading-none">🏆</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-snug">{q.title}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                          <span>{CATEGORY_META[q.category].icon}</span>
+                          <span>{CATEGORY_META[q.category].label}</span>
+                          {date && <span>· {date.toLocaleDateString("ru-RU")}</span>}
+                          <span style={{ color: meta.color }}>· +{q.reward} XP</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="panel p-6">

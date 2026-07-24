@@ -48,7 +48,7 @@ function Home() {
 
   const disc = useMemo(() => (hydrated ? computeDiscipline(state) : null), [state, hydrated]);
 
-  function completeQuest(id: string, _photoPath: string | undefined, e?: React.MouseEvent) {
+  function completeQuest(id: string, _photoPath: string | undefined, note: string | undefined, e?: React.MouseEvent) {
     const quest = state.quests.find((q) => q.id === id);
     if (!quest || quest.done) return;
     const meta = STAT_META[quest.stat];
@@ -84,7 +84,9 @@ function Home() {
         ...rewarded,
         dailyCompletions,
         quests: rewarded.quests.map((q) =>
-          q.id === id ? { ...q, done: true, completedAt: Date.now(), lastResetDate: todayKey() } : q
+          q.id === id
+            ? { ...q, done: true, completedAt: Date.now(), lastResetDate: todayKey(), proofNote: note || q.proofNote }
+            : q
         ),
       };
     });

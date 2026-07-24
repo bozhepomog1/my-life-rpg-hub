@@ -16,6 +16,8 @@ export interface Quest {
   requiresPhoto?: boolean;
   photoHint?: string;
   photoPath?: string; // path within the "quest-photos" Storage bucket (private; resolve via signed URL)
+  requiresText?: boolean; // needs a short written note before it can be completed
+  proofNote?: string;
   done: boolean;
   mandatory?: boolean; // for daily → discipline calendar
   checklist?: ChecklistItem[];
@@ -68,6 +70,9 @@ export const CATEGORY_META: Record<QuestCategory, { label: string; icon: string;
 
 export const DEPOSIT_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Minimum length of the written proof note for requiresText quests. */
+export const MIN_NOTE_LENGTH = 25;
+
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -118,12 +123,12 @@ function seedQuests(): Quest[] {
     // STORY
     q({ title: "Съездить на восток и сделать генеральную уборку", stat: "will", reward: 30, category: "story" }),
     q({ title: "Выйти на пробежку", stat: "strength", reward: 15, category: "story", requiresPhoto: true, photoHint: "Фото с улицы" }),
-    q({ title: "Разобраться в вайбкодинге", stat: "intellect", reward: 20, category: "story" }),
-    q({ title: "Начать учить английский язык", stat: "intellect", reward: 15, category: "story" }),
-    q({ title: "Начать учить программирование", stat: "intellect", reward: 15, category: "story" }),
-    q({ title: "Изучить уроки по вайтлистам", stat: "intellect", reward: 25, category: "story" }),
-    q({ title: "Начать изучать, как создавать ТГ-ботов", stat: "intellect", reward: 20, category: "story" }),
-    q({ title: "Начать изучать, как создать нейросеть под себя", stat: "intellect", reward: 30, category: "story" }),
+    q({ title: "Разобраться в вайбкодинге", stat: "intellect", reward: 20, category: "story", requiresText: true }),
+    q({ title: "Начать учить английский язык", stat: "intellect", reward: 15, category: "story", requiresText: true }),
+    q({ title: "Начать учить программирование", stat: "intellect", reward: 15, category: "story", requiresText: true }),
+    q({ title: "Изучить уроки по вайтлистам", stat: "intellect", reward: 25, category: "story", requiresText: true }),
+    q({ title: "Начать изучать, как создавать ТГ-ботов", stat: "intellect", reward: 20, category: "story", requiresText: true }),
+    q({ title: "Начать изучать, как создать нейросеть под себя", stat: "intellect", reward: 30, category: "story", requiresText: true }),
     q({ title: "Придумать схему по арбитражу (купил дешевле — продал дороже)", stat: "will", reward: 25, category: "story" }),
     q({ title: "Разобраться в мультиварке и приготовить блюдо", stat: "will", reward: 10, category: "story", requiresPhoto: true, photoHint: "Фото готового блюда" }),
     q({ title: "Сходить подстричься и сделать брови", stat: "appearance", reward: 20, category: "story", requiresPhoto: true, photoHint: "Селфи «До/После»" }),
@@ -298,7 +303,7 @@ export function resetDailyIfNeeded(state: GameState): GameState {
     if (q.category !== "daily") return q;
     if (q.lastResetDate !== today && q.done) {
       changed = true;
-      return { ...q, done: false, photoPath: undefined, lastResetDate: today, completedAt: undefined };
+      return { ...q, done: false, photoPath: undefined, proofNote: undefined, lastResetDate: today, completedAt: undefined };
     }
     if (!q.lastResetDate) {
       changed = true;

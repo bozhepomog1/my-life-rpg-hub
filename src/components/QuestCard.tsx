@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { STAT_META, type Quest } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
+import { QuestConfirmModal } from "@/components/QuestConfirmModal";
 
 interface Props {
   quest: Quest;
-  onComplete: (id: string, photoPath: string | undefined, e?: React.MouseEvent) => void;
+  onComplete: (id: string, photoPath: string | undefined, note: string | undefined, e?: React.MouseEvent) => void;
   onToggleChecklist?: (questId: string, itemId: string) => void;
   onDelete: (id: string) => void;
   onPhoto: (id: string, path: string) => void;
@@ -14,13 +15,14 @@ interface Props {
 export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPhoto }: Props) {
   const meta = STAT_META[quest.stat];
   const { user } = useAuthContext();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const checklistDone = quest.checklist ? quest.checklist.every((c) => c.done) : true;
-  const canComplete = (!quest.requiresPhoto || !!quest.photoPath) && checklistDone;
+  const canAttempt = !quest.done && checklistDone;
+  const needsConfirmModal = quest.requiresPhoto || quest.requiresText;
 
   const wasDone = useRef(quest.done);
   const [justCompleted, setJustCompleted] = useState(false);
@@ -48,19 +50,31 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
     };
   }, [quest.photoPath]);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f || !user) return;
+  async function attachPhoto(file: File) {
+    if (!user) return;
     setUploading(true);
     try {
-      const path = await uploadQuestPhoto(user.id, quest.id, f);
+      const path = await uploadQuestPhoto(user.id, quest.id, file);
       onPhoto(quest.id, path);
     } catch (err) {
       console.warn("photo upload failed", err);
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
+  }
+
+  function handleMainClick(e: React.MouseEvent) {
+    if (!canAttempt) return;
+    if (needsConfirmModal) {
+      setModalOpen(true);
+    } else {
+      onComplete(quest.id, quest.photoPath, undefined, e);
+    }
+  }
+
+  function handleConfirm(note?: string) {
+    onComplete(quest.id, quest.photoPath, note);
+    setModalOpen(false);
   }
 
   return (
@@ -88,35 +102,25 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
             {quest.title}
           </h4>
 
-          {quest.requiresPhoto && !quest.done && (
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => fileRef.current?.click()}
-                className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                📷 {uploading ? "Загрузка…" : quest.photoPath ? "Заменить фото" : "Загрузить фото"}
-              </button>
-              <span className="text-xs text-muted-foreground">
-                {quest.photoHint || "Требуется подтверждение"}
-              </span>
-            </div>
+          {(quest.requiresPhoto || quest.requiresText) && !quest.done && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {quest.requiresPhoto
+                ? "Нажми «Выполнить», чтобы прикрепить фото-подтверждение"
+                : "Нажми «Выполнить», чтобы описать, что уже сделал"}
+            </p>
           )}
+
           {photoUrl && (
             <img
               src={photoUrl}
               alt=""
               className="mt-2 h-20 rounded-lg border border-border object-cover"
             />
+          )}
+          {quest.proofNote && (
+            <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              {quest.proofNote}
+            </p>
           )}
 
           {quest.checklist && quest.checklist.length > 0 && (
@@ -154,11 +158,11 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <button
-            onClick={(e) => !quest.done && canComplete && onComplete(quest.id, quest.photoPath, e)}
-            disabled={quest.done || !canComplete}
+            onClick={handleMainClick}
+            disabled={quest.done || !checklistDone}
             className="grid h-10 w-10 place-items-center rounded-full border transition-all enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
             style={{
-              borderColor: quest.done || canComplete ? "var(--color-primary)" : "var(--color-border)",
+              borderColor: quest.done || checklistDone ? "var(--color-primary)" : "var(--color-border)",
               background: quest.done ? "var(--color-primary)" : "transparent",
               color: quest.done ? "var(--color-primary-foreground)" : "var(--color-primary)",
             }}
@@ -175,6 +179,17 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
           </button>
         </div>
       </div>
+
+      {modalOpen && (
+        <QuestConfirmModal
+          quest={quest}
+          uploading={uploading}
+          photoUrl={photoUrl}
+          onAttachPhoto={attachPhoto}
+          onConfirm={handleConfirm}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { STAT_META, type Quest } from "@/lib/game";
+import { STAT_META, trainingHint, type BodyStats, type Quest } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
 import { QuestConfirmModal } from "@/components/QuestConfirmModal";
 
 interface Props {
   quest: Quest;
+  body: BodyStats;
   onComplete: (
     id: string,
     photoPath: string | undefined,
@@ -18,7 +19,14 @@ interface Props {
   onPhoto: (id: string, path: string) => void;
 }
 
-export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPhoto }: Props) {
+export function QuestCard({
+  quest,
+  body,
+  onComplete,
+  onToggleChecklist,
+  onDelete,
+  onPhoto,
+}: Props) {
   const meta = STAT_META[quest.stat];
   const { user } = useAuthContext();
   const [expanded, setExpanded] = useState(false);
@@ -116,6 +124,12 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
               : "Нажми «Выполнить», чтобы описать, что уже сделал"}
           </p>
         )}
+
+        {!quest.done &&
+          (() => {
+            const hint = trainingHint(quest, body);
+            return hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null;
+          })()}
 
         {photoUrl && (
           <img

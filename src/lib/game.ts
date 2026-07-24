@@ -25,6 +25,13 @@ export interface Quest {
   completedAt?: number;
   lastResetDate?: string; // for daily quests, ISO date
   deadline?: number;
+  // Bodyweight training quests: when set, the quest's hint is personalized
+  // with a target rep count based on the matching personal record (once
+  // one's been entered in "Тело"); otherwise it falls back to
+  // trainingDefaultHint.
+  linkedRecord?: RecordKey;
+  recordPercent?: number; // e.g. 0.7 for "70% of your max"
+  trainingDefaultHint?: string;
 }
 
 export interface StatState {
@@ -48,6 +55,24 @@ export interface NutritionDay extends Macro {
   entries: NutritionEntry[];
 }
 
+export type RecordKey = "maxPushups" | "maxPullups" | "maxDips" | "maxLegRaises";
+
+export const RECORD_META: Record<RecordKey, { label: string; unit: string }> = {
+  maxPushups: { label: "Отжимания от пола (макс. за подход)", unit: "раз" },
+  maxPullups: { label: "Подтягивания (макс. за подход)", unit: "раз" },
+  maxDips: { label: "Отжимания на брусьях (макс. за подход)", unit: "раз" },
+  maxLegRaises: { label: "Подъёмы ног на пресс (макс. за подход)", unit: "раз" },
+};
+
+export interface BodyStats {
+  heightCm?: number;
+  weightKg?: number;
+  maxPushups?: number;
+  maxPullups?: number;
+  maxDips?: number;
+  maxLegRaises?: number;
+}
+
 export interface GameState {
   avatar: string;
   name: string;
@@ -64,6 +89,8 @@ export interface GameState {
   dailyCompletions: Record<string, string[]>;
   // nutrition: date → that day's logged calories/macros
   nutrition: Record<string, NutritionDay>;
+  // body: height/weight + personal training records
+  body: BodyStats;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -226,6 +253,44 @@ function seedQuests(): Quest[] {
     }),
     q({ title: "Мб покрасить волосы", stat: "appearance", reward: 15, category: "story" }),
 
+    // STORY — bodyweight training, personalized once a record is set in "Тело"
+    q({
+      title: "Сделать подход отжиманий от пола",
+      stat: "strength",
+      reward: 10,
+      category: "story",
+      linkedRecord: "maxPushups",
+      recordPercent: 0.7,
+      trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+    }),
+    q({
+      title: "Сделать подход подтягиваний",
+      stat: "strength",
+      reward: 15,
+      category: "story",
+      linkedRecord: "maxPullups",
+      recordPercent: 0.7,
+      trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+    }),
+    q({
+      title: "Сделать подход отжиманий на брусьях",
+      stat: "strength",
+      reward: 15,
+      category: "story",
+      linkedRecord: "maxDips",
+      recordPercent: 0.7,
+      trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+    }),
+    q({
+      title: "Сделать подход подъёмов ног на пресс",
+      stat: "strength",
+      reward: 10,
+      category: "story",
+      linkedRecord: "maxLegRaises",
+      recordPercent: 0.7,
+      trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+    }),
+
     // PURCHASE (already completed)
     q({
       title: "Найти умные очки Ray-Ban Meta Wayfarer Gen 2 RW4012 (1 700 ₽)",
@@ -325,6 +390,7 @@ export function defaultState(): GameState {
     depositLost: false,
     dailyCompletions: {},
     nutrition: {},
+    body: {},
   };
 }
 
@@ -347,6 +413,7 @@ export function loadState(userId?: string): GameState | null {
       stats: { ...base.stats, ...(parsed.stats || {}) },
       dailyCompletions: parsed.dailyCompletions || {},
       nutrition: parsed.nutrition || {},
+      body: parsed.body || {},
     };
   } catch {
     return null;
@@ -374,6 +441,21 @@ export function clearLegacyLocalState() {
 
 export function xpForNextLevel(level: number) {
   return 100 * level;
+}
+
+/**
+ * Personalized hint for bodyweight-training quests: once the linked
+ * personal record is set in "Тело", shows a real target rep count based on
+ * recordPercent; otherwise falls back to the quest's default hint (no
+ * personalization). Returns null for quests that aren't linked to a record.
+ */
+export function trainingHint(quest: Quest, body: BodyStats): string | null {
+  if (!quest.linkedRecord || !quest.recordPercent) return null;
+  const max = body[quest.linkedRecord];
+  if (!max) return quest.trainingDefaultHint ?? "Сделай 3 подхода в комфортном темпе";
+  const target = Math.max(1, Math.round(max * quest.recordPercent));
+  const pct = Math.round(quest.recordPercent * 100);
+  return `Сделай 3 подхода по ${pct}% от твоего максимума — это ${target} повторений за подход`;
 }
 
 export function applyReward(state: GameState, stat: StatKey, reward: number): GameState {

@@ -220,6 +220,7 @@ function Home() {
               <QuestCard
                 key={q.id}
                 quest={q}
+                body={state.body}
                 onComplete={completeQuest}
                 onToggleChecklist={togglChecklist}
                 onDelete={deleteQuest}
@@ -238,6 +239,7 @@ function Home() {
                   <QuestCard
                     key={q.id}
                     quest={q}
+                    body={state.body}
                     onComplete={() => {}}
                     onToggleChecklist={togglChecklist}
                     onDelete={deleteQuest}
@@ -287,6 +289,7 @@ export function TabNav({ pathname }: { pathname: string }) {
   const tabs = [
     { to: "/", label: "Профиль" },
     { to: "/nutrition", label: "Питание" },
+    { to: "/body", label: "Тело" },
     { to: "/achievements", label: "Достижения" },
   ] as const;
   return (

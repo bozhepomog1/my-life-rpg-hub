@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NutritionRouteImport } from './routes/nutrition'
+import { Route as BodyRouteImport } from './routes/body'
 import { Route as AchievementsRouteImport } from './routes/achievements'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -22,6 +23,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const NutritionRoute = NutritionRouteImport.update({
   id: '/nutrition',
   path: '/nutrition',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BodyRoute = BodyRouteImport.update({
+  id: '/body',
+  path: '/body',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AchievementsRoute = AchievementsRouteImport.update({
@@ -38,12 +44,14 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
+  '/body': typeof BodyRoute
   '/nutrition': typeof NutritionRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
+  '/body': typeof BodyRoute
   '/nutrition': typeof NutritionRoute
   '/settings': typeof SettingsRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
+  '/body': typeof BodyRoute
   '/nutrition': typeof NutritionRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/achievements' | '/nutrition' | '/settings'
+  fullPaths: '/' | '/achievements' | '/body' | '/nutrition' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/achievements' | '/nutrition' | '/settings'
-  id: '__root__' | '/' | '/achievements' | '/nutrition' | '/settings'
+  to: '/' | '/achievements' | '/body' | '/nutrition' | '/settings'
+  id: '__root__' | '/' | '/achievements' | '/body' | '/nutrition' | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AchievementsRoute: typeof AchievementsRoute
+  BodyRoute: typeof BodyRoute
   NutritionRoute: typeof NutritionRoute
   SettingsRoute: typeof SettingsRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/nutrition'
       fullPath: '/nutrition'
       preLoaderRoute: typeof NutritionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/body': {
+      id: '/body'
+      path: '/body'
+      fullPath: '/body'
+      preLoaderRoute: typeof BodyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/achievements': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AchievementsRoute: AchievementsRoute,
+  BodyRoute: BodyRoute,
   NutritionRoute: NutritionRoute,
   SettingsRoute: SettingsRoute,
 }

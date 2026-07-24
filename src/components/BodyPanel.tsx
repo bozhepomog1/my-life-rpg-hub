@@ -58,6 +58,9 @@ export function BodyPanel({ state, update }: Props) {
             <div className="mt-1 text-sm font-medium text-foreground">
               {fitnessLevelLabel(fitnessIndex)}
             </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Считается по среднему из твоих 4 рекордов относительно продвинутого уровня
+            </p>
           </>
         )}
       </section>

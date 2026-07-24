@@ -158,7 +158,7 @@ export function FriendsPanel({ state, update }: Props) {
                 {search.profile.username ?? "Без имени"}
               </div>
               <div className="text-xs text-muted-foreground">
-                Ур. {search.profile.level} · {search.profile.total_xp} XP
+                Уровень {search.profile.level} · {search.profile.total_xp} XP
               </div>
             </div>
             <button
@@ -187,7 +187,7 @@ export function FriendsPanel({ state, update }: Props) {
                       {p?.username ?? "Пользователь"}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {p ? `Ур. ${p.level} · ${p.total_xp} XP` : ""}
+                      {p ? `Уровень ${p.level} · ${p.total_xp} XP` : ""}
                     </div>
                   </div>
                   <button
@@ -292,7 +292,7 @@ function LeaderboardRow({
           {isMe && <span className="ml-1 text-xs text-primary">(ты)</span>}
         </div>
         <div className="text-xs text-muted-foreground">
-          Ур. {profile.level}
+          Уровень {profile.level}
           {profile.fitness_index != null && <> · Форма {profile.fitness_index}</>}
         </div>
       </div>

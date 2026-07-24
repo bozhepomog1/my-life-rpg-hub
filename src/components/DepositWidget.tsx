@@ -35,13 +35,21 @@ export function DepositWidget({ state }: Props) {
     <div className="panel p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs text-muted-foreground">Система залога</div>
+          <div
+            className="text-xs text-muted-foreground"
+            title="Ставка на себя: выполняй ежедневные квесты 30 дней подряд, чтобы вернуть эту сумму."
+          >
+            Система залога
+          </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-3xl font-semibold text-foreground sm:text-4xl">
               ${state.depositAmount}
             </span>
             <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: statusColor }}
+              />
               {active ? "Заблокировано" : lost ? "Сгорели" : "Высвобождены"}
             </span>
           </div>
@@ -59,8 +67,13 @@ export function DepositWidget({ state }: Props) {
           { l: "Мин", v: mins },
           { l: "Сек", v: secs },
         ].map((u) => (
-          <div key={u.l} className="rounded-xl border border-border bg-secondary px-1.5 py-2.5 text-center">
-            <div className="text-2xl tabular-nums font-semibold text-foreground sm:text-3xl">{fmt(u.v)}</div>
+          <div
+            key={u.l}
+            className="rounded-xl border border-border bg-secondary px-1.5 py-2.5 text-center"
+          >
+            <div className="text-2xl tabular-nums font-semibold text-foreground sm:text-3xl">
+              {fmt(u.v)}
+            </div>
             <div className="text-[10px] text-muted-foreground">{u.l}</div>
           </div>
         ))}
@@ -70,7 +83,9 @@ export function DepositWidget({ state }: Props) {
         <ProgressBar value={progress} />
         <div className="mt-2 flex justify-between text-xs text-muted-foreground">
           <span>✓ {greenCount} закрыто</span>
-          <span>✕ {redCount} штраф −{redCount * 5}%</span>
+          <span>
+            ✕ {redCount} штраф −{redCount * 5}%
+          </span>
         </div>
       </div>
 

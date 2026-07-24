@@ -97,9 +97,9 @@ export function NutritionCalculator({ state, update }: Props) {
               ))}
             </ul>
             <div className="mt-1.5 font-medium text-foreground">
-              Итого: {Math.round(lastResult.totals.kcal)} ккал · Б{" "}
-              {Math.round(lastResult.totals.protein)} · Ж {Math.round(lastResult.totals.fat)} · У{" "}
-              {Math.round(lastResult.totals.carbs)}
+              Итого: {Math.round(lastResult.totals.kcal)} ккал · Белки{" "}
+              {Math.round(lastResult.totals.protein)} · Жиры {Math.round(lastResult.totals.fat)} ·
+              Углеводы {Math.round(lastResult.totals.carbs)}
             </div>
           </div>
         )}

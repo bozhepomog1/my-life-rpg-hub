@@ -70,7 +70,10 @@ export function SettingsPanel({ state, update, setState }: Props) {
   return (
     <div className="space-y-5">
       <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Имя персонажа</h2>
+        <h2 className="text-sm font-semibold">Как тебя зовут в игре?</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Это имя видно на главном экране и в таблице рейтингов у друзей.
+        </p>
         <div className="mt-3">
           <AutosaveField
             value={state.name}
@@ -84,6 +87,11 @@ export function SettingsPanel({ state, update, setState }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Залог</h2>
         <p className="mt-1 text-xs text-muted-foreground">
+          Ставка на самого себя: эта сумма «замораживается» на 30 дней. Закрывай все ежедневные
+          квесты каждый день — и получишь её обратно полностью. Пропускай слишком часто — и часть
+          сгорит.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
           Текущая сумма: <span className="font-medium text-foreground">${state.depositAmount}</span>
         </p>
         <div className="mt-3">
@@ -145,23 +153,25 @@ export function SettingsPanel({ state, update, setState }: Props) {
       </section>
 
       <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Данные</h2>
+        <h2 className="text-sm font-semibold">Резервная копия</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Экспортирует весь твой прогресс (квесты, статы, залог, питание) в один JSON-файл.
+          Сохрани весь свой прогресс (квесты, характеристики, залог, питание) в один файл — на
+          случай, если захочешь перенести его или просто иметь копию про запас.
         </p>
         <button
           type="button"
           onClick={exportBackup}
           className="mt-3 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
         >
-          Скачать резервную копию данных (JSON)
+          Скачать резервную копию
         </button>
       </section>
 
       <section className="panel border-destructive/30 p-6">
         <h2 className="text-sm font-semibold text-destructive">Опасная зона</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Полностью сбрасывает уровень, статы, квесты, залог и питание к начальному состоянию.
+          Обнулит уровень, характеристики, квесты, залог и питание — начнёшь с чистого листа.
+          Отменить это будет нельзя, так что сначала лучше скачай резервную копию выше.
         </p>
         <button
           type="button"

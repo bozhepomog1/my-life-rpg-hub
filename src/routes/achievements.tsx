@@ -143,7 +143,7 @@ function Achievements() {
                       <span style={{ color: meta.color }}>{meta.label}</span>
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Ур. {state.stats[s.key].level} · {s.total} XP
+                      Уровень {state.stats[s.key].level} · {s.total} XP
                     </span>
                   </div>
                   <ProgressBar value={pct} color={meta.color} />

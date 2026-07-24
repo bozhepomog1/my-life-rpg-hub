@@ -25,7 +25,7 @@ export function StatBar({ stat, level, xp }: Props) {
           </span>
         </div>
         <span className="text-lg font-semibold" style={{ color: meta.color }}>
-          Ур. {level}
+          Уровень {level}
         </span>
       </div>
       <ProgressBar value={pct} color={meta.color} />

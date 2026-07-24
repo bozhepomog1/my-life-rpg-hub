@@ -3,10 +3,10 @@ import {
   computeFitnessIndex,
   fitnessLevelLabel,
   RECORD_META,
-  type BodyStats,
   type GameState,
   type RecordKey,
 } from "@/lib/game";
+import { AutosaveField } from "@/components/AutosaveField";
 
 interface Props {
   state: GameState;
@@ -18,32 +18,28 @@ const RECORD_KEYS = Object.keys(RECORD_META) as RecordKey[];
 export function BodyPanel({ state, update }: Props) {
   const body = state.body;
   const fitnessIndex = computeFitnessIndex(body);
-  const [heightDraft, setHeightDraft] = useState(String(body.heightCm ?? ""));
-  const [weightDraft, setWeightDraft] = useState(String(body.weightKg ?? ""));
-  const [recordDrafts, setRecordDrafts] = useState<Record<RecordKey, string>>(() =>
-    RECORD_KEYS.reduce(
-      (acc, k) => ({ ...acc, [k]: body[k] != null ? String(body[k]) : "" }),
-      {} as Record<RecordKey, string>,
-    ),
-  );
   const [celebrating, setCelebrating] = useState<RecordKey | null>(null);
 
-  function saveMeasurement(field: "heightCm" | "weightKg", draft: string) {
-    const n = Math.max(0, Math.round(Number(draft) || 0));
-    if (!n) return;
+  /** Returns true if the value actually changed and was saved. */
+  function commitMeasurement(field: "heightCm" | "weightKg", raw: string): boolean {
+    if (raw.trim() === "") return false;
+    const n = Math.max(0, Math.round(Number(raw) || 0));
+    if (!n || n === body[field]) return false;
     update((s) => ({ ...s, body: { ...s.body, [field]: n } }));
+    return true;
   }
 
-  function saveRecord(key: RecordKey) {
-    const n = Math.max(0, Math.round(Number(recordDrafts[key]) || 0));
-    if (!n) return;
+  function commitRecord(key: RecordKey, raw: string): boolean {
+    if (raw.trim() === "") return false;
+    const n = Math.max(0, Math.round(Number(raw) || 0));
+    if (!n || n === body[key]) return false;
     const prev = body[key];
     update((s) => ({ ...s, body: { ...s.body, [key]: n } }));
-    setRecordDrafts((d) => ({ ...d, [key]: String(n) }));
     if (prev != null && n > prev) {
       setCelebrating(key);
       setTimeout(() => setCelebrating((c) => (c === key ? null : c)), 1800);
     }
+    return true;
   }
 
   return (
@@ -71,42 +67,26 @@ export function BodyPanel({ state, update }: Props) {
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="text-xs text-muted-foreground">Рост (см)</label>
-            <div className="mt-1 flex gap-2">
-              <input
+            <div className="mt-1">
+              <AutosaveField
                 type="number"
                 min={0}
-                value={heightDraft}
-                onChange={(e) => setHeightDraft(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                ariaLabel="Рост в сантиметрах"
+                value={String(body.heightCm ?? "")}
+                onCommit={(raw) => commitMeasurement("heightCm", raw)}
               />
-              <button
-                type="button"
-                onClick={() => saveMeasurement("heightCm", heightDraft)}
-                disabled={!heightDraft.trim() || Number(heightDraft) === body.heightCm}
-                className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Сохранить
-              </button>
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Вес (кг)</label>
-            <div className="mt-1 flex gap-2">
-              <input
+            <div className="mt-1">
+              <AutosaveField
                 type="number"
                 min={0}
-                value={weightDraft}
-                onChange={(e) => setWeightDraft(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                ariaLabel="Вес в килограммах"
+                value={String(body.weightKg ?? "")}
+                onCommit={(raw) => commitMeasurement("weightKg", raw)}
               />
-              <button
-                type="button"
-                onClick={() => saveMeasurement("weightKg", weightDraft)}
-                disabled={!weightDraft.trim() || Number(weightDraft) === body.weightKg}
-                className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Сохранить
-              </button>
             </div>
           </div>
         </div>
@@ -114,71 +94,37 @@ export function BodyPanel({ state, update }: Props) {
 
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Мои рекорды</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Сохраняются автоматически, кнопка не нужна.
+        </p>
         <div className="mt-3 space-y-4">
-          {RECORD_KEYS.map((key) => (
-            <RecordField
-              key={key}
-              recordKey={key}
-              body={body}
-              draft={recordDrafts[key]}
-              onDraftChange={(v) => setRecordDrafts((d) => ({ ...d, [key]: v }))}
-              onSave={() => saveRecord(key)}
-              celebrating={celebrating === key}
-            />
-          ))}
+          {RECORD_KEYS.map((key) => {
+            const meta = RECORD_META[key];
+            return (
+              <div key={key}>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">{meta.label}</label>
+                  {celebrating === key && (
+                    <span className="animate-level-up rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      🏆 Новый рекорд!
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1">
+                  <AutosaveField
+                    type="number"
+                    min={0}
+                    ariaLabel={meta.label}
+                    placeholder={meta.unit}
+                    value={String(body[key] ?? "")}
+                    onCommit={(raw) => commitRecord(key, raw)}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
-    </div>
-  );
-}
-
-function RecordField({
-  recordKey,
-  body,
-  draft,
-  onDraftChange,
-  onSave,
-  celebrating,
-}: {
-  recordKey: RecordKey;
-  body: BodyStats;
-  draft: string;
-  onDraftChange: (v: string) => void;
-  onSave: () => void;
-  celebrating: boolean;
-}) {
-  const meta = RECORD_META[recordKey];
-  const current = body[recordKey];
-  const changed = draft.trim() !== "" && Number(draft) !== current;
-
-  return (
-    <div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-muted-foreground">{meta.label}</label>
-        {celebrating && (
-          <span className="animate-level-up rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-            🏆 Новый рекорд!
-          </span>
-        )}
-      </div>
-      <div className="mt-1 flex gap-2">
-        <input
-          type="number"
-          min={0}
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          placeholder={meta.unit}
-          className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-        />
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!changed}
-          className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Сохранить
-        </button>
-      </div>
     </div>
   );
 }

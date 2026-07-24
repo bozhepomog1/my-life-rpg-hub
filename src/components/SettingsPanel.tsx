@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { defaultState, todayKey, type GameState } from "@/lib/game";
+import { AutosaveField } from "@/components/AutosaveField";
 
 interface Props {
   state: GameState;
@@ -9,23 +10,21 @@ interface Props {
 }
 
 export function SettingsPanel({ state, update, setState }: Props) {
-  const [nameDraft, setNameDraft] = useState(state.name);
-  const [depositDraft, setDepositDraft] = useState(String(state.depositAmount));
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const nameChanged = nameDraft.trim() !== "" && nameDraft.trim() !== state.name;
-  const depositNum = Math.max(0, Math.round(Number(depositDraft) || 0));
-  const depositChanged = depositDraft.trim() !== "" && depositNum !== state.depositAmount;
-
-  function saveName() {
-    const trimmed = nameDraft.trim();
-    if (!trimmed) return;
+  function commitName(raw: string): boolean {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === state.name) return false;
     update((s) => ({ ...s, name: trimmed }));
+    return true;
   }
 
-  function saveDeposit() {
-    update((s) => ({ ...s, depositAmount: depositNum }));
-    setDepositDraft(String(depositNum));
+  function commitDeposit(raw: string): boolean {
+    if (raw.trim() === "") return false;
+    const n = Math.max(0, Math.round(Number(raw) || 0));
+    if (n === state.depositAmount) return false;
+    update((s) => ({ ...s, depositAmount: n }));
+    return true;
   }
 
   function exportBackup() {
@@ -49,21 +48,13 @@ export function SettingsPanel({ state, update, setState }: Props) {
     <div className="space-y-5">
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Имя персонажа</h2>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
+        <div className="mt-3">
+          <AutosaveField
+            value={state.name}
             placeholder="Герой"
-            className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            ariaLabel="Имя персонажа"
+            onCommit={commitName}
           />
-          <button
-            type="button"
-            onClick={saveName}
-            disabled={!nameChanged}
-            className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Сохранить
-          </button>
         </div>
       </section>
 
@@ -72,22 +63,14 @@ export function SettingsPanel({ state, update, setState }: Props) {
         <p className="mt-1 text-xs text-muted-foreground">
           Текущая сумма: <span className="font-medium text-foreground">${state.depositAmount}</span>
         </p>
-        <div className="mt-3 flex gap-2">
-          <input
+        <div className="mt-3">
+          <AutosaveField
             type="number"
             min={0}
-            value={depositDraft}
-            onChange={(e) => setDepositDraft(e.target.value)}
-            className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            value={String(state.depositAmount)}
+            ariaLabel="Сумма залога"
+            onCommit={commitDeposit}
           />
-          <button
-            type="button"
-            onClick={saveDeposit}
-            disabled={!depositChanged}
-            className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Изменить сумму
-          </button>
         </div>
       </section>
 

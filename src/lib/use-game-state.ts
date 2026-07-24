@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthContext } from "./auth-context";
+import { useAuthContext } from "./use-auth-context";
 import { supabase } from "./supabase";
 import { clearLegacyLocalState, defaultState, loadState, saveState, type GameState } from "./game";
 

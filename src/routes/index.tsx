@@ -171,9 +171,17 @@ function Home() {
           </div>
 
           <div className="space-y-3">
-            {active.length === 0 && (
+            {active.length === 0 && done.length === 0 && (
+              <div className="panel p-8 text-center">
+                <div className="text-3xl">{CATEGORY_META[tab].icon}</div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Пока нет квестов в этой категории — начни свой первый!
+                </p>
+              </div>
+            )}
+            {active.length === 0 && done.length > 0 && (
               <div className="panel p-6 text-center text-sm text-muted-foreground">
-                Все квесты этой категории выполнены. Легенда.
+                🏆 Все квесты этой категории выполнены. Легенда.
               </div>
             )}
             {active.map((q) => (

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useAuthContext } from "@/lib/auth-context";
+import { useAuthContext } from "@/lib/use-auth-context";
 import { sendMagicLink } from "@/lib/auth";
 
 export function AuthGate({ children }: { children: ReactNode }) {

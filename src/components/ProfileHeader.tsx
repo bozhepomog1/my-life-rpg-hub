@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
-import { useAuthContext } from "@/lib/auth-context";
+import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];

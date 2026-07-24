@@ -78,7 +78,12 @@ function Achievements() {
         <section className="panel p-6">
           <h2 className="mb-4 text-sm font-semibold">История квестов</h2>
           {completed.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ещё нет выполненных квестов.</p>
+            <div className="py-6 text-center">
+              <div className="text-3xl">🏅</div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Пока нет выполненных квестов — заверши первый, и он появится здесь.
+              </p>
+            </div>
           ) : (
             <ul className="divide-y divide-border">
               {completed.slice(0, 100).map((q) => {

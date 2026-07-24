@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { STAT_META, type Quest } from "@/lib/game";
-import { useAuthContext } from "@/lib/auth-context";
+import { useAuthContext } from "@/lib/use-auth-context";
 import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
 
 interface Props {

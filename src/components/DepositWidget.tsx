@@ -32,66 +32,45 @@ export function DepositWidget({ state }: Props) {
   const statusColor = lost ? "var(--color-destructive)" : "var(--color-success)";
 
   return (
-    <div className="panel p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <div className="panel p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <div
-            className="text-xs text-muted-foreground"
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
             title="Ставка на себя: выполняй ежедневные квесты 30 дней подряд, чтобы вернуть эту сумму."
           >
-            Система залога
+            <span
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: statusColor }}
+            />
+            <span className="truncate">
+              Залог · {active ? "заблокировано" : lost ? "сгорели" : "высвобождены"}
+            </span>
           </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-3xl font-semibold text-foreground sm:text-4xl">
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-xl font-semibold text-foreground sm:text-2xl">
               ${state.depositAmount}
             </span>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ background: statusColor }}
-              />
-              {active ? "Заблокировано" : lost ? "Сгорели" : "Высвобождены"}
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {days}д {fmt(hours)}:{fmt(mins)}:{fmt(secs)}
             </span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-muted-foreground">Прогресс</div>
-          <div className="text-2xl font-semibold text-primary sm:text-3xl">{progress}%</div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-2">
-        {[
-          { l: "Дни", v: days },
-          { l: "Час", v: hours },
-          { l: "Мин", v: mins },
-          { l: "Сек", v: secs },
-        ].map((u) => (
-          <div
-            key={u.l}
-            className="rounded-xl border border-border bg-secondary px-1.5 py-2.5 text-center"
-          >
-            <div className="text-2xl tabular-nums font-semibold text-foreground sm:text-3xl">
-              {fmt(u.v)}
-            </div>
-            <div className="text-[10px] text-muted-foreground">{u.l}</div>
+        <div className="shrink-0 text-right">
+          <div className="text-lg font-semibold text-primary sm:text-xl">{progress}%</div>
+          <div className="text-[10px] text-muted-foreground">
+            ✓{greenCount} ✕{redCount}
           </div>
-        ))}
+        </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-2.5">
         <ProgressBar value={progress} />
-        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-          <span>✓ {greenCount} закрыто</span>
-          <span>
-            ✕ {redCount} штраф −{redCount * 5}%
-          </span>
-        </div>
       </div>
 
       {lost && (
-        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-center text-xs text-destructive">
-          Вы проиграли — $1000 сгорели
+        <div className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-center text-[11px] text-destructive">
+          Вы проиграли — ${state.depositAmount} сгорели
         </div>
       )}
     </div>

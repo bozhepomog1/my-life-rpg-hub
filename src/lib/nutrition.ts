@@ -1,14 +1,34 @@
-import { todayKey, type GameState, type Macro, type NutritionDay } from "@/lib/game";
+import {
+  computeNutritionGoals,
+  todayKey,
+  type GameState,
+  type Macro,
+  type NutritionDay,
+} from "@/lib/game";
 
 export type { Macro, NutritionDay } from "@/lib/game";
 
-/** Reasonable default daily targets for an average adult; not user-configurable yet. */
+/**
+ * Fallback daily targets for an average adult, used only until the user has
+ * filled in enough of "Параметры тела" (height/weight/age/sex/goal) for the
+ * Mifflin-St Jeor calculation in computeNutritionGoals() to kick in — see
+ * baseGoals() below.
+ */
 export const NUTRITION_GOALS: Macro = {
   kcal: 2200,
   protein: 130,
   fat: 70,
   carbs: 260,
 };
+
+/**
+ * The nutrition goals before today's cheat-meal reduction: a manual
+ * override if the user set one, otherwise the calculated goals from body
+ * params, otherwise the generic fallback above.
+ */
+export function baseGoals(state: GameState): Macro {
+  return state.body.nutritionOverride ?? computeNutritionGoals(state.body) ?? NUTRITION_GOALS;
+}
 
 /**
  * Cheat-meal reward system: instead of penalizing an off-plan meal, the user
@@ -57,14 +77,15 @@ export function consumeCheatMeal(state: GameState): GameState {
   };
 }
 
-/** Today's effective macro goals — lowered carbs/fat if a cheat meal was used today. */
+/** Today's effective macro goals — base goals, lowered carbs/fat if a cheat meal was used today. */
 export function effectiveGoals(state: GameState): Macro {
+  const goals = baseGoals(state);
   const day = getTodayNutrition(state);
-  if (!day.cheatMealUsed) return NUTRITION_GOALS;
+  if (!day.cheatMealUsed) return goals;
   return {
-    ...NUTRITION_GOALS,
-    carbs: Math.round(NUTRITION_GOALS.carbs * (1 - CHEAT_MEAL_REDUCTION)),
-    fat: Math.round(NUTRITION_GOALS.fat * (1 - CHEAT_MEAL_REDUCTION)),
+    ...goals,
+    carbs: Math.round(goals.carbs * (1 - CHEAT_MEAL_REDUCTION)),
+    fat: Math.round(goals.fat * (1 - CHEAT_MEAL_REDUCTION)),
   };
 }
 

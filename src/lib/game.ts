@@ -77,6 +77,9 @@ export const RECORD_META: Record<RecordKey, { label: string; unit: string }> = {
   maxLegRaises: { label: "Подъёмы ног на пресс (макс. за подход)", unit: "раз" },
 };
 
+export type Sex = "male" | "female";
+export type NutritionGoal = "lose" | "maintain" | "gain";
+
 export interface BodyStats {
   heightCm?: number;
   weightKg?: number;
@@ -84,6 +87,74 @@ export interface BodyStats {
   maxPullups?: number;
   maxDips?: number;
   maxLegRaises?: number;
+  // Used only for the Mifflin-St Jeor nutrition goal calculation below.
+  age?: number;
+  sex?: Sex;
+  goal?: NutritionGoal;
+  // When set, these values are used as the nutrition goals instead of the
+  // calculated ones — an explicit manual override for anyone who disagrees
+  // with the formula's numbers. Clearing it (setting back to undefined)
+  // reverts to auto-calculation.
+  nutritionOverride?: Macro;
+}
+
+export const NUTRITION_GOAL_LABELS: Record<NutritionGoal, string> = {
+  lose: "Похудение",
+  maintain: "Поддержание веса",
+  gain: "Набор массы",
+};
+
+/**
+ * Fixed activity multiplier used for the Mifflin-St Jeor calculation below.
+ * The request only asked for height/weight/age/sex/goal as inputs — no
+ * separate "activity level" field — so this uses "lightly active" (light
+ * exercise 1-3 days/week), a reasonable middle-of-the-road default given
+ * the app already tracks some exercise via quests. Documented here rather
+ * than silently baked in, since it's the one part of the standard formula
+ * this app doesn't collect a dedicated input for.
+ */
+export const NUTRITION_ACTIVITY_FACTOR = 1.375;
+
+/** kcal deficit/surplus applied on top of maintenance TDEE, per goal. */
+const GOAL_KCAL_ADJUSTMENT: Record<NutritionGoal, number> = {
+  lose: -500,
+  maintain: 0,
+  gain: 400,
+};
+
+/** Grams of protein per kg of bodyweight, per goal (higher to preserve muscle in a deficit). */
+const GOAL_PROTEIN_PER_KG: Record<NutritionGoal, number> = {
+  lose: 2.0,
+  maintain: 1.6,
+  gain: 1.8,
+};
+
+const MIN_DAILY_KCAL = 1200;
+
+/**
+ * Mifflin-St Jeor BMR × activity factor, adjusted for the stated goal, then
+ * split into macros: protein by bodyweight (goal-dependent), fat at 25% of
+ * total calories, carbs filling the remainder. Returns null until height,
+ * weight, age, sex, and goal are all filled in — this is a standard
+ * fitness-app formula, computed entirely client-side (no external calls).
+ */
+export function computeNutritionGoals(body: BodyStats): Macro | null {
+  const { heightCm, weightKg, age, sex, goal } = body;
+  if (!heightCm || !weightKg || !age || !sex || !goal) return null;
+
+  const bmr =
+    sex === "male"
+      ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+      : 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+
+  const tdee = bmr * NUTRITION_ACTIVITY_FACTOR;
+  const kcal = Math.max(MIN_DAILY_KCAL, Math.round(tdee + GOAL_KCAL_ADJUSTMENT[goal]));
+
+  const protein = Math.round(weightKg * GOAL_PROTEIN_PER_KG[goal]);
+  const fat = Math.round((kcal * 0.25) / 9);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+
+  return { kcal, protein, fat, carbs };
 }
 
 /** Rep count treated as a "100%, advanced-level" reference for each record. */

@@ -8,7 +8,7 @@ import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { StreakBanner } from "@/components/StreakBanner";
-import { WorkModeToggle } from "@/components/WorkModeToggle";
+import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
   applyReward,
@@ -18,6 +18,7 @@ import {
   effectiveQuest,
   ensureBonusQuests,
   ensureDailyRotation,
+  isWorkDay,
   STAT_META,
   STREAK_MILESTONES,
   todayKey,
@@ -220,10 +221,11 @@ function Home() {
 
   if (!hydrated) return null;
 
+  const isWork = isWorkDay(state.schedule);
   const questsByCat = state.quests
     .filter((q) => q.category === tab)
-    .filter((q) => !q.dayOffOnly || !state.workMode)
-    .map((q) => effectiveQuest(q, state.workMode));
+    .filter((q) => !q.dayOffOnly || !isWork)
+    .map((q) => effectiveQuest(q, isWork));
   const active = questsByCat.filter((q) => !q.done);
   const done = questsByCat.filter((q) => q.done);
   const lost = disc?.lost;
@@ -247,10 +249,7 @@ function Home() {
 
         <StreakBanner current={streak} longest={longestStreak} />
 
-        <WorkModeToggle
-          workMode={state.workMode}
-          onChange={(workMode) => update((s) => ({ ...s, workMode }))}
-        />
+        <WorkScheduleStatus isWork={isWork} />
 
         <DepositWidget state={state} />
 

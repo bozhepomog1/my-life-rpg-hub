@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { defaultState, todayKey, type GameState } from "@/lib/game";
+import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
 
 type NotificationPermissionState = NotificationPermission | "unsupported";
+
+const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 interface Props {
   state: GameState;
@@ -33,6 +35,28 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
   function handleToggleReminders() {
     update((s) => ({ ...s, remindersEnabled: !s.remindersEnabled }));
+  }
+
+  function setScheduleMode(mode: ScheduleMode) {
+    update((s) => ({ ...s, schedule: { ...s.schedule, mode } }));
+  }
+
+  function toggleWeekday(index: number) {
+    update((s) => {
+      const weeklyWorkDays = [...s.schedule.weeklyWorkDays];
+      weeklyWorkDays[index] = !weeklyWorkDays[index];
+      return { ...s, schedule: { ...s.schedule, weeklyWorkDays } };
+    });
+  }
+
+  function setCycleField(field: "cycleWorkDays" | "cycleRestDays", raw: string) {
+    const n = Math.min(30, Math.max(1, Math.round(Number(raw) || 1)));
+    update((s) => ({ ...s, schedule: { ...s.schedule, [field]: n } }));
+  }
+
+  function setCycleAnchor(raw: string) {
+    if (!raw) return;
+    update((s) => ({ ...s, schedule: { ...s.schedule, cycleAnchor: raw } }));
   }
 
   function commitName(raw: string): boolean {
@@ -148,6 +172,111 @@ export function SettingsPanel({ state, update, setState }: Props) {
             >
               {state.remindersEnabled ? "Выключить" : "Включить"}
             </button>
+          </div>
+        )}
+      </section>
+
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">График работы</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          В рабочий день ежедневные квесты автоматически облегчаются (короткая разминка вместо
+          полной тренировки и т.п.), в выходной — доступна полная версия. Сегодня по этому графику:{" "}
+          <span className="font-medium text-foreground">
+            {isWorkDay(state.schedule) ? "рабочий день" : "выходной"}
+          </span>
+          .
+        </p>
+
+        <div className="mt-3 flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setScheduleMode("weekly")}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+              state.schedule.mode === "weekly"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            По дням недели
+          </button>
+          <button
+            type="button"
+            onClick={() => setScheduleMode("cycle")}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+              state.schedule.mode === "cycle"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            Смены (цикл)
+          </button>
+        </div>
+
+        {state.schedule.mode === "weekly" ? (
+          <div className="mt-3">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Отметь рабочие дни недели — подходит для 5/2 или любого другого свободного паттерна.
+            </p>
+            <div className="grid grid-cols-7 gap-1.5">
+              {WEEKDAY_LABELS.map((label, i) => {
+                const isWorkDayOfWeek = state.schedule.weeklyWorkDays[i];
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => toggleWeekday(i)}
+                    className={`rounded-lg px-1 py-2 text-xs font-medium transition-colors ${
+                      isWorkDayOfWeek
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Подходит для смен, которые не привязаны к дням недели — например 2/2 или 4/3.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Рабочих дней подряд</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={state.schedule.cycleWorkDays}
+                  onChange={(e) => setCycleField("cycleWorkDays", e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Дней отдыха подряд</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={state.schedule.cycleRestDays}
+                  onChange={(e) => setCycleField("cycleRestDays", e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">
+                Первый день текущего рабочего блока
+              </label>
+              <input
+                type="date"
+                value={state.schedule.cycleAnchor}
+                onChange={(e) => setCycleAnchor(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
           </div>
         )}
       </section>

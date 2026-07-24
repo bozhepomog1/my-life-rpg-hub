@@ -149,9 +149,11 @@ export interface GameState {
   body: BodyStats;
   // longest streak of consecutive fully-completed days ever reached
   longestStreak: number;
-  // Work/Day-off mode: true = "at work (12h shift)", lightens/hides heavy
-  // daily quests; false = "day off", full quest set available.
-  workMode: boolean;
+  // Work schedule: replaces the old binary work/day-off toggle. Whether
+  // "today" counts as a work day is derived from this via isWorkDayToday()
+  // rather than stored directly, so it stays correct automatically as days
+  // pass — see WorkSchedule below.
+  schedule: WorkSchedule;
   // Monthly cheat-meal reward counter, keyed by "YYYY-MM".
   cheatMealsUsed: Record<string, number>;
   // Today's randomly-drawn bonus quests (shown once no daily quests remain).
@@ -462,7 +464,7 @@ export function defaultState(): GameState {
     nutrition: {},
     body: {},
     longestStreak: 0,
-    workMode: false,
+    schedule: defaultSchedule(),
     cheatMealsUsed: {},
     bonusQuests: [],
     dailyMandatoryCounts: {},
@@ -495,7 +497,10 @@ export function loadState(userId?: string): GameState | null {
       nutrition: parsed.nutrition || {},
       body: parsed.body || {},
       longestStreak: parsed.longestStreak ?? 0,
-      workMode: parsed.workMode ?? false,
+      // Migrates from the old binary workMode toggle: that boolean can't map
+      // meaningfully onto a recurring schedule, so existing users just get a
+      // fresh default (classic 5/2) schedule to configure in Settings.
+      schedule: parsed.schedule || defaultSchedule(),
       cheatMealsUsed: parsed.cheatMealsUsed || {},
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
@@ -530,6 +535,62 @@ export function clearLegacyLocalState() {
 
 export function xpForNextLevel(level: number) {
   return 100 * level;
+}
+
+export type ScheduleMode = "weekly" | "cycle";
+
+/**
+ * Configurable work schedule, replacing the old binary "at work / day off"
+ * toggle. Two modes cover any pattern the request asked for:
+ * - "weekly": a fixed weekly pattern (7 booleans, Monday-first) — covers a
+ *   classic 5/2 week and any other weekly-repeating ("free-form") pattern.
+ * - "cycle": a repeating N-work/M-rest cycle anchored to a date — covers
+ *   shift patterns that drift across weekdays (2/2, 4/3, etc.), which a
+ *   weekly pattern can't express since they don't repeat every 7 days.
+ */
+export interface WorkSchedule {
+  mode: ScheduleMode;
+  /** Monday-first: index 0 = Monday, 6 = Sunday. */
+  weeklyWorkDays: boolean[];
+  cycleWorkDays: number;
+  cycleRestDays: number;
+  /** ISO date (todayKey format) of the first day of a work block in the cycle. */
+  cycleAnchor: string;
+}
+
+/** Fresh default schedule (classic 5/2 week) — a function, not a frozen
+ * constant, so cycleAnchor is always "today" at the moment it's needed
+ * rather than whenever this module first happened to load. */
+export function defaultSchedule(): WorkSchedule {
+  return {
+    mode: "weekly",
+    weeklyWorkDays: [true, true, true, true, true, false, false], // classic 5/2
+    cycleWorkDays: 2,
+    cycleRestDays: 2,
+    cycleAnchor: todayKey(),
+  };
+}
+
+function startOfDay(d: Date): Date {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+
+/** Whether the given date counts as a work day under the schedule. */
+export function isWorkDay(schedule: WorkSchedule, date = new Date()): boolean {
+  if (schedule.mode === "weekly") {
+    const dow = (date.getDay() + 6) % 7; // JS getDay is Sunday-first; convert to Monday-first
+    return schedule.weeklyWorkDays[dow] ?? false;
+  }
+  const cycleLen = schedule.cycleWorkDays + schedule.cycleRestDays;
+  if (cycleLen <= 0) return false;
+  const anchor = new Date(`${schedule.cycleAnchor}T00:00:00`);
+  const diffDays = Math.round(
+    (startOfDay(date).getTime() - startOfDay(anchor).getTime()) / 86_400_000,
+  );
+  const mod = ((diffDays % cycleLen) + cycleLen) % cycleLen;
+  return mod < schedule.cycleWorkDays;
 }
 
 /**

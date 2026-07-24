@@ -73,6 +73,49 @@ export interface BodyStats {
   maxLegRaises?: number;
 }
 
+/** Rep count treated as a "100%, advanced-level" reference for each record. */
+export const FITNESS_BENCHMARKS: Record<RecordKey, number> = {
+  maxPushups: 40,
+  maxPullups: 15,
+  maxDips: 20,
+  maxLegRaises: 30,
+};
+
+export interface FitnessLevel {
+  label: string;
+  min: number;
+}
+
+export const FITNESS_LEVELS: FitnessLevel[] = [
+  { label: "Новичок", min: 0 },
+  { label: "Любитель", min: 25 },
+  { label: "Продвинутый", min: 50 },
+  { label: "Атлет", min: 75 },
+];
+
+/**
+ * 0-100 index averaging all 4 records, each normalized against its
+ * benchmark (capped at 100% so one very strong lift can't drag the
+ * average over 100). Requires all 4 records to be set — averaging over
+ * only the ones that are filled in would show a misleadingly high index
+ * from partial data (e.g. only pushups entered, at "Атлет" level).
+ */
+export function computeFitnessIndex(body: BodyStats): number | null {
+  const keys = Object.keys(FITNESS_BENCHMARKS) as RecordKey[];
+  if (!keys.every((k) => body[k] != null)) return null;
+  const pct =
+    keys.reduce((sum, k) => {
+      const value = body[k] as number;
+      return sum + Math.min(100, (value / FITNESS_BENCHMARKS[k]) * 100);
+    }, 0) / keys.length;
+  return Math.round(pct);
+}
+
+export function fitnessLevelLabel(index: number): string {
+  const level = [...FITNESS_LEVELS].reverse().find((l) => index >= l.min);
+  return level?.label ?? FITNESS_LEVELS[0].label;
+}
+
 export interface GameState {
   avatar: string;
   name: string;
@@ -143,33 +186,78 @@ function seedQuests(): Quest[] {
   });
 
   return [
-    // DAILY (mandatory)
+    // DAILY (mandatory) — base starter set across all 4 stats
     q({
-      title: "Почитать любую книгу 30 минут",
+      title: "Сделать разминку или растяжку 10 минут",
+      stat: "strength",
+      reward: 8,
+      category: "daily",
+      mandatory: true,
+      requiresPhoto: true,
+      photoHint: "Фото/видео разминки",
+    }),
+    q({
+      title: "Мини-тренировка: отжимания, приседания или планка",
+      stat: "strength",
+      reward: 12,
+      category: "daily",
+      mandatory: true,
+      requiresPhoto: true,
+      photoHint: "Фото после тренировки",
+    }),
+    q({
+      title: "Почитать книгу 30 минут",
       stat: "intellect",
-      reward: 5,
+      reward: 10,
       category: "daily",
       mandatory: true,
       requiresPhoto: true,
       photoHint: "Фото раскрытой книги",
     }),
     q({
-      title: "Тренировка шеи и уход за лицом",
-      stat: "appearance",
-      reward: 5,
+      title: "Изучить один новый факт или урок по теме, которая интересна",
+      stat: "intellect",
+      reward: 8,
+      category: "daily",
+      mandatory: true,
+      requiresPhoto: true,
+      photoHint: "Скриншот статьи/видео/заметки",
+    }),
+    q({
+      title: "Привести в порядок своё пространство (стол, комната)",
+      stat: "will",
+      reward: 8,
+      category: "daily",
+      mandatory: true,
+      requiresPhoto: true,
+      photoHint: "Фото убранного пространства",
+    }),
+    q({
+      title: "Гигиена: душ, чистка зубов, уход за собой",
+      stat: "will",
+      reward: 6,
       category: "daily",
       mandatory: true,
       requiresPhoto: true,
       photoHint: "Селфи-подтверждение",
     }),
     q({
-      title: "Оптимизировать траты и внести в бюджет",
-      stat: "will",
-      reward: 3,
+      title: "Выпить 2 литра воды за день",
+      stat: "appearance",
+      reward: 5,
       category: "daily",
       mandatory: true,
       requiresPhoto: true,
-      photoHint: "Скриншот или фото расходов",
+      photoHint: "Фото бутылки воды или трекера",
+    }),
+    q({
+      title: "Уход за кожей лица (умыться, увлажнить)",
+      stat: "appearance",
+      reward: 6,
+      category: "daily",
+      mandatory: true,
+      requiresPhoto: true,
+      photoHint: "Селфи-подтверждение",
     }),
 
     // STORY

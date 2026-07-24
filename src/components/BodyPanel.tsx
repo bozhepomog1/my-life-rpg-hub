@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { RECORD_META, type BodyStats, type GameState, type RecordKey } from "@/lib/game";
+import {
+  computeFitnessIndex,
+  fitnessLevelLabel,
+  RECORD_META,
+  type BodyStats,
+  type GameState,
+  type RecordKey,
+} from "@/lib/game";
 
 interface Props {
   state: GameState;
@@ -10,6 +17,7 @@ const RECORD_KEYS = Object.keys(RECORD_META) as RecordKey[];
 
 export function BodyPanel({ state, update }: Props) {
   const body = state.body;
+  const fitnessIndex = computeFitnessIndex(body);
   const [heightDraft, setHeightDraft] = useState(String(body.heightCm ?? ""));
   const [weightDraft, setWeightDraft] = useState(String(body.weightKg ?? ""));
   const [recordDrafts, setRecordDrafts] = useState<Record<RecordKey, string>>(() =>
@@ -40,6 +48,24 @@ export function BodyPanel({ state, update }: Props) {
 
   return (
     <div className="space-y-5">
+      <section className="panel-glow p-6 text-center">
+        <h2 className="text-xs font-medium tracking-wide text-muted-foreground">
+          Индекс физической формы
+        </h2>
+        {fitnessIndex == null ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Заполни свои рекорды, чтобы увидеть индекс
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 text-5xl font-semibold text-primary">{fitnessIndex}</div>
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {fitnessLevelLabel(fitnessIndex)}
+            </div>
+          </>
+        )}
+      </section>
+
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Параметры тела</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">

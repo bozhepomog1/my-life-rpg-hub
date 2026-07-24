@@ -15,6 +15,7 @@ import { AuthGate } from "../components/AuthGate";
 import { AuthProvider } from "../lib/auth-context";
 import { GameStateProvider } from "../lib/game-state-context";
 import { AchievementWatcher } from "../components/AchievementWatcher";
+import { DailyReminderService } from "../components/DailyReminderService";
 
 function NotFoundComponent() {
   return (
@@ -146,6 +147,7 @@ function RootComponent() {
         <AuthGate>
           <GameStateProvider>
             <AchievementWatcher />
+            <DailyReminderService />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
           </GameStateProvider>

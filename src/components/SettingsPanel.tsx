@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { defaultState, todayKey, type GameState } from "@/lib/game";
+import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
+
+type NotificationPermissionState = NotificationPermission | "unsupported";
 
 interface Props {
   state: GameState;
@@ -11,6 +14,26 @@ interface Props {
 
 export function SettingsPanel({ state, update, setState }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermissionState>("unsupported");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPermission("unsupported");
+      return;
+    }
+    setPermission(Notification.permission);
+  }, []);
+
+  async function handleEnableReminders() {
+    if (permission === "unsupported") return;
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === "granted") update((s) => ({ ...s, remindersEnabled: true }));
+  }
+
+  function handleToggleReminders() {
+    update((s) => ({ ...s, remindersEnabled: !s.remindersEnabled }));
+  }
 
   function commitName(raw: string): boolean {
     const trimmed = raw.trim();
@@ -72,6 +95,53 @@ export function SettingsPanel({ state, update, setState }: Props) {
             onCommit={commitDeposit}
           />
         </div>
+      </section>
+
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Напоминания</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Если к {REMINDER_HOUR}:00 по твоему времени ещё остались незакрытые ежедневные квесты,
+          пришлём уведомление в браузере. Работает, только пока эта вкладка открыта — при закрытой
+          вкладке или браузере уведомление не придёт, это ограничение самой технологии, не наше.
+        </p>
+
+        {permission === "unsupported" && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Этот браузер не поддерживает уведомления.
+          </p>
+        )}
+
+        {permission === "denied" && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            Уведомления заблокированы в настройках браузера. Разреши их вручную для этого сайта,
+            чтобы включить напоминания.
+          </p>
+        )}
+
+        {permission === "default" && (
+          <button
+            type="button"
+            onClick={handleEnableReminders}
+            className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
+          >
+            Включить напоминания
+          </button>
+        )}
+
+        {permission === "granted" && (
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">
+              {state.remindersEnabled ? "Включены" : "Выключены"}
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleReminders}
+              className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+            >
+              {state.remindersEnabled ? "Выключить" : "Включить"}
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="panel p-6">

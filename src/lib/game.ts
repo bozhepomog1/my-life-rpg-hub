@@ -160,6 +160,9 @@ export interface GameState {
   // Unlocked achievement ids → the timestamp they were unlocked at. Once set,
   // an id is never removed (achievements don't "re-lock").
   unlockedAchievements: Record<string, number>;
+  // Opt-in browser Notification reminders for unfinished daily quests.
+  // Only ever set to true after the user explicitly grants permission.
+  remindersEnabled: boolean;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -525,6 +528,7 @@ export function defaultState(): GameState {
     cheatMealsUsed: {},
     bonusQuests: [],
     unlockedAchievements: {},
+    remindersEnabled: false,
   };
 }
 
@@ -554,6 +558,7 @@ export function loadState(userId?: string): GameState | null {
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
       unlockedAchievements: parsed.unlockedAchievements || {},
+      remindersEnabled: parsed.remindersEnabled ?? false,
     };
   } catch {
     return null;

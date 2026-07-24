@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DEPOSIT_DURATION_MS, computeDiscipline, type GameState } from "@/lib/game";
+import { ProgressBar } from "@/components/ProgressBar";
 
 interface Props {
   state: GameState;
@@ -66,9 +67,7 @@ export function DepositWidget({ state }: Props) {
       </div>
 
       <div className="mt-4">
-        <div className="bar-track">
-          <div className="bar-fill" style={{ width: `${progress}%` }} />
-        </div>
+        <ProgressBar value={progress} />
         <div className="mt-2 flex justify-between text-xs text-muted-foreground">
           <span>✓ {greenCount} закрыто</span>
           <span>✕ {redCount} штраф −{redCount * 5}%</span>

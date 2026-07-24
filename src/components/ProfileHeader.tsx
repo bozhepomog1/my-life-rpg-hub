@@ -2,6 +2,7 @@ import { useState } from "react";
 import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
+import { ProgressBar } from "@/components/ProgressBar";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
 
@@ -27,14 +28,14 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
   );
 
   return (
-    <div className={`panel-glow p-6 transition-transform ${levelUpPulse ? "animate-level-up" : ""}`}>
+    <div className="panel-glow p-6">
       {user && (
         <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted-foreground">
           <span className="truncate">{user.email}</span>
           <button
             type="button"
             onClick={() => signOut()}
-            className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs hover:border-destructive/50 hover:text-destructive"
+            className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs transition-all hover:-translate-y-0.5 hover:border-destructive/50 hover:text-destructive"
           >
             Выйти
           </button>
@@ -77,7 +78,9 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
             </p>
           </div>
         </div>
-        <div className="shrink-0 rounded-xl border border-border bg-secondary px-4 py-2 text-right">
+        <div
+          className={`shrink-0 rounded-xl border border-border bg-secondary px-4 py-2 text-right ${levelUpPulse ? "animate-level-up" : ""}`}
+        >
           <div className="text-[11px] tracking-wide text-muted-foreground">Уровень</div>
           <div className="text-2xl font-semibold text-primary sm:text-3xl">{state.level}</div>
         </div>
@@ -88,9 +91,7 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
           <span>Прогресс уровня</span>
           <span>{currentLevelXp} / {need} XP</span>
         </div>
-        <div className="bar-track">
-          <div className="bar-fill" style={{ width: `${pct}%` }} />
-        </div>
+        <ProgressBar value={pct} />
       </div>
 
       {pickerOpen && (

@@ -70,7 +70,7 @@ function Home() {
       const prev = s.level;
       const rewarded = applyReward(s, quest.stat, quest.reward);
       if (rewarded.level > prev) {
-        setTimeout(() => { setLevelPulse(true); setTimeout(() => setLevelPulse(false), 700); }, 200);
+        setTimeout(() => { setLevelPulse(true); setTimeout(() => setLevelPulse(false), 1500); }, 200);
       }
       // record daily completion
       const dailyCompletions = { ...rewarded.dailyCompletions };

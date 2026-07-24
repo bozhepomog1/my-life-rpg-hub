@@ -29,7 +29,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-success: var(--success);
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 /* Light theme (default) */
@@ -44,20 +45,20 @@
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
-  --primary: #b97455;
+  --primary: #af5f3c;
   --primary-foreground: #fefdfb;
   --secondary: #f2f2f3;
   --secondary-foreground: #1a1a1a;
   --muted: #f2f2f3;
   --muted-foreground: #6e6e73;
-  --accent: #b97455;
+  --accent: #af5f3c;
   --accent-foreground: #fefdfb;
   --destructive: #b3543f;
   --destructive-foreground: #fefdfb;
   --success: #6f8f6a;
   --border: #eaeaec;
   --input: #ffffff;
-  --ring: #b97455;
+  --ring: #af5f3c;
   --shadow-color: 20 20 25;
 }
 
@@ -72,20 +73,20 @@
   --card-foreground: #ececf1;
   --popover: #1a1c22;
   --popover-foreground: #ececf1;
-  --primary: #d2977a;
+  --primary: #da9472;
   --primary-foreground: #201510;
   --secondary: #20222a;
   --secondary-foreground: #ececf1;
   --muted: #20222a;
   --muted-foreground: #9c9ca6;
-  --accent: #d2977a;
+  --accent: #da9472;
   --accent-foreground: #201510;
   --destructive: #d67d6a;
   --destructive-foreground: #201510;
   --success: #97b88f;
   --border: #2a2c35;
   --input: #1a1c22;
-  --ring: #d2977a;
+  --ring: #da9472;
   --shadow-color: 0 0 0;
 }
 
@@ -133,22 +134,38 @@
   box-shadow: 0 1px 2px rgba(var(--shadow-color) / 0.05), 0 8px 20px -10px rgba(var(--shadow-color) / 0.12);
 }
 
+/* Cards feel alive on hover: a small lift + a deeper shadow */
+.panel, .panel-glow, .card-elevated {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.panel:hover, .panel-glow:hover, .card-elevated:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(var(--shadow-color) / 0.08), 0 18px 34px -14px rgba(var(--shadow-color) / 0.22);
+}
+
 @keyframes xp-pop {
   0% { transform: translateY(0) scale(0.9); opacity: 0; }
   20% { opacity: 1; }
   100% { transform: translateY(-56px) scale(1.05); opacity: 0; }
 }
 @keyframes level-up {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-  100% { transform: scale(1); }
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 45%, transparent); }
+  25% { transform: scale(1.12); box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-primary) 22%, transparent); }
+  55% { transform: scale(0.97); box-shadow: 0 0 0 14px color-mix(in srgb, var(--color-primary) 0%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 0%, transparent); }
+}
+@keyframes quest-complete {
+  0% { transform: scale(1); background-color: var(--color-card); }
+  35% { transform: scale(1.015); background-color: color-mix(in srgb, var(--color-success) 16%, var(--color-card)); }
+  100% { transform: scale(1); background-color: var(--color-card); }
 }
 @keyframes tab-pill {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
 .animate-xp-pop { animation: xp-pop 1s ease-out forwards; }
-.animate-level-up { animation: level-up 0.5s ease-out; }
+.animate-level-up { animation: level-up 1.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.animate-quest-complete { animation: quest-complete 550ms ease-out; }
 .animate-tab-pill { animation: tab-pill 220ms ease-out; }
 
 .bar-track {
@@ -163,7 +180,7 @@
   inset: 0;
   border-radius: 999px;
   background: var(--color-accent);
-  transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Scrollbar */

@@ -22,6 +22,18 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
   const checklistDone = quest.checklist ? quest.checklist.every((c) => c.done) : true;
   const canComplete = (!quest.requiresPhoto || !!quest.photoPath) && checklistDone;
 
+  const wasDone = useRef(quest.done);
+  const [justCompleted, setJustCompleted] = useState(false);
+  useEffect(() => {
+    if (quest.done && !wasDone.current) {
+      setJustCompleted(true);
+      wasDone.current = true;
+      const t = setTimeout(() => setJustCompleted(false), 600);
+      return () => clearTimeout(t);
+    }
+    wasDone.current = quest.done;
+  }, [quest.done]);
+
   useEffect(() => {
     let cancelled = false;
     if (!quest.photoPath) {
@@ -53,7 +65,7 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
 
   return (
     <div
-      className="panel group relative overflow-hidden p-5 transition-opacity"
+      className={`panel group relative overflow-hidden p-5 transition-opacity ${justCompleted ? "animate-quest-complete" : ""}`}
       style={{ opacity: quest.done ? 0.6 : 1 }}
     >
       <div className="absolute inset-y-0 left-0 w-1" style={{ background: meta.color }} />
@@ -144,7 +156,7 @@ export function QuestCard({ quest, onComplete, onToggleChecklist, onDelete, onPh
           <button
             onClick={(e) => !quest.done && canComplete && onComplete(quest.id, quest.photoPath, e)}
             disabled={quest.done || !canComplete}
-            className="grid h-10 w-10 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-full border transition-all enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-40"
             style={{
               borderColor: quest.done || canComplete ? "var(--color-primary)" : "var(--color-border)",
               background: quest.done ? "var(--color-primary)" : "transparent",

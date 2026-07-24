@@ -2,6 +2,7 @@ import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useGameState } from "@/lib/use-game-state";
 import { computeDiscipline, defaultState, STAT_META, type StatKey } from "@/lib/game";
 import { TabNav } from "./index";
+import { ProgressBar } from "@/components/ProgressBar";
 
 export const Route = createFileRoute("/achievements")({
   head: () => ({
@@ -66,9 +67,7 @@ function Achievements() {
                       Ур. {state.stats[s.key].level} · {s.total} XP
                     </span>
                   </div>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${pct}%`, background: meta.color }} />
-                  </div>
+                  <ProgressBar value={pct} color={meta.color} />
                 </div>
               );
             })}
@@ -107,13 +106,13 @@ function Achievements() {
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             onClick={restartDeposit}
-            className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+            className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
           >
             Перезапустить залог
           </button>
           <button
             onClick={resetAll}
-            className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+            className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
           >
             Сбросить прогресс
           </button>

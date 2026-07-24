@@ -157,6 +157,18 @@ export interface GameState {
   // Today's randomly-drawn bonus quests (shown once no daily quests remain).
   bonusQuests: Quest[];
   bonusQuestsDate?: string;
+  // Date the current daily-quest rotation (see DAILY_QUEST_POOL) was drawn
+  // for. When this isn't today, ensureDailyRotation() swaps in a fresh
+  // random subset from the pool.
+  dailyQuestsDate?: string;
+  // How many mandatory daily quests were assigned on a given date — needed
+  // because rotated daily quests get fresh ids every day, so past days'
+  // dailyCompletions can no longer be matched by id against "today's"
+  // mandatory quest ids the way the original fixed quest list allowed.
+  // Comparing counts instead of ids keeps the discipline calendar/streak
+  // correct across rotations. Dates from before this feature existed simply
+  // won't have an entry — callers fall back to the current mandatory count.
+  dailyMandatoryCounts: Record<string, number>;
   // Unlocked achievement ids → the timestamp they were unlocked at. Once set,
   // an id is never removed (achievements don't "re-lock").
   unlockedAchievements: Record<string, number>;
@@ -215,83 +227,9 @@ function seedQuests(): Quest[] {
   });
 
   return [
-    // DAILY (mandatory) — base starter set across all 4 stats
-    q({
-      title: "Сделать разминку или растяжку 10 минут",
-      stat: "strength",
-      reward: 8,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Фото/видео разминки",
-    }),
-    q({
-      title: "Мини-тренировка: отжимания, приседания или планка",
-      stat: "strength",
-      reward: 12,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Фото после тренировки",
-      workModeTitle: "Короткая разминка/растяжка 5-10 минут",
-      workModeReward: 8,
-    }),
-    q({
-      title: "Почитать книгу 30 минут",
-      stat: "intellect",
-      reward: 10,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Фото раскрытой книги",
-      workModeTitle: "Почитать книгу 10-15 минут",
-      workModeReward: 6,
-    }),
-    q({
-      title: "Изучить один новый факт или урок по теме, которая интересна",
-      stat: "intellect",
-      reward: 8,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Скриншот статьи/видео/заметки",
-    }),
-    q({
-      title: "Привести в порядок своё пространство (стол, комната)",
-      stat: "will",
-      reward: 8,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Фото убранного пространства",
-    }),
-    q({
-      title: "Гигиена: душ, чистка зубов, уход за собой",
-      stat: "will",
-      reward: 6,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Селфи-подтверждение",
-    }),
-    q({
-      title: "Выпить 2 литра воды за день",
-      stat: "appearance",
-      reward: 5,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Фото бутылки воды или трекера",
-    }),
-    q({
-      title: "Уход за кожей лица (умыться, увлажнить)",
-      stat: "appearance",
-      reward: 6,
-      category: "daily",
-      mandatory: true,
-      requiresPhoto: true,
-      photoHint: "Селфи-подтверждение",
-    }),
+    // Daily quests are no longer seeded here — see DAILY_QUEST_POOL and
+    // ensureDailyRotation() below, which draw a fresh random subset every
+    // day. This function now only seeds the one-off story/purchase quests.
 
     // STORY
     q({
@@ -504,7 +442,7 @@ function seedQuests(): Quest[] {
 }
 
 export function defaultState(): GameState {
-  return {
+  const base: GameState = {
     avatar: "🥷",
     name: "Герой",
     totalXp: 0,
@@ -527,9 +465,13 @@ export function defaultState(): GameState {
     workMode: false,
     cheatMealsUsed: {},
     bonusQuests: [],
+    dailyMandatoryCounts: {},
     unlockedAchievements: {},
     remindersEnabled: false,
   };
+  // Draw the first day's random daily-quest rotation immediately, so a
+  // brand-new account isn't left with an empty daily list.
+  return ensureDailyRotation(base);
 }
 
 /**
@@ -557,6 +499,8 @@ export function loadState(userId?: string): GameState | null {
       cheatMealsUsed: parsed.cheatMealsUsed || {},
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
+      dailyQuestsDate: parsed.dailyQuestsDate,
+      dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
       unlockedAchievements: parsed.unlockedAchievements || {},
       remindersEnabled: parsed.remindersEnabled ?? false,
     };
@@ -616,6 +560,232 @@ export function effectiveQuest(quest: Quest, workMode: boolean): Quest {
     ...quest,
     title: quest.workModeTitle,
     reward: quest.workModeReward ?? quest.reward,
+  };
+}
+
+/**
+ * Large pool of daily-quest templates, spread across all 4 stats and 3
+ * rough difficulty bands (light 5-10 XP, medium 15-20, hard 25-30).
+ * ensureDailyRotation() below draws a fresh random subset every day instead
+ * of showing the same fixed list forever.
+ */
+export interface DailyQuestTemplate {
+  title: string;
+  stat: StatKey;
+  reward: number;
+  requiresPhoto?: boolean;
+  photoHint?: string;
+  requiresText?: boolean;
+  workModeTitle?: string;
+  workModeReward?: number;
+}
+
+export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
+  // ── Сила ──
+  {
+    title: "Сделать разминку или растяжку 10 минут",
+    stat: "strength",
+    reward: 8,
+    requiresPhoto: true,
+    photoHint: "Фото/видео разминки",
+  },
+  {
+    title: "Мини-тренировка: отжимания, приседания или планка",
+    stat: "strength",
+    reward: 12,
+    requiresPhoto: true,
+    photoHint: "Фото после тренировки",
+    workModeTitle: "Короткая разминка/растяжка 5-10 минут",
+    workModeReward: 8,
+  },
+  { title: "Сделать 30 приседаний", stat: "strength", reward: 8 },
+  { title: "Планка 2 минуты — можно в несколько подходов", stat: "strength", reward: 10 },
+  {
+    title: "Прогулка быстрым шагом 20 минут",
+    stat: "strength",
+    reward: 8,
+    requiresPhoto: true,
+    photoHint: "Фото с прогулки",
+  },
+  {
+    title: "Полноценная силовая тренировка 40-60 минут",
+    stat: "strength",
+    reward: 28,
+    requiresPhoto: true,
+    photoHint: "Фото после тренировки",
+    workModeTitle: "Короткая тренировка 15 минут",
+    workModeReward: 15,
+  },
+  { title: "100 приседаний за день суммарно, в любое время", stat: "strength", reward: 20 },
+  { title: "Растяжка всего тела 15 минут перед сном", stat: "strength", reward: 10 },
+  { title: "Подниматься по лестнице вместо лифта весь день", stat: "strength", reward: 6 },
+  { title: "Пройти 10000 шагов за день (по трекеру)", stat: "strength", reward: 20 },
+
+  // ── Интеллект ──
+  {
+    title: "Почитать книгу 30 минут",
+    stat: "intellect",
+    reward: 10,
+    requiresPhoto: true,
+    photoHint: "Фото раскрытой книги",
+    workModeTitle: "Почитать книгу 10-15 минут",
+    workModeReward: 6,
+  },
+  {
+    title: "Изучить один новый факт или урок по теме, которая интересна",
+    stat: "intellect",
+    reward: 8,
+    requiresPhoto: true,
+    photoHint: "Скриншот статьи/видео/заметки",
+  },
+  { title: "Пройти урок на образовательной платформе", stat: "intellect", reward: 18 },
+  { title: "Написать план на неделю по одной из своих целей", stat: "intellect", reward: 15 },
+  {
+    title: "Посмотреть обучающее видео 20 минут и законспектировать",
+    stat: "intellect",
+    reward: 15,
+  },
+  { title: "Решить 5 логических задач или головоломок", stat: "intellect", reward: 10 },
+  {
+    title: "Выучить новое слово на иностранном языке и повторить 10 раз",
+    stat: "intellect",
+    reward: 8,
+  },
+  {
+    title: "Прочитать статью по теме саморазвития и выписать 3 идеи",
+    stat: "intellect",
+    reward: 12,
+    requiresText: true,
+  },
+  {
+    title: "Провести час глубокой работы без соцсетей (deep work)",
+    stat: "intellect",
+    reward: 25,
+    workModeTitle: "Провести 25 минут глубокой работы без соцсетей",
+    workModeReward: 15,
+  },
+  {
+    title: "Разобрать и систематизировать заметки/файлы на компьютере",
+    stat: "intellect",
+    reward: 15,
+  },
+
+  // ── Воля ──
+  {
+    title: "Привести в порядок своё пространство (стол, комната)",
+    stat: "will",
+    reward: 8,
+    requiresPhoto: true,
+    photoHint: "Фото убранного пространства",
+  },
+  {
+    title: "Гигиена: душ, чистка зубов, уход за собой",
+    stat: "will",
+    reward: 6,
+    requiresPhoto: true,
+    photoHint: "Селфи-подтверждение",
+  },
+  { title: "Встать без повторного будильника («ещё 5 минут»)", stat: "will", reward: 8 },
+  { title: "Провести время после 21:00 без соцсетей", stat: "will", reward: 15 },
+  {
+    title: "Сделать то дело, которое откладываешь уже неделю",
+    stat: "will",
+    reward: 28,
+    requiresText: true,
+  },
+  { title: "Помедитировать 10 минут", stat: "will", reward: 10 },
+  { title: "Заполнить дневник или трекер привычек", stat: "will", reward: 6 },
+  {
+    title: "Приготовить еду самостоятельно, а не заказать",
+    stat: "will",
+    reward: 15,
+    requiresPhoto: true,
+    photoHint: "Фото готового блюда",
+  },
+  { title: "Лечь спать до полуночи", stat: "will", reward: 10 },
+  {
+    title: "Генеральная уборка одной зоны — шкаф, ящик или кухня",
+    stat: "will",
+    reward: 20,
+    requiresPhoto: true,
+    photoHint: "Фото результата",
+  },
+
+  // ── Внешность ──
+  {
+    title: "Выпить 2 литра воды за день",
+    stat: "appearance",
+    reward: 5,
+    requiresPhoto: true,
+    photoHint: "Фото бутылки воды или трекера",
+  },
+  {
+    title: "Уход за кожей лица (умыться, увлажнить)",
+    stat: "appearance",
+    reward: 6,
+    requiresPhoto: true,
+    photoHint: "Селфи-подтверждение",
+  },
+  { title: "Сделать причёску/укладку, даже если никуда не идёшь", stat: "appearance", reward: 8 },
+  { title: "Погладить или подготовить одежду на завтра", stat: "appearance", reward: 6 },
+  {
+    title: "Подобрать образ, в котором чувствуешь себя уверенно",
+    stat: "appearance",
+    reward: 10,
+    requiresPhoto: true,
+    photoHint: "Селфи в образе",
+  },
+  {
+    title: "Полноценный уход: маска для лица или волос",
+    stat: "appearance",
+    reward: 15,
+    requiresPhoto: true,
+    photoHint: "Фото во время ухода",
+  },
+  { title: "Почистить обувь или привести в порядок гардероб", stat: "appearance", reward: 12 },
+];
+
+/** How many quests are drawn from DAILY_QUEST_POOL for each day. */
+export const DAILY_QUEST_COUNT = 9;
+
+/**
+ * Draws a fresh random subset of DAILY_QUEST_POOL for today if it hasn't
+ * been drawn yet, replacing whatever daily quests were active before.
+ * Non-daily (story/purchase) quests are left untouched. Also records how
+ * many mandatory quests were assigned today in dailyMandatoryCounts, so the
+ * discipline calendar/streak can later check completeness by count instead
+ * of by id (today's rotated ids won't exist tomorrow).
+ */
+export function ensureDailyRotation(state: GameState): GameState {
+  const today = todayKey();
+  if (state.dailyQuestsDate === today) return state;
+
+  const now = Date.now();
+  const pool = [...DAILY_QUEST_POOL].sort(() => Math.random() - 0.5);
+  const picked = pool.slice(0, Math.min(DAILY_QUEST_COUNT, pool.length));
+  const newDailies: Quest[] = picked.map((t) => ({
+    id: uid(),
+    title: t.title,
+    stat: t.stat,
+    reward: t.reward,
+    category: "daily",
+    mandatory: true,
+    requiresPhoto: t.requiresPhoto,
+    photoHint: t.photoHint,
+    requiresText: t.requiresText,
+    workModeTitle: t.workModeTitle,
+    workModeReward: t.workModeReward,
+    done: false,
+    createdAt: now,
+    lastResetDate: today,
+  }));
+
+  const nonDaily = state.quests.filter((q) => q.category !== "daily");
+  return {
+    ...state,
+    quests: [...nonDaily, ...newDailies],
+    dailyQuestsDate: today,
+    dailyMandatoryCounts: { ...state.dailyMandatoryCounts, [today]: newDailies.length },
   };
 }
 
@@ -704,31 +874,17 @@ export function todayKey(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-// Reset daily quests at midnight boundaries
-export function resetDailyIfNeeded(state: GameState): GameState {
-  const today = todayKey();
-  let changed = false;
-  const quests = state.quests.map((q) => {
-    if (q.category !== "daily") return q;
-    if (q.lastResetDate !== today && q.done) {
-      changed = true;
-      return {
-        ...q,
-        done: false,
-        photoPath: undefined,
-        proofNote: undefined,
-        lastResetDate: today,
-        completedAt: undefined,
-      };
-    }
-    if (!q.lastResetDate) {
-      changed = true;
-      return { ...q, lastResetDate: today };
-    }
-    return q;
-  });
-  if (!changed) return state;
-  return { ...state, quests };
+/**
+ * Number of mandatory daily quests assigned on a given date. Reads the
+ * recorded count for that date if we have one (dailyMandatoryCounts, filled
+ * in by ensureDailyRotation); dates from before daily-quest rotation existed
+ * won't have an entry, so those fall back to today's current mandatory
+ * count, matching the old fixed-list behavior for historical data.
+ */
+function mandatoryCountFor(state: GameState, dateKey: string): number {
+  const recorded = state.dailyMandatoryCounts[dateKey];
+  if (recorded != null) return recorded;
+  return state.quests.filter((q) => q.category === "daily" && q.mandatory).length;
 }
 
 export interface DayStatus {
@@ -743,9 +899,6 @@ export function computeDiscipline(state: GameState) {
   const days: DayStatus[] = [];
   const now = new Date();
   const todayK = todayKey();
-  const mandatoryIds = state.quests
-    .filter((q) => q.category === "daily" && q.mandatory)
-    .map((q) => q.id);
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(start);
@@ -755,9 +908,9 @@ export function computeDiscipline(state: GameState) {
     if (d > now && k !== todayK) status = "future";
     else if (k === todayK) status = "pending";
     else {
+      const assigned = mandatoryCountFor(state, k);
       const done = state.dailyCompletions[k] || [];
-      const allDone = mandatoryIds.every((id) => done.includes(id));
-      status = allDone && mandatoryIds.length > 0 ? "green" : "red";
+      status = assigned > 0 && done.length >= assigned ? "green" : "red";
     }
     days.push({ date: k, status, dayNum: d.getDate() });
   }
@@ -772,14 +925,17 @@ export function computeDiscipline(state: GameState) {
 /** Streak milestones that trigger a celebration when first reached. */
 export const STREAK_MILESTONES = [7, 30, 100];
 
-/** True if every mandatory daily quest was completed on the given date. */
+/**
+ * True if every mandatory daily quest was completed on the given date.
+ * Compares the count of completed daily quest ids against the number
+ * assigned that day (see mandatoryCountFor) rather than matching exact ids,
+ * since rotated daily quests get fresh ids every day.
+ */
 export function isDayFullyDone(state: GameState, dateKey: string): boolean {
-  const mandatoryIds = state.quests
-    .filter((q) => q.category === "daily" && q.mandatory)
-    .map((q) => q.id);
-  if (mandatoryIds.length === 0) return false;
+  const assigned = mandatoryCountFor(state, dateKey);
+  if (assigned === 0) return false;
   const done = state.dailyCompletions[dateKey] || [];
-  return mandatoryIds.every((id) => done.includes(id));
+  return done.length >= assigned;
 }
 
 /**

@@ -17,7 +17,7 @@ import {
   computeStreak,
   effectiveQuest,
   ensureBonusQuests,
-  resetDailyIfNeeded,
+  ensureDailyRotation,
   STAT_META,
   STREAK_MILESTONES,
   todayKey,
@@ -55,11 +55,11 @@ function Home() {
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Reset daily quests at midnight + keep today's bonus quest set current
+  // Draw today's daily-quest rotation + keep today's bonus quest set current
   useEffect(() => {
     if (!hydrated) return;
-    update((s) => ensureBonusQuests(resetDailyIfNeeded(s)));
-    const t = setInterval(() => update((s) => ensureBonusQuests(resetDailyIfNeeded(s))), 60_000);
+    update((s) => ensureBonusQuests(ensureDailyRotation(s)));
+    const t = setInterval(() => update((s) => ensureBonusQuests(ensureDailyRotation(s))), 60_000);
     return () => clearInterval(t);
   }, [hydrated, update]);
 

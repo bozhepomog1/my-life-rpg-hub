@@ -57,7 +57,6 @@ export function FriendsPanel({ state }: Props) {
   // Leaderboard: me (from live game state) + accepted friends, by total XP.
   const myEntry: PublicProfile = {
     user_id: myId,
-    email: user?.email ?? null,
     username: state.name,
     avatar: state.avatar,
     total_xp: state.totalXp,
@@ -72,7 +71,7 @@ export function FriendsPanel({ state }: Props) {
     const q = email.trim();
     if (!q) return;
     setSearch({ kind: "searching" });
-    const found = await findProfileByEmail(q, myId);
+    const found = await findProfileByEmail(q);
     if (!found) {
       setSearch({ kind: "none" });
       return;
@@ -172,7 +171,9 @@ export function FriendsPanel({ state }: Props) {
                     <div className="truncate text-sm font-medium">
                       {p?.username ?? "Пользователь"}
                     </div>
-                    <div className="text-xs text-muted-foreground">{p?.email ?? ""}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p ? `Ур. ${p.level} · ${p.total_xp} XP` : ""}
+                    </div>
                   </div>
                   <button
                     type="button"

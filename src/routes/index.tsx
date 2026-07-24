@@ -7,6 +7,8 @@ import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
+import { SeasonProgress } from "@/components/SeasonProgress";
+import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
 import { StreakBanner } from "@/components/StreakBanner";
 import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
@@ -19,6 +21,7 @@ import {
   effectiveQuest,
   ensureBonusQuests,
   ensureDailyRotation,
+  ensureSeason,
   isWorkDay,
   STAT_META,
   STREAK_MILESTONES,
@@ -121,11 +124,13 @@ function Home() {
     setPendingUndo(null);
   }
 
-  // Draw today's daily-quest rotation + keep today's bonus quest set current
+  // Draw today's daily-quest rotation, keep today's bonus quest set current,
+  // and roll the season over once its 30 days are up.
   useEffect(() => {
     if (!hydrated) return;
-    update((s) => ensureBonusQuests(ensureDailyRotation(s)));
-    const t = setInterval(() => update((s) => ensureBonusQuests(ensureDailyRotation(s))), 60_000);
+    const run = () => update((s) => ensureSeason(ensureBonusQuests(ensureDailyRotation(s))));
+    run();
+    const t = setInterval(run, 60_000);
     return () => clearInterval(t);
   }, [hydrated, update]);
 
@@ -337,6 +342,8 @@ function Home() {
 
         <WorkScheduleStatus isWork={isWork} />
 
+        <SeasonProgress season={state.season} />
+
         <DepositWidget state={state} />
 
         <section>
@@ -520,6 +527,13 @@ function Home() {
             </Link>
           </div>
         </div>
+      )}
+
+      {state.lastSeasonSummary && !state.seasonSummarySeen && (
+        <SeasonSummaryModal
+          summary={state.lastSeasonSummary}
+          onContinue={() => update((s) => ({ ...s, seasonSummarySeen: true }))}
+        />
       )}
     </div>
   );

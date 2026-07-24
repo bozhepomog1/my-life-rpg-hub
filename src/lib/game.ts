@@ -248,6 +248,14 @@ export interface GameState {
   // Opt-in browser Notification reminders for unfinished daily quests.
   // Only ever set to true after the user explicitly grants permission.
   remindersEnabled: boolean;
+  // Current 30-day season — a rolling XP/quest counter that resets every
+  // season without touching overall hero level/XP. See SeasonState below.
+  season: SeasonState;
+  // Set once a season rolls over, so a results screen can be shown; cleared
+  // (marked seen) once the player dismisses it, but the record itself is
+  // kept around as the last completed season's summary.
+  lastSeasonSummary?: SeasonSummary;
+  seasonSummarySeen: boolean;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -541,6 +549,8 @@ export function defaultState(): GameState {
     dailyMandatoryCounts: {},
     unlockedAchievements: {},
     remindersEnabled: false,
+    season: defaultSeason(),
+    seasonSummarySeen: true,
   };
   // Draw the first day's random daily-quest rotation immediately, so a
   // brand-new account isn't left with an empty daily list.
@@ -579,6 +589,9 @@ export function loadState(userId?: string): GameState | null {
       dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
       unlockedAchievements: parsed.unlockedAchievements || {},
       remindersEnabled: parsed.remindersEnabled ?? false,
+      season: parsed.season || defaultSeason(),
+      lastSeasonSummary: parsed.lastSeasonSummary,
+      seasonSummarySeen: parsed.seasonSummarySeen ?? true,
     };
   } catch {
     return null;
@@ -921,6 +934,75 @@ export function ensureDailyRotation(state: GameState): GameState {
   };
 }
 
+/**
+ * A rolling 30-day "season" — a fresh XP/quest counter layered on top of
+ * overall progress, purely to give short-term goals against the fatigue of
+ * an otherwise-unchanging quest list. Overall hero level/totalXp/stats are
+ * never touched by a season rolling over — see ensureSeason() below.
+ */
+export interface SeasonState {
+  seasonNumber: number;
+  startedAt: number;
+  xp: number;
+  questsCompleted: number;
+}
+
+export interface SeasonSummary {
+  seasonNumber: number;
+  xp: number;
+  questsCompleted: number;
+  badgeUnlocked: boolean;
+  endedAt: number;
+}
+
+export const SEASON_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Season XP needed to unlock the season's cosmetic badge. */
+export const SEASON_BADGE_XP_TARGET = 800;
+
+/** Cosmetic badge icons, one per season, cycling if a player outlasts the list. */
+const SEASON_BADGE_ICONS = ["🏵️", "🎖️", "🏆", "🥇", "💠", "🔶", "🌟"];
+
+export function seasonBadgeIcon(seasonNumber: number): string {
+  return SEASON_BADGE_ICONS[(seasonNumber - 1) % SEASON_BADGE_ICONS.length];
+}
+
+export function defaultSeason(): SeasonState {
+  return { seasonNumber: 1, startedAt: Date.now(), xp: 0, questsCompleted: 0 };
+}
+
+/**
+ * Rolls the season over once SEASON_DURATION_MS has elapsed since it
+ * started: records a one-time summary (xp earned, quests completed,
+ * whether the cosmetic badge was reached) for the results screen, then
+ * starts a fresh season with a clean counter. Only ever touches
+ * state.season/lastSeasonSummary/seasonSummarySeen — nothing else.
+ */
+export function ensureSeason(state: GameState): GameState {
+  const elapsed = Date.now() - state.season.startedAt;
+  if (elapsed < SEASON_DURATION_MS) return state;
+
+  const summary: SeasonSummary = {
+    seasonNumber: state.season.seasonNumber,
+    xp: state.season.xp,
+    questsCompleted: state.season.questsCompleted,
+    badgeUnlocked: state.season.xp >= SEASON_BADGE_XP_TARGET,
+    endedAt: state.season.startedAt + SEASON_DURATION_MS,
+  };
+
+  return {
+    ...state,
+    season: {
+      seasonNumber: state.season.seasonNumber + 1,
+      startedAt: Date.now(),
+      xp: 0,
+      questsCompleted: 0,
+    },
+    lastSeasonSummary: summary,
+    seasonSummarySeen: false,
+  };
+}
+
 /** Local pool of light bonus quests, drawn from when no daily quests remain today. */
 export interface BonusQuestTemplate {
   title: string;
@@ -996,6 +1078,11 @@ export function applyReward(state: GameState, stat: StatKey, reward: number): Ga
     next.level += 1;
   }
   next.completedCount += 1;
+  next.season = {
+    ...next.season,
+    xp: next.season.xp + reward,
+    questsCompleted: next.season.questsCompleted + 1,
+  };
   return next;
 }
 
@@ -1019,6 +1106,11 @@ export function undoReward(state: GameState, stat: StatKey, reward: number): Gam
   next.level = level;
 
   next.completedCount = Math.max(0, next.completedCount - 1);
+  next.season = {
+    ...next.season,
+    xp: Math.max(0, next.season.xp - reward),
+    questsCompleted: Math.max(0, next.season.questsCompleted - 1),
+  };
   return next;
 }
 

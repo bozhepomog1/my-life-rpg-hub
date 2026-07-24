@@ -134,6 +134,8 @@ export interface GameState {
   nutrition: Record<string, NutritionDay>;
   // body: height/weight + personal training records
   body: BodyStats;
+  // longest streak of consecutive fully-completed days ever reached
+  longestStreak: number;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -479,6 +481,7 @@ export function defaultState(): GameState {
     dailyCompletions: {},
     nutrition: {},
     body: {},
+    longestStreak: 0,
   };
 }
 
@@ -502,6 +505,7 @@ export function loadState(userId?: string): GameState | null {
       dailyCompletions: parsed.dailyCompletions || {},
       nutrition: parsed.nutrition || {},
       body: parsed.body || {},
+      longestStreak: parsed.longestStreak ?? 0,
     };
   } catch {
     return null;
@@ -632,4 +636,42 @@ export function computeDiscipline(state: GameState) {
   const finished = Date.now() >= state.depositStartAt + DEPOSIT_DURATION_MS;
   const lost = finished && progress < 100;
   return { days, redCount, greenCount, progress, finished, lost };
+}
+
+/** Streak milestones that trigger a celebration when first reached. */
+export const STREAK_MILESTONES = [7, 30, 100];
+
+/** True if every mandatory daily quest was completed on the given date. */
+export function isDayFullyDone(state: GameState, dateKey: string): boolean {
+  const mandatoryIds = state.quests
+    .filter((q) => q.category === "daily" && q.mandatory)
+    .map((q) => q.id);
+  if (mandatoryIds.length === 0) return false;
+  const done = state.dailyCompletions[dateKey] || [];
+  return mandatoryIds.every((id) => done.includes(id));
+}
+
+/**
+ * Current streak of consecutive fully-completed days, counting backwards from
+ * today over the full completion history (not capped to the deposit window).
+ * Today counts once it's fully done; while today is still in progress it
+ * neither adds to nor breaks the streak, so the run from yesterday is shown
+ * until midnight.
+ */
+export function computeStreak(state: GameState): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let current = 0;
+  let startOffset = 1; // default: begin at yesterday
+  if (isDayFullyDone(state, todayKey(today))) {
+    current = 1;
+    startOffset = 1;
+  }
+  for (let i = startOffset; i <= 3660; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (isDayFullyDone(state, todayKey(d))) current += 1;
+    else break;
+  }
+  return current;
 }

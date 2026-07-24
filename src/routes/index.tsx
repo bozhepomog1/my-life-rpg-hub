@@ -7,13 +7,16 @@ import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
+import { StreakBanner } from "@/components/StreakBanner";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
   applyReward,
   CATEGORY_META,
   computeDiscipline,
+  computeStreak,
   resetDailyIfNeeded,
   STAT_META,
+  STREAK_MILESTONES,
   todayKey,
   type QuestCategory,
   type StatKey,
@@ -57,6 +60,35 @@ function Home() {
   }, [hydrated, update]);
 
   const disc = useMemo(() => (hydrated ? computeDiscipline(state) : null), [state, hydrated]);
+  const streak = useMemo(() => (hydrated ? computeStreak(state) : 0), [state, hydrated]);
+  const longestStreak = Math.max(state.longestStreak, streak);
+
+  const [milestone, setMilestone] = useState<number | null>(null);
+  const prevStreak = useRef(streak);
+
+  // Persist a new all-time-longest streak.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (streak > state.longestStreak) {
+      update((s) => ({ ...s, longestStreak: Math.max(s.longestStreak, streak) }));
+    }
+  }, [streak, hydrated, state.longestStreak, update]);
+
+  // Celebrate crossing a round milestone (7/30/100) during this session. On
+  // mount prevStreak is seeded to the current value, so a reload of an
+  // already-high streak won't re-trigger — only an actual increment does.
+  useEffect(() => {
+    if (!hydrated) return;
+    const before = prevStreak.current;
+    prevStreak.current = streak;
+    if (streak <= before) return;
+    const hit = STREAK_MILESTONES.filter((m) => m > before && m <= streak).pop();
+    if (hit) {
+      setMilestone(hit);
+      const t = setTimeout(() => setMilestone(null), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [streak, hydrated]);
 
   function completeQuest(
     id: string,
@@ -159,6 +191,8 @@ function Home() {
           onChangeName={(n) => update((s) => ({ ...s, name: n }))}
           levelUpPulse={levelPulse}
         />
+
+        <StreakBanner current={streak} longest={longestStreak} />
 
         <DepositWidget state={state} />
 
@@ -263,6 +297,17 @@ function Home() {
           </div>
         ))}
       </div>
+
+      {milestone != null && (
+        <div className="pointer-events-none fixed inset-x-0 top-6 z-[120] flex justify-center px-4">
+          <div className="animate-level-up rounded-full border border-primary/40 bg-card px-5 py-2.5 text-center shadow-lg">
+            <span className="text-lg">🔥</span>{" "}
+            <span className="text-sm font-semibold text-foreground">
+              {milestone} дней подряд — новая веха!
+            </span>
+          </div>
+        </div>
+      )}
 
       {lost && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-background/80 p-6 backdrop-blur-sm">

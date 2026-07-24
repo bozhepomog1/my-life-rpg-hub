@@ -335,29 +335,32 @@ export function TabNav({ pathname }: { pathname: string }) {
     { to: "/", label: "Профиль" },
     { to: "/nutrition", label: "Питание" },
     { to: "/body", label: "Тело" },
+    { to: "/friends", label: "Друзья" },
     { to: "/achievements", label: "Достижения" },
   ] as const;
   return (
-    <div className="mb-4 flex items-center justify-between sm:mb-6">
-      <div className="inline-flex rounded-full border border-border bg-secondary p-1">
-        {tabs.map((t) => {
-          const active = pathname === t.to;
-          return (
-            <Link
-              key={t.to}
-              to={t.to}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
-                active
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </Link>
-          );
-        })}
+    <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6">
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <div className="inline-flex w-max rounded-full border border-border bg-secondary p-1">
+          {tabs.map((t) => {
+            const active = pathname === t.to;
+            return (
+              <Link
+                key={t.to}
+                to={t.to}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Link
           to="/settings"
           aria-label="Настройки"

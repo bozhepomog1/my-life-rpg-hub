@@ -8,16 +8,20 @@ import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { StreakBanner } from "@/components/StreakBanner";
+import { WorkModeToggle } from "@/components/WorkModeToggle";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
   applyReward,
   CATEGORY_META,
   computeDiscipline,
   computeStreak,
+  effectiveQuest,
+  ensureBonusQuests,
   resetDailyIfNeeded,
   STAT_META,
   STREAK_MILESTONES,
   todayKey,
+  type Quest,
   type QuestCategory,
   type StatKey,
 } from "@/lib/game";
@@ -51,11 +55,11 @@ function Home() {
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Reset daily quests at midnight
+  // Reset daily quests at midnight + keep today's bonus quest set current
   useEffect(() => {
     if (!hydrated) return;
-    update((s) => resetDailyIfNeeded(s));
-    const t = setInterval(() => update((s) => resetDailyIfNeeded(s)), 60_000);
+    update((s) => ensureBonusQuests(resetDailyIfNeeded(s)));
+    const t = setInterval(() => update((s) => ensureBonusQuests(resetDailyIfNeeded(s))), 60_000);
     return () => clearInterval(t);
   }, [hydrated, update]);
 
@@ -148,6 +152,47 @@ function Home() {
     });
   }
 
+  function completeBonusQuest(
+    id: string,
+    _photoPath: string | undefined,
+    _note: string | undefined,
+    e?: React.MouseEvent,
+  ) {
+    const quest = state.bonusQuests.find((q) => q.id === id);
+    if (!quest || quest.done) return;
+    const meta = STAT_META[quest.stat];
+    const rect = (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect();
+    const fid = ++floatId.current;
+    setFloats((f) => [
+      ...f,
+      {
+        id: fid,
+        text: `+${quest.reward} ${meta.label}`,
+        color: meta.color,
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top : window.innerHeight / 2,
+      },
+    ]);
+    setTimeout(() => setFloats((f) => f.filter((x) => x.id !== fid)), 1100);
+
+    update((s) => {
+      const prev = s.level;
+      const rewarded = applyReward(s, quest.stat, quest.reward);
+      if (rewarded.level > prev) {
+        setTimeout(() => {
+          setLevelPulse(true);
+          setTimeout(() => setLevelPulse(false), 1500);
+        }, 200);
+      }
+      return {
+        ...rewarded,
+        bonusQuests: rewarded.bonusQuests.map((q) =>
+          q.id === id ? { ...q, done: true, completedAt: Date.now() } : q,
+        ),
+      };
+    });
+  }
+
   function togglChecklist(qid: string, itemId: string) {
     update((s) => ({
       ...s,
@@ -175,10 +220,18 @@ function Home() {
 
   if (!hydrated) return null;
 
-  const questsByCat = state.quests.filter((q) => q.category === tab);
+  const questsByCat = state.quests
+    .filter((q) => q.category === tab)
+    .filter((q) => !q.dayOffOnly || !state.workMode)
+    .map((q) => effectiveQuest(q, state.workMode));
   const active = questsByCat.filter((q) => !q.done);
   const done = questsByCat.filter((q) => q.done);
   const lost = disc?.lost;
+
+  const dailyQuests = state.quests.filter((q) => q.category === "daily");
+  const noActiveDailies = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
+  const bonusActive = state.bonusQuests.filter((q) => !q.done);
+  const bonusDone = state.bonusQuests.filter((q) => q.done);
 
   return (
     <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
@@ -193,6 +246,11 @@ function Home() {
         />
 
         <StreakBanner current={streak} longest={longestStreak} />
+
+        <WorkModeToggle
+          workMode={state.workMode}
+          onChange={(workMode) => update((s) => ({ ...s, workMode }))}
+        />
 
         <DepositWidget state={state} />
 
@@ -284,6 +342,49 @@ function Home() {
             </div>
           )}
         </section>
+
+        {noActiveDailies && (bonusActive.length > 0 || bonusDone.length > 0) && (
+          <section>
+            <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
+              ✨ Дополнительно
+            </h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Все ежедневные квесты выполнены — вот пара лёгких бонусов с наградой ×1.5.
+            </p>
+            <div className="space-y-3">
+              {bonusActive.map((q: Quest) => (
+                <QuestCard
+                  key={q.id}
+                  quest={q}
+                  body={state.body}
+                  onComplete={completeBonusQuest}
+                  onDelete={() =>
+                    update((s) => ({
+                      ...s,
+                      bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
+                    }))
+                  }
+                  onPhoto={() => {}}
+                />
+              ))}
+              {bonusDone.map((q: Quest) => (
+                <QuestCard
+                  key={q.id}
+                  quest={q}
+                  body={state.body}
+                  onComplete={() => {}}
+                  onDelete={() =>
+                    update((s) => ({
+                      ...s,
+                      bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
+                    }))
+                  }
+                  onPhoto={() => {}}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <div className="pointer-events-none fixed inset-0 z-50">

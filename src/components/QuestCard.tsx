@@ -107,6 +107,11 @@ export function QuestCard({
               Обязательно
             </span>
           )}
+          {quest.bonus && (
+            <span className="rounded-full border border-primary/40 px-1.5 py-0.5 text-[10px] text-primary">
+              ×1.5
+            </span>
+          )}
           <span className="ml-auto shrink-0 text-sm font-medium text-primary">
             +{quest.reward} XP
           </span>

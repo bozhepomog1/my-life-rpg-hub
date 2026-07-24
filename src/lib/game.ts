@@ -32,6 +32,16 @@ export interface Quest {
   linkedRecord?: RecordKey;
   recordPercent?: number; // e.g. 0.7 for "70% of your max"
   trainingDefaultHint?: string;
+  // Work/Day-off mode (see WORK_MODE below): when workMode is on, a daily
+  // quest with these set shows the lightened title/reward instead of the
+  // full one. dayOffOnly quests are hidden entirely while at work — reserved
+  // for genuinely heavy tasks (full workouts, extensive learning sessions).
+  workModeTitle?: string;
+  workModeReward?: number;
+  dayOffOnly?: boolean;
+  // Bonus quests: drawn from BONUS_QUEST_POOL when no daily quests remain
+  // today, rewarded at 1.5x. Purely a display flag (badge).
+  bonus?: boolean;
 }
 
 export interface StatState {
@@ -53,6 +63,9 @@ export interface NutritionEntry extends Macro {
 
 export interface NutritionDay extends Macro {
   entries: NutritionEntry[];
+  // Set for a day when a monthly "cheat meal" reward was used — temporarily
+  // lowers the remaining carb/fat goals, but the day still counts as green.
+  cheatMealUsed?: boolean;
 }
 
 export type RecordKey = "maxPushups" | "maxPullups" | "maxDips" | "maxLegRaises";
@@ -136,6 +149,14 @@ export interface GameState {
   body: BodyStats;
   // longest streak of consecutive fully-completed days ever reached
   longestStreak: number;
+  // Work/Day-off mode: true = "at work (12h shift)", lightens/hides heavy
+  // daily quests; false = "day off", full quest set available.
+  workMode: boolean;
+  // Monthly cheat-meal reward counter, keyed by "YYYY-MM".
+  cheatMealsUsed: Record<string, number>;
+  // Today's randomly-drawn bonus quests (shown once no daily quests remain).
+  bonusQuests: Quest[];
+  bonusQuestsDate?: string;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -206,6 +227,8 @@ function seedQuests(): Quest[] {
       mandatory: true,
       requiresPhoto: true,
       photoHint: "Фото после тренировки",
+      workModeTitle: "Короткая разминка/растяжка 5-10 минут",
+      workModeReward: 8,
     }),
     q({
       title: "Почитать книгу 30 минут",
@@ -215,6 +238,8 @@ function seedQuests(): Quest[] {
       mandatory: true,
       requiresPhoto: true,
       photoHint: "Фото раскрытой книги",
+      workModeTitle: "Почитать книгу 10-15 минут",
+      workModeReward: 6,
     }),
     q({
       title: "Изучить один новый факт или урок по теме, которая интересна",
@@ -276,6 +301,7 @@ function seedQuests(): Quest[] {
       category: "story",
       requiresPhoto: true,
       photoHint: "Фото с улицы",
+      dayOffOnly: true,
     }),
     q({
       title: "Разобраться в вайбкодинге",
@@ -283,6 +309,7 @@ function seedQuests(): Quest[] {
       reward: 20,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Начать учить английский язык",
@@ -290,6 +317,7 @@ function seedQuests(): Quest[] {
       reward: 15,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Начать учить программирование",
@@ -297,6 +325,7 @@ function seedQuests(): Quest[] {
       reward: 15,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Изучить уроки по вайтлистам",
@@ -304,6 +333,7 @@ function seedQuests(): Quest[] {
       reward: 25,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Начать изучать, как создавать ТГ-ботов",
@@ -311,6 +341,7 @@ function seedQuests(): Quest[] {
       reward: 20,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Начать изучать, как создать нейросеть под себя",
@@ -318,6 +349,7 @@ function seedQuests(): Quest[] {
       reward: 30,
       category: "story",
       requiresText: true,
+      dayOffOnly: true,
     }),
     q({
       title: "Придумать схему по арбитражу (купил дешевле — продал дороже)",
@@ -352,6 +384,7 @@ function seedQuests(): Quest[] {
       linkedRecord: "maxPushups",
       recordPercent: 0.7,
       trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+      dayOffOnly: true,
     }),
     q({
       title: "Сделать подход подтягиваний",
@@ -361,6 +394,7 @@ function seedQuests(): Quest[] {
       linkedRecord: "maxPullups",
       recordPercent: 0.7,
       trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+      dayOffOnly: true,
     }),
     q({
       title: "Сделать подход отжиманий на брусьях",
@@ -370,6 +404,7 @@ function seedQuests(): Quest[] {
       linkedRecord: "maxDips",
       recordPercent: 0.7,
       trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+      dayOffOnly: true,
     }),
     q({
       title: "Сделать подход подъёмов ног на пресс",
@@ -379,6 +414,7 @@ function seedQuests(): Quest[] {
       linkedRecord: "maxLegRaises",
       recordPercent: 0.7,
       trainingDefaultHint: "Сделай 3 подхода в комфортном темпе",
+      dayOffOnly: true,
     }),
 
     // PURCHASE (already completed)
@@ -482,6 +518,9 @@ export function defaultState(): GameState {
     nutrition: {},
     body: {},
     longestStreak: 0,
+    workMode: false,
+    cheatMealsUsed: {},
+    bonusQuests: [],
   };
 }
 
@@ -506,6 +545,10 @@ export function loadState(userId?: string): GameState | null {
       nutrition: parsed.nutrition || {},
       body: parsed.body || {},
       longestStreak: parsed.longestStreak ?? 0,
+      workMode: parsed.workMode ?? false,
+      cheatMealsUsed: parsed.cheatMealsUsed || {},
+      bonusQuests: parsed.bonusQuests || [],
+      bonusQuestsDate: parsed.bonusQuestsDate,
     };
   } catch {
     return null;
@@ -548,6 +591,84 @@ export function trainingHint(quest: Quest, body: BodyStats): string | null {
   const target = Math.max(1, Math.round(max * quest.recordPercent));
   const pct = Math.round(quest.recordPercent * 100);
   return `Сделай 3 подхода по ${pct}% от твоего максимума — это ${target} повторений за подход`;
+}
+
+/**
+ * Applies the Work/Day-off lightening to a single quest for display: while
+ * workMode is on, a quest with workModeTitle set shows the lightened
+ * title/reward instead of the full one. Purely presentational — the
+ * underlying quest record (and its reward on completion) uses whatever was
+ * effective at the moment of completion.
+ */
+export function effectiveQuest(quest: Quest, workMode: boolean): Quest {
+  if (!workMode || !quest.workModeTitle) return quest;
+  return {
+    ...quest,
+    title: quest.workModeTitle,
+    reward: quest.workModeReward ?? quest.reward,
+  };
+}
+
+/** Local pool of light bonus quests, drawn from when no daily quests remain today. */
+export interface BonusQuestTemplate {
+  title: string;
+  stat: StatKey;
+  reward: number;
+}
+
+export const BONUS_QUEST_POOL: BonusQuestTemplate[] = [
+  { title: "Сделай 5-минутную растяжку глаз", stat: "will", reward: 5 },
+  { title: "Позвони близкому человеку", stat: "will", reward: 8 },
+  { title: "Приберись на рабочем столе 10 минут", stat: "will", reward: 6 },
+  { title: "Сделай 20 приседаний прямо сейчас", stat: "strength", reward: 6 },
+  { title: "Выпиши 3 вещи, за которые благодарен сегодня", stat: "intellect", reward: 6 },
+  { title: "Послушай подкаст или лекцию 10 минут", stat: "intellect", reward: 8 },
+  { title: "Завари чай осознанно, без телефона в руках", stat: "appearance", reward: 5 },
+  { title: "Прогуляйся на свежем воздухе 10 минут", stat: "strength", reward: 8 },
+  { title: "Разбери 10 старых фото в галерее телефона", stat: "will", reward: 5 },
+  { title: "Напиши список дел на завтра", stat: "intellect", reward: 6 },
+  { title: "Сделай себе комплимент перед зеркалом", stat: "appearance", reward: 5 },
+  { title: "Проветри комнату 10 минут", stat: "will", reward: 5 },
+  { title: "Сделай 10 глубоких осознанных вдохов-выдохов", stat: "will", reward: 5 },
+  { title: "Полей цветы или приберись у растений", stat: "appearance", reward: 5 },
+  { title: "Наведи порядок в закладках браузера 10 минут", stat: "intellect", reward: 6 },
+];
+
+const BONUS_REWARD_MULTIPLIER = 1.5;
+
+/**
+ * Ensures today's bonus-quest set is up to date: draws 2-3 random quests
+ * from BONUS_QUEST_POOL (rewarded at 1.5x) once every daily quest is done,
+ * and clears them out for a new day otherwise. Regenerating only once per
+ * day (tracked via bonusQuestsDate) means completing/reopening quests during
+ * the same day doesn't reshuffle the bonus set under the user.
+ */
+export function ensureBonusQuests(state: GameState): GameState {
+  const today = todayKey();
+  const dailyQuests = state.quests.filter((q) => q.category === "daily");
+  const allDailyDone = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
+
+  if (!allDailyDone) {
+    if (state.bonusQuestsDate === today && state.bonusQuests.length === 0) return state;
+    return { ...state, bonusQuests: [], bonusQuestsDate: today };
+  }
+
+  if (state.bonusQuestsDate === today && state.bonusQuests.length > 0) return state;
+
+  const shuffled = [...BONUS_QUEST_POOL].sort(() => Math.random() - 0.5);
+  const count = 2 + Math.round(Math.random()); // 2 or 3
+  const now = Date.now();
+  const bonusQuests: Quest[] = shuffled.slice(0, count).map((t) => ({
+    id: uid(),
+    title: t.title,
+    stat: t.stat,
+    reward: Math.round(t.reward * BONUS_REWARD_MULTIPLIER),
+    category: "daily",
+    done: false,
+    createdAt: now,
+    bonus: true,
+  }));
+  return { ...state, bonusQuests, bonusQuestsDate: today };
 }
 
 export function applyReward(state: GameState, stat: StatKey, reward: number): GameState {

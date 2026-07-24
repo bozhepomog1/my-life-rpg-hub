@@ -3,8 +3,11 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { STAT_META, type GameState } from "@/lib/game";
 import {
   addNutritionEntry,
+  cheatMealsRemaining,
+  effectiveGoals,
   getTodayNutrition,
-  NUTRITION_GOALS,
+  consumeCheatMeal,
+  MONTHLY_CHEAT_LIMIT,
   parseMeal,
   type ParsedMeal,
 } from "@/lib/nutrition";
@@ -28,6 +31,8 @@ export function NutritionCalculator({ state, update }: Props) {
   const [notFound, setNotFound] = useState(false);
 
   const today = getTodayNutrition(state);
+  const goals = effectiveGoals(state);
+  const remaining = cheatMealsRemaining(state);
 
   function handleCalculate() {
     const trimmed = text.trim();
@@ -101,11 +106,42 @@ export function NutritionCalculator({ state, update }: Props) {
       </section>
 
       <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Лимит поощрений на месяц</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Осознанный читмил вместо штрафа: снижает цель по углеводам/жирам на остаток дня, но день
+          всё равно остаётся зелёным в календаре — это выбор, а не провал.
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-sm font-medium">
+            {remaining} / {MONTHLY_CHEAT_LIMIT} разрешённых
+          </span>
+          <button
+            type="button"
+            onClick={() => update((s) => consumeCheatMeal(s))}
+            disabled={remaining <= 0}
+            className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Использовать поощрение
+          </button>
+        </div>
+        {remaining <= 0 && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            Лимит на этот месяц исчерпан — новые поощрения появятся в следующем месяце.
+          </p>
+        )}
+        {today.cheatMealUsed && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            Сегодня цель по углеводам/жирам временно снижена — день всё равно засчитан ✅
+          </p>
+        )}
+      </section>
+
+      <section className="panel p-6">
         <h2 className="mb-4 text-sm font-semibold">Прогресс дня</h2>
         <div className="space-y-4">
           {METRICS.map((m) => {
             const value = today[m.key];
-            const goal = NUTRITION_GOALS[m.key];
+            const goal = goals[m.key];
             const pct = Math.min(100, (value / goal) * 100);
             return (
               <div key={m.key}>

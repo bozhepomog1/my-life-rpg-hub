@@ -10,6 +10,64 @@ export const NUTRITION_GOALS: Macro = {
   carbs: 260,
 };
 
+/**
+ * Cheat-meal reward system: instead of penalizing an off-plan meal, the user
+ * gets a limited number of conscious "rewards" per month. Using one lowers
+ * the remaining carb/fat goals for the rest of the day (not protein/kcal —
+ * those stay as a sanity check), but the discipline calendar day still
+ * counts as green since it only ever looks at daily-quest completion, never
+ * nutrition — see computeDiscipline() in game.ts.
+ */
+export const MONTHLY_CHEAT_LIMIT = 3;
+export const CHEAT_MEAL_REDUCTION = 0.25; // 25% off carbs/fat goals for the day
+
+export function monthKey(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function cheatMealsUsedThisMonth(state: GameState): number {
+  return state.cheatMealsUsed[monthKey()] ?? 0;
+}
+
+export function cheatMealsRemaining(state: GameState): number {
+  return Math.max(0, MONTHLY_CHEAT_LIMIT - cheatMealsUsedThisMonth(state));
+}
+
+/**
+ * Consumes one of this month's cheat-meal rewards (no-op if none remain) and
+ * flags today so the reduced goals apply. Counter resets automatically at
+ * the start of each month since it's keyed by "YYYY-MM" — no cron/migration
+ * needed.
+ */
+export function consumeCheatMeal(state: GameState): GameState {
+  if (cheatMealsRemaining(state) <= 0) return state;
+  const mk = monthKey();
+  const key = todayKey();
+  const day: NutritionDay = state.nutrition[key] ?? {
+    kcal: 0,
+    protein: 0,
+    fat: 0,
+    carbs: 0,
+    entries: [],
+  };
+  return {
+    ...state,
+    cheatMealsUsed: { ...state.cheatMealsUsed, [mk]: (state.cheatMealsUsed[mk] ?? 0) + 1 },
+    nutrition: { ...state.nutrition, [key]: { ...day, cheatMealUsed: true } },
+  };
+}
+
+/** Today's effective macro goals — lowered carbs/fat if a cheat meal was used today. */
+export function effectiveGoals(state: GameState): Macro {
+  const day = getTodayNutrition(state);
+  if (!day.cheatMealUsed) return NUTRITION_GOALS;
+  return {
+    ...NUTRITION_GOALS,
+    carbs: Math.round(NUTRITION_GOALS.carbs * (1 - CHEAT_MEAL_REDUCTION)),
+    fat: Math.round(NUTRITION_GOALS.fat * (1 - CHEAT_MEAL_REDUCTION)),
+  };
+}
+
 interface FoodItem extends Macro {
   label: string;
   keywords: string[];

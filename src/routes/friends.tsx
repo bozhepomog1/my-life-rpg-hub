@@ -14,7 +14,7 @@ export const Route = createFileRoute("/friends")({
 });
 
 function FriendsPage() {
-  const { state, hydrated } = useGameStateContext();
+  const { state, update, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (!hydrated) return null;
@@ -22,7 +22,7 @@ function FriendsPage() {
   return (
     <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
       <TabNav pathname={pathname} />
-      <FriendsPanel state={state} />
+      <FriendsPanel state={state} update={update} />
     </div>
   );
 }

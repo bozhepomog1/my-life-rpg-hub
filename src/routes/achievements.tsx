@@ -7,6 +7,11 @@ import {
   STAT_META,
   type StatKey,
 } from "@/lib/game";
+import {
+  ACHIEVEMENTS,
+  ACHIEVEMENT_CATEGORY_LABELS,
+  ACHIEVEMENT_CATEGORY_ORDER,
+} from "@/lib/achievements";
 import { TabNav } from "./index";
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -59,6 +64,68 @@ function Achievements() {
           <StatCard label="Квесты" value={state.completedCount} />
           <StatCard label="Прогресс залога" value={`${disc.progress}%`} />
         </div>
+
+        <section className="panel p-6">
+          <h2 className="mb-1 text-sm font-semibold">🎖️ Достижения</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            {Object.keys(state.unlockedAchievements).length} / {ACHIEVEMENTS.length} разблокировано
+          </p>
+          <div className="space-y-5">
+            {ACHIEVEMENT_CATEGORY_ORDER.map((cat) => {
+              const defs = ACHIEVEMENTS.filter((a) => a.category === cat);
+              return (
+                <div key={cat}>
+                  <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
+                    {ACHIEVEMENT_CATEGORY_LABELS[cat]}
+                  </h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {defs.map((def) => {
+                      const unlockedAt = state.unlockedAchievements[def.id];
+                      const progress = def.progress?.(state, {
+                        friendsCount: 0,
+                        leaderboardTop3: false,
+                      });
+                      return (
+                        <div
+                          key={def.id}
+                          className={`rounded-xl border p-3 transition-colors ${
+                            unlockedAt
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-border opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-xl leading-none">{def.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium">{def.title}</div>
+                              {unlockedAt ? (
+                                <div className="mt-0.5 text-[11px] text-primary">
+                                  Получено {new Date(unlockedAt).toLocaleDateString("ru-RU")}
+                                </div>
+                              ) : (
+                                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                  {def.description}
+                                </div>
+                              )}
+                              {!unlockedAt && progress && progress.target > 1 && (
+                                <div className="mt-1.5">
+                                  <ProgressBar value={(progress.current / progress.target) * 100} />
+                                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                    {progress.current}/{progress.target}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <section className="panel p-6">
           <h2 className="mb-4 text-sm font-semibold">Топ характеристик</h2>

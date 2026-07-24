@@ -157,6 +157,9 @@ export interface GameState {
   // Today's randomly-drawn bonus quests (shown once no daily quests remain).
   bonusQuests: Quest[];
   bonusQuestsDate?: string;
+  // Unlocked achievement ids → the timestamp they were unlocked at. Once set,
+  // an id is never removed (achievements don't "re-lock").
+  unlockedAchievements: Record<string, number>;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -521,6 +524,7 @@ export function defaultState(): GameState {
     workMode: false,
     cheatMealsUsed: {},
     bonusQuests: [],
+    unlockedAchievements: {},
   };
 }
 
@@ -549,6 +553,7 @@ export function loadState(userId?: string): GameState | null {
       cheatMealsUsed: parsed.cheatMealsUsed || {},
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
+      unlockedAchievements: parsed.unlockedAchievements || {},
     };
   } catch {
     return null;

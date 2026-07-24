@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthGate } from "../components/AuthGate";
 import { AuthProvider } from "../lib/auth-context";
 import { GameStateProvider } from "../lib/game-state-context";
+import { AchievementWatcher } from "../components/AchievementWatcher";
 
 function NotFoundComponent() {
   return (
@@ -144,6 +145,7 @@ function RootComponent() {
       <AuthProvider>
         <AuthGate>
           <GameStateProvider>
+            <AchievementWatcher />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
           </GameStateProvider>

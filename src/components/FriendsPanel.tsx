@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { computeFitnessIndex, type GameState } from "@/lib/game";
+import { applyAchievementUnlocks } from "@/lib/achievements";
 import { useAuthContext } from "@/lib/use-auth-context";
 import {
   acceptedFriendIds,
@@ -13,6 +14,7 @@ import { findProfileByEmail, getProfiles, type PublicProfile } from "@/lib/profi
 
 interface Props {
   state: GameState;
+  update: (fn: (s: GameState) => GameState) => void;
 }
 
 type SearchState =
@@ -22,7 +24,7 @@ type SearchState =
   | { kind: "none" }
   | { kind: "error"; message: string };
 
-export function FriendsPanel({ state }: Props) {
+export function FriendsPanel({ state, update }: Props) {
   const { user } = useAuthContext();
   const myId = user?.id ?? "";
 
@@ -66,6 +68,19 @@ export function FriendsPanel({ state }: Props) {
   const leaderboard = [myEntry, ...friendIds.map((id) => profiles[id]).filter(Boolean)].sort(
     (a, b) => b.total_xp - a.total_xp,
   );
+  const myRank = leaderboard.findIndex((p) => p.user_id === myId) + 1;
+
+  // Social achievements need friends/leaderboard data that only lives here
+  // (fetched from Supabase) — the global AchievementWatcher can't see it.
+  useEffect(() => {
+    if (loading) return;
+    update((s) =>
+      applyAchievementUnlocks(s, {
+        friendsCount: friendIds.length,
+        leaderboardTop3: myRank > 0 && myRank <= 3,
+      }),
+    );
+  }, [loading, friendIds.length, myRank, update]);
 
   async function handleSearch() {
     const q = email.trim();

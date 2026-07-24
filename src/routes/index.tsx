@@ -22,13 +22,22 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Life RPG — Геймификация жизни" },
-      { name: "description", content: "Личный RPG-трекер: квесты, залог $1000 и календарь дисциплины." },
+      {
+        name: "description",
+        content: "Личный RPG-трекер: квесты, залог $1000 и календарь дисциплины.",
+      },
     ],
   }),
   component: Home,
 });
 
-interface FloatXp { id: number; text: string; color: string; x: number; y: number }
+interface FloatXp {
+  id: number;
+  text: string;
+  color: string;
+  x: number;
+  y: number;
+}
 
 function Home() {
   const { state, update, hydrated } = useGameState();
@@ -48,7 +57,12 @@ function Home() {
 
   const disc = useMemo(() => (hydrated ? computeDiscipline(state) : null), [state, hydrated]);
 
-  function completeQuest(id: string, _photoPath: string | undefined, note: string | undefined, e?: React.MouseEvent) {
+  function completeQuest(
+    id: string,
+    _photoPath: string | undefined,
+    note: string | undefined,
+    e?: React.MouseEvent,
+  ) {
     const quest = state.quests.find((q) => q.id === id);
     if (!quest || quest.done) return;
     const meta = STAT_META[quest.stat];
@@ -70,7 +84,10 @@ function Home() {
       const prev = s.level;
       const rewarded = applyReward(s, quest.stat, quest.reward);
       if (rewarded.level > prev) {
-        setTimeout(() => { setLevelPulse(true); setTimeout(() => setLevelPulse(false), 1500); }, 200);
+        setTimeout(() => {
+          setLevelPulse(true);
+          setTimeout(() => setLevelPulse(false), 1500);
+        }, 200);
       }
       // record daily completion
       const dailyCompletions = { ...rewarded.dailyCompletions };
@@ -85,8 +102,14 @@ function Home() {
         dailyCompletions,
         quests: rewarded.quests.map((q) =>
           q.id === id
-            ? { ...q, done: true, completedAt: Date.now(), lastResetDate: todayKey(), proofNote: note || q.proofNote }
-            : q
+            ? {
+                ...q,
+                done: true,
+                completedAt: Date.now(),
+                lastResetDate: todayKey(),
+                proofNote: note || q.proofNote,
+              }
+            : q,
         ),
       };
     });
@@ -97,14 +120,20 @@ function Home() {
       ...s,
       quests: s.quests.map((q) =>
         q.id === qid && q.checklist
-          ? { ...q, checklist: q.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c)) }
-          : q
+          ? {
+              ...q,
+              checklist: q.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c)),
+            }
+          : q,
       ),
     }));
   }
 
   function setPhoto(id: string, path: string) {
-    update((s) => ({ ...s, quests: s.quests.map((q) => (q.id === id ? { ...q, photoPath: path } : q)) }));
+    update((s) => ({
+      ...s,
+      quests: s.quests.map((q) => (q.id === id ? { ...q, photoPath: path } : q)),
+    }));
   }
 
   function deleteQuest(id: string) {
@@ -146,9 +175,7 @@ function Home() {
         <DisciplineCalendar state={state} />
 
         <section>
-          <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
-            Квесты
-          </h2>
+          <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">Квесты</h2>
           <div className="mb-3 grid grid-cols-3 gap-1.5 sm:gap-2">
             {(Object.keys(CATEGORY_META) as QuestCategory[]).map((c) => {
               const active = tab === c;
@@ -161,7 +188,9 @@ function Home() {
                     active ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
                   }`}
                 >
-                  <div className={`text-xs font-medium ${active ? "text-primary" : "text-muted-foreground"}`}>
+                  <div
+                    className={`text-xs font-medium ${active ? "text-primary" : "text-muted-foreground"}`}
+                  >
                     {meta.icon} {meta.label.replace(" квесты", "")}
                   </div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
@@ -256,6 +285,7 @@ function Home() {
 export function TabNav({ pathname }: { pathname: string }) {
   const tabs = [
     { to: "/", label: "Профиль" },
+    { to: "/nutrition", label: "Питание" },
     { to: "/achievements", label: "Достижения" },
   ] as const;
   return (

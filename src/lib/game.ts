@@ -32,6 +32,22 @@ export interface StatState {
   xp: number;
 }
 
+export interface Macro {
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+}
+
+export interface NutritionEntry extends Macro {
+  text: string;
+  at: number;
+}
+
+export interface NutritionDay extends Macro {
+  entries: NutritionEntry[];
+}
+
 export interface GameState {
   avatar: string;
   name: string;
@@ -46,6 +62,8 @@ export interface GameState {
   depositLost: boolean;
   // discipline: dates → list of completed daily quest ids that day
   dailyCompletions: Record<string, string[]>;
+  // nutrition: date → that day's logged calories/macros
+  nutrition: Record<string, NutritionDay>;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -62,8 +80,15 @@ export const STAT_META: Record<StatKey, { label: string; color: string; icon: st
   appearance: { label: "Внешность", color: "#9b7a96", icon: "💎" },
 };
 
-export const CATEGORY_META: Record<QuestCategory, { label: string; icon: string; description: string }> = {
-  daily: { label: "Ежедневные квесты", icon: "🌅", description: "Сброс в полночь. Требуют подтверждения." },
+export const CATEGORY_META: Record<
+  QuestCategory,
+  { label: string; icon: string; description: string }
+> = {
+  daily: {
+    label: "Ежедневные квесты",
+    icon: "🌅",
+    description: "Сброс в полночь. Требуют подтверждения.",
+  },
   story: { label: "Сюжетные квесты", icon: "📜", description: "Крупные разовые цели с дедлайном." },
   purchase: { label: "Квесты-закупки", icon: "🛒", description: "Поиск, менеджмент, оптимизация." },
 };
@@ -121,17 +146,84 @@ function seedQuests(): Quest[] {
     }),
 
     // STORY
-    q({ title: "Съездить на восток и сделать генеральную уборку", stat: "will", reward: 30, category: "story" }),
-    q({ title: "Выйти на пробежку", stat: "strength", reward: 15, category: "story", requiresPhoto: true, photoHint: "Фото с улицы" }),
-    q({ title: "Разобраться в вайбкодинге", stat: "intellect", reward: 20, category: "story", requiresText: true }),
-    q({ title: "Начать учить английский язык", stat: "intellect", reward: 15, category: "story", requiresText: true }),
-    q({ title: "Начать учить программирование", stat: "intellect", reward: 15, category: "story", requiresText: true }),
-    q({ title: "Изучить уроки по вайтлистам", stat: "intellect", reward: 25, category: "story", requiresText: true }),
-    q({ title: "Начать изучать, как создавать ТГ-ботов", stat: "intellect", reward: 20, category: "story", requiresText: true }),
-    q({ title: "Начать изучать, как создать нейросеть под себя", stat: "intellect", reward: 30, category: "story", requiresText: true }),
-    q({ title: "Придумать схему по арбитражу (купил дешевле — продал дороже)", stat: "will", reward: 25, category: "story" }),
-    q({ title: "Разобраться в мультиварке и приготовить блюдо", stat: "will", reward: 10, category: "story", requiresPhoto: true, photoHint: "Фото готового блюда" }),
-    q({ title: "Сходить подстричься и сделать брови", stat: "appearance", reward: 20, category: "story", requiresPhoto: true, photoHint: "Селфи «До/После»" }),
+    q({
+      title: "Съездить на восток и сделать генеральную уборку",
+      stat: "will",
+      reward: 30,
+      category: "story",
+    }),
+    q({
+      title: "Выйти на пробежку",
+      stat: "strength",
+      reward: 15,
+      category: "story",
+      requiresPhoto: true,
+      photoHint: "Фото с улицы",
+    }),
+    q({
+      title: "Разобраться в вайбкодинге",
+      stat: "intellect",
+      reward: 20,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Начать учить английский язык",
+      stat: "intellect",
+      reward: 15,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Начать учить программирование",
+      stat: "intellect",
+      reward: 15,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Изучить уроки по вайтлистам",
+      stat: "intellect",
+      reward: 25,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Начать изучать, как создавать ТГ-ботов",
+      stat: "intellect",
+      reward: 20,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Начать изучать, как создать нейросеть под себя",
+      stat: "intellect",
+      reward: 30,
+      category: "story",
+      requiresText: true,
+    }),
+    q({
+      title: "Придумать схему по арбитражу (купил дешевле — продал дороже)",
+      stat: "will",
+      reward: 25,
+      category: "story",
+    }),
+    q({
+      title: "Разобраться в мультиварке и приготовить блюдо",
+      stat: "will",
+      reward: 10,
+      category: "story",
+      requiresPhoto: true,
+      photoHint: "Фото готового блюда",
+    }),
+    q({
+      title: "Сходить подстричься и сделать брови",
+      stat: "appearance",
+      reward: 20,
+      category: "story",
+      requiresPhoto: true,
+      photoHint: "Селфи «До/После»",
+    }),
     q({ title: "Мб покрасить волосы", stat: "appearance", reward: 15, category: "story" }),
 
     // PURCHASE (already completed)
@@ -198,9 +290,19 @@ function seedQuests(): Quest[] {
         "Сделать потолок в машине",
       ]),
     }),
-    q({ title: "Глянуть все сохранённые ссылки и убрать лишнее", stat: "intellect", reward: 15, category: "purchase" }),
+    q({
+      title: "Глянуть все сохранённые ссылки и убрать лишнее",
+      stat: "intellect",
+      reward: 15,
+      category: "purchase",
+    }),
     q({ title: "Сходить в секонд-хенды", stat: "appearance", reward: 10, category: "purchase" }),
-    q({ title: "Разобраться в приложении с питанием", stat: "will", reward: 15, category: "purchase" }),
+    q({
+      title: "Разобраться в приложении с питанием",
+      stat: "will",
+      reward: 15,
+      category: "purchase",
+    }),
   ];
 }
 
@@ -222,6 +324,7 @@ export function defaultState(): GameState {
     depositAmount: 1000,
     depositLost: false,
     dailyCompletions: {},
+    nutrition: {},
   };
 }
 
@@ -243,6 +346,7 @@ export function loadState(userId?: string): GameState | null {
       ...parsed,
       stats: { ...base.stats, ...(parsed.stats || {}) },
       dailyCompletions: parsed.dailyCompletions || {},
+      nutrition: parsed.nutrition || {},
     };
   } catch {
     return null;
@@ -303,7 +407,14 @@ export function resetDailyIfNeeded(state: GameState): GameState {
     if (q.category !== "daily") return q;
     if (q.lastResetDate !== today && q.done) {
       changed = true;
-      return { ...q, done: false, photoPath: undefined, proofNote: undefined, lastResetDate: today, completedAt: undefined };
+      return {
+        ...q,
+        done: false,
+        photoPath: undefined,
+        proofNote: undefined,
+        lastResetDate: today,
+        completedAt: undefined,
+      };
     }
     if (!q.lastResetDate) {
       changed = true;
@@ -327,7 +438,9 @@ export function computeDiscipline(state: GameState) {
   const days: DayStatus[] = [];
   const now = new Date();
   const todayK = todayKey();
-  const mandatoryIds = state.quests.filter((q) => q.category === "daily" && q.mandatory).map((q) => q.id);
+  const mandatoryIds = state.quests
+    .filter((q) => q.category === "daily" && q.mandatory)
+    .map((q) => q.id);
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(start);

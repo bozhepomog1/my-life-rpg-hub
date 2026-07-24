@@ -999,6 +999,29 @@ export function applyReward(state: GameState, stat: StatKey, reward: number): Ga
   return next;
 }
 
+/**
+ * Exact inverse of applyReward() — used by the "Отменить" undo toast after
+ * completing a quest. Both counters it touches are simple base-100
+ * odometers (stat level+xp) or a pure function of one running total
+ * (hero level from totalXp), so both can be recomputed precisely from the
+ * reward amount alone — no snapshot of prior state needed.
+ */
+export function undoReward(state: GameState, stat: StatKey, reward: number): GameState {
+  const next = structuredClone(state);
+  const s = next.stats[stat];
+  const combined = Math.max(0, s.level * 100 + s.xp - reward);
+  s.level = Math.floor(combined / 100);
+  s.xp = combined % 100;
+
+  next.totalXp = Math.max(0, next.totalXp - reward);
+  let level = 1;
+  while (next.totalXp >= xpForNextLevel(level)) level += 1;
+  next.level = level;
+
+  next.completedCount = Math.max(0, next.completedCount - 1);
+  return next;
+}
+
 export function todayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

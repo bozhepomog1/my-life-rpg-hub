@@ -8,6 +8,7 @@ import { QuestCard } from "@/components/QuestCard";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { StreakBanner } from "@/components/StreakBanner";
+import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
@@ -22,10 +23,25 @@ import {
   STAT_META,
   STREAK_MILESTONES,
   todayKey,
+  undoReward,
   type Quest,
   type QuestCategory,
   type StatKey,
 } from "@/lib/game";
+
+const UNDO_WINDOW_MS = 10_000;
+
+interface PendingUndo {
+  id: number;
+  title: string;
+  questId: string;
+  source: "quests" | "bonusQuests";
+  stat: StatKey;
+  reward: number;
+  /** Set only for daily-category quests, to also remove them from dailyCompletions on undo. */
+  dailyKey?: string;
+  expiresAt: number;
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,6 +71,55 @@ function Home() {
   const [tab, setTab] = useState<QuestCategory>("daily");
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Undo window: only the single most recent completion can be undone —
+  // completing another quest replaces it rather than stacking.
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
+  const undoId = useRef(0);
+
+  useEffect(() => {
+    if (!pendingUndo) return;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((pendingUndo.expiresAt - Date.now()) / 1000));
+      setUndoSecondsLeft(left);
+      if (left <= 0) setPendingUndo(null);
+    };
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [pendingUndo]);
+
+  function handleUndo() {
+    if (!pendingUndo) return;
+    const { questId, source, stat, reward, dailyKey } = pendingUndo;
+    update((s) => {
+      let next = undoReward(s, stat, reward);
+      if (source === "quests") {
+        next = {
+          ...next,
+          quests: next.quests.map((q) =>
+            q.id === questId
+              ? { ...q, done: false, completedAt: undefined, proofNote: undefined }
+              : q,
+          ),
+        };
+        if (dailyKey) {
+          const arr = (next.dailyCompletions[dailyKey] ?? []).filter((qid) => qid !== questId);
+          next = { ...next, dailyCompletions: { ...next.dailyCompletions, [dailyKey]: arr } };
+        }
+      } else {
+        next = {
+          ...next,
+          bonusQuests: next.bonusQuests.map((q) =>
+            q.id === questId ? { ...q, done: false, completedAt: undefined } : q,
+          ),
+        };
+      }
+      return next;
+    });
+    setPendingUndo(null);
+  }
 
   // Draw today's daily-quest rotation + keep today's bonus quest set current
   useEffect(() => {
@@ -151,6 +216,17 @@ function Home() {
         ),
       };
     });
+
+    setPendingUndo({
+      id: ++undoId.current,
+      title: quest.title,
+      questId: id,
+      source: "quests",
+      stat: quest.stat,
+      reward: quest.reward,
+      dailyKey: quest.category === "daily" ? todayKey() : undefined,
+      expiresAt: Date.now() + UNDO_WINDOW_MS,
+    });
   }
 
   function completeBonusQuest(
@@ -191,6 +267,16 @@ function Home() {
           q.id === id ? { ...q, done: true, completedAt: Date.now() } : q,
         ),
       };
+    });
+
+    setPendingUndo({
+      id: ++undoId.current,
+      title: quest.title,
+      questId: id,
+      source: "bonusQuests",
+      stat: quest.stat,
+      reward: quest.reward,
+      expiresAt: Date.now() + UNDO_WINDOW_MS,
     });
   }
 
@@ -397,6 +483,15 @@ function Home() {
           </div>
         ))}
       </div>
+
+      {pendingUndo && (
+        <UndoToast
+          title={pendingUndo.title}
+          secondsLeft={undoSecondsLeft}
+          onUndo={handleUndo}
+          onDismiss={() => setPendingUndo(null)}
+        />
+      )}
 
       {milestone != null && (
         <div className="pointer-events-none fixed inset-x-0 top-6 z-[120] flex justify-center px-4">

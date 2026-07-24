@@ -86,7 +86,8 @@ export function NutritionCalculator({ state, update }: Props) {
               {lastResult.items.map((it, i) => (
                 <li key={i}>
                   {it.label}
-                  {it.qty > 1 ? ` × ${it.qty}` : ""} — {Math.round(it.kcal)} ккал
+                  {it.qty !== 1 ? ` × ${Math.round(it.qty * 10) / 10}` : ""} — {Math.round(it.kcal)}{" "}
+                  ккал
                 </li>
               ))}
             </ul>

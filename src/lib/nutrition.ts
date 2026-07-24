@@ -17,8 +17,19 @@ interface FoodItem extends Macro {
 
 /**
  * Local database of ~50 common foods/dishes with approximate calories and
- * macros per a standard serving. Values are rough averages for a simple
- * text-based estimator, not precise nutritional data.
+ * macros. Values are rough averages for a simple text-based estimator, not
+ * precise nutritional data.
+ *
+ * Two conventions are used, matching how people actually describe food:
+ * - Starchy staples that are normally cooked from a raw/dry form (rice,
+ *   buckwheat, oatmeal, pasta, potato) and meats/fish are given PER 100G OF
+ *   THE READY-TO-EAT/COOKED PRODUCT — never raw or dry weight, since dry
+ *   grain and cooked grain have very different calorie density (cooking
+ *   adds water, not calories). "рис"/"гречка" with no quantity assumes
+ *   100g cooked; write "200г риса" for a bigger portion.
+ * - Discrete items people count rather than weigh (eggs, a banana, a slice
+ *   of bread, a cup of coffee, a cookie) are given per natural unit/serving
+ *   instead — nobody says "100g of egg", they say "2 eggs".
  *
  * Order matters: more specific/compound phrases are listed before the
  * generic single-word items they overlap with (e.g. "кофе с молоком"
@@ -49,13 +60,13 @@ const FOOD_DB: FoodItem[] = [
     // "фри" alone is enough — it's an unambiguous marker in Russian food
     // text; the parseMeal special-case below also blanks a preceding
     // "картофель"/"картошка" so the generic potato entry doesn't also
-    // double-count the same words.
+    // double-count the same words. Per 100g fried, ready to eat.
     label: "Картофель фри",
     keywords: ["фри"],
-    kcal: 330,
-    protein: 4,
+    kcal: 312,
+    protein: 3.4,
     fat: 15,
-    carbs: 43,
+    carbs: 41,
   },
   {
     label: "Куриная грудка",
@@ -84,9 +95,12 @@ const FOOD_DB: FoodItem[] = [
 
   // --- generic single items ---
   { label: "Яйцо варёное", keywords: ["яйц", "яиц"], kcal: 78, protein: 6.3, fat: 5.3, carbs: 0.6 },
-  { label: "Рис варёный", keywords: ["рис"], kcal: 195, protein: 4, fat: 0.5, carbs: 42 },
-  { label: "Гречка", keywords: ["гречк"], kcal: 150, protein: 5, fat: 1.5, carbs: 30 },
-  { label: "Овсянка", keywords: ["овсян"], kcal: 150, protein: 5, fat: 3, carbs: 27 },
+  // Per 100g cooked/boiled — see file-level note above.
+  { label: "Рис варёный", keywords: ["рис"], kcal: 130, protein: 2.7, fat: 0.3, carbs: 28 },
+  { label: "Гречка", keywords: ["гречк"], kcal: 92, protein: 3.4, fat: 1, carbs: 20 },
+  // Cooked with water (porridge), not dry oats — dry oats have ~60g
+  // carbs/100g, but water roughly triples the weight once cooked.
+  { label: "Овсянка", keywords: ["овсян"], kcal: 71, protein: 2.5, fat: 1.5, carbs: 12 },
   { label: "Творог", keywords: ["творог"], kcal: 178, protein: 25.5, fat: 7.5, carbs: 4.5 },
   { label: "Банан", keywords: ["банан"], kcal: 105, protein: 1.3, fat: 0.3, carbs: 27 },
   { label: "Хлеб / тост", keywords: ["хлеб", "тост"], kcal: 75, protein: 2.5, fat: 1, carbs: 14 },
@@ -111,22 +125,26 @@ const FOOD_DB: FoodItem[] = [
     fat: 13.5,
     carbs: 0,
   },
+  // Per 100g cooked, not dry pasta weight.
   {
     label: "Макароны / паста",
     keywords: ["макарон", "спагетти", "паста"],
-    kcal: 220,
-    protein: 7.5,
-    fat: 1.3,
-    carbs: 45,
+    kcal: 131,
+    protein: 5,
+    fat: 1.1,
+    carbs: 25,
   },
+  // Per 100g boiled; "пюре" with milk/butter runs a bit higher in practice.
   {
     label: "Картофель варёный / пюре",
     keywords: ["картофел", "картошк"],
-    kcal: 160,
-    protein: 4,
-    fat: 0.4,
-    carbs: 34,
+    kcal: 87,
+    protein: 1.9,
+    fat: 0.1,
+    carbs: 20,
   },
+  // Meat/fish below were already on a per-100g-cooked basis and check out
+  // against standard references — left unchanged.
   { label: "Говядина", keywords: ["говядин", "говяж"], kcal: 250, protein: 26, fat: 15, carbs: 0 },
   { label: "Свинина", keywords: ["свинин"], kcal: 263, protein: 27, fat: 17, carbs: 0 },
   {
@@ -190,12 +208,26 @@ const FOOD_DB: FoodItem[] = [
   { label: "Огурец", keywords: ["огурец", "огурц"], kcal: 15, protein: 0.8, fat: 0.1, carbs: 3.6 },
 ];
 
-/** Looks for a quantity ("2", "3 шт") right before a matched keyword; defaults to 1. */
+/**
+ * Looks for a quantity right before a matched keyword; defaults to 1.
+ * Supports two forms:
+ * - grams ("200г", "150 г", "300 грамм") — for per-100g entries this is a
+ *   fractional multiplier of 100g units (200г → 2, 150г → 1.5);
+ * - a plain count ("2", "3 шт", "4 штуки") — a whole-item multiplier for
+ *   per-unit entries (eggs, bananas, ...).
+ */
 function quantityBefore(text: string, idx: number): number {
   const before = text.slice(0, idx);
-  const m = before.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?\s*$/);
-  if (!m) return 1;
-  const n = parseInt(m[1], 10);
+
+  const gramMatch = before.match(/(\d+)\s*(?:г\.?|гр\.?|грамм[а-я]*)\s*$/);
+  if (gramMatch) {
+    const grams = parseInt(gramMatch[1], 10);
+    if (Number.isFinite(grams) && grams > 0) return Math.min(grams / 100, 20);
+  }
+
+  const countMatch = before.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?\s*$/);
+  if (!countMatch) return 1;
+  const n = parseInt(countMatch[1], 10);
   if (!Number.isFinite(n) || n <= 0) return 1;
   return Math.min(n, 20);
 }

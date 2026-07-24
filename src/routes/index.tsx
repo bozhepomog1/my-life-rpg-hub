@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
@@ -308,7 +309,21 @@ export function TabNav({ pathname }: { pathname: string }) {
           );
         })}
       </div>
-      <ThemeToggle />
+      <div className="flex items-center gap-2">
+        <Link
+          to="/settings"
+          aria-label="Настройки"
+          title="Настройки"
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition-all hover:scale-110 ${
+            pathname === "/settings"
+              ? "border-primary text-primary"
+              : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          }`}
+        >
+          <Settings size={15} />
+        </Link>
+        <ThemeToggle />
+      </div>
     </div>
   );
 }

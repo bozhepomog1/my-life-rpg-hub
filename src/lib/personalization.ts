@@ -1,7 +1,9 @@
 import {
   accentForMode,
   adjustLightness,
+  colorDistance,
   contrastRatio,
+  mixHex,
   MIN_SAFE_CONTRAST,
   pickForeground,
   withLightness,
@@ -196,6 +198,111 @@ export function backgroundContrastWarning(hex: string): string | null {
   const darkOk = contrastRatio(darkBg, "#ececf1") >= MIN_SAFE_CONTRAST;
   if (!lightOk || !darkOk) {
     return "Этот фон может плохо сочетаться с текстом на светлой или тёмной теме.";
+  }
+  return null;
+}
+
+// ── Card color personalization ──────────────────────────────────────────
+
+export interface CardColorSettings {
+  /** "default" keeps the current white/near-black card surface untouched
+   *  (byte-identical CSS values). "color" tints card panels using `color`. */
+  mode: "default" | "color";
+  /** Canonical (user-picked, mid-lightness) hex. Re-targeted to a pale/dark
+   *  card-appropriate lightness per theme by computeCardCssVars — unlike the
+   *  background, which stays near-white/near-black to feel like a subtle
+   *  backdrop, cards are meant to visibly read as a soft color. */
+  color: string;
+}
+
+export const DEFAULT_CARD_COLOR: CardColorSettings = { mode: "default", color: "#8264c4" };
+
+export interface CardColorPreset {
+  id: string;
+  label: string;
+  /** null = the "default" neutral preset (no color override at all). */
+  color: string | null;
+}
+
+export const CARD_COLOR_PRESETS: CardColorPreset[] = [
+  { id: "neutral", label: "Нейтральный", color: null },
+  { id: "ivory", label: "Слоновая кость", color: "#c98f4a" },
+  { id: "mint", label: "Мята", color: "#3f9e7c" },
+  { id: "lavender", label: "Лаванда", color: "#8264c4" },
+  { id: "rose", label: "Роза", color: "#c15f7c" },
+];
+
+// Unlike the background's near-white/near-black targets, cards are meant to
+// visibly read as a soft pastel/dark tint — pale but clearly colored in
+// light mode, a muted deep tone (lighter than the page background, keeping
+// the existing "elevated surface" feel) in dark mode.
+const LIGHT_CARD_TARGET_L = 94;
+const DARK_CARD_TARGET_L = 22;
+
+const DEFAULT_CARD_HEX = { light: "#ffffff", dark: "#1a1c22" };
+const DEFAULT_BG_HEX = { light: "#fcfcfd", dark: "#121318" };
+// Neutral text colors actually used elsewhere in the app (not the
+// accent-tinted pickForeground defaults), so card text matches the rest of
+// the UI's plain foreground/muted-foreground palette.
+const FOREGROUND_HEX = { light: "#1a1a1a", dark: "#ececf1" };
+
+function cardColorForMode(settings: CardColorSettings, mode: "light" | "dark"): string {
+  if (settings.mode !== "color") return DEFAULT_CARD_HEX[mode];
+  return withLightness(settings.color, mode === "light" ? LIGHT_CARD_TARGET_L : DARK_CARD_TARGET_L);
+}
+
+function backgroundColorForMode(settings: BackgroundSettings, mode: "light" | "dark"): string {
+  if (settings.mode !== "color") return DEFAULT_BG_HEX[mode];
+  return withLightness(settings.color, mode === "light" ? LIGHT_BG_TARGET_L : DARK_BG_TARGET_L);
+}
+
+/**
+ * CSS var overrides for card/panel surfaces in one theme: the card
+ * background itself, plus an automatically-derived foreground and muted-
+ * foreground so text inside cards always reads clearly against WHATEVER
+ * card color is picked — pale card → dark text, dark card → light text —
+ * independent of which theme (light/dark) is active. Empty for "default".
+ */
+export function computeCardCssVars(
+  settings: CardColorSettings,
+  mode: "light" | "dark",
+): Record<string, string> {
+  if (settings.mode !== "color") return {};
+  const card = cardColorForMode(settings, mode);
+  const cardForeground = pickForeground(card, FOREGROUND_HEX.light, FOREGROUND_HEX.dark);
+  // A dimmer "secondary text" tone: blend the chosen foreground partway
+  // toward the card background, same relationship the fixed
+  // foreground/muted-foreground pair already has (muted sits between
+  // foreground and the surface it's read against).
+  const cardMutedForeground = mixHex(cardForeground, card, 0.42);
+  return {
+    "--card": card,
+    "--card-foreground": cardForeground,
+    "--card-muted-foreground": cardMutedForeground,
+    "--popover": card,
+    "--popover-foreground": cardForeground,
+  };
+}
+
+/**
+ * Warns if the card color and page background end up too visually close to
+ * distinguish — WCAG contrast ratio isn't a useful signal here since both
+ * are, by design, near-white or near-black in a given theme (so their
+ * ratio is always small regardless of hue); a plain RGB distance check is
+ * what actually answers "will these blend together". Skipped entirely when
+ * neither has been customized — the shipped defaults are already fine.
+ */
+export function backgroundCardSimilarityWarning(
+  background: BackgroundSettings,
+  cardColor: CardColorSettings,
+): string | null {
+  if (background.mode !== "color" && cardColor.mode !== "color") return null;
+  const SIMILARITY_THRESHOLD = 10;
+  const tooClose = (mode: "light" | "dark") =>
+    colorDistance(backgroundColorForMode(background, mode), cardColorForMode(cardColor, mode)) <
+    SIMILARITY_THRESHOLD;
+  if (tooClose("light") || tooClose("dark")) {
+    return "Цвет карточек слишком похож на фон — карточки могут визуально «сливаться» с ним.";
   }
   return null;
 }

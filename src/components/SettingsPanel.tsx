@@ -8,8 +8,11 @@ import {
   ACCENT_PRESETS,
   accentContrastWarning,
   BACKGROUND_PRESETS,
+  backgroundCardSimilarityWarning,
   backgroundContrastWarning,
+  CARD_COLOR_PRESETS,
   DEFAULT_BACKGROUND,
+  DEFAULT_CARD_COLOR,
   findMatchingPreset,
   type AccentColors,
   type BackgroundSettings,
@@ -172,6 +175,18 @@ export function SettingsPanel({ state, update, setState }: Props) {
     update((s) => ({ ...s, background: { ...s.background, dimOpacity: n } }));
   }
 
+  function applyCardColorPreset(color: string | null) {
+    update((s) => ({
+      ...s,
+      cardColor: color ? { mode: "color", color } : { mode: "default", color: s.cardColor.color },
+    }));
+  }
+
+  function setCustomCardColor(hex: string) {
+    if (!isValidHex(hex)) return;
+    update((s) => ({ ...s, cardColor: { mode: "color", color: hex } }));
+  }
+
   const activePreset = findMatchingPreset(state.accentColors);
   const primaryWarning = accentContrastWarning(state.accentColors.primary);
   const secondaryWarning = accentContrastWarning(state.accentColors.secondary);
@@ -185,6 +200,15 @@ export function SettingsPanel({ state, update, setState }: Props) {
   );
   const bgWarning =
     state.background.mode === "color" ? backgroundContrastWarning(state.background.color) : null;
+
+  const activeCardPreset = CARD_COLOR_PRESETS.find(
+    (p) =>
+      (p.color === null && state.cardColor.mode === "default") ||
+      (p.color !== null &&
+        state.cardColor.mode === "color" &&
+        p.color.toLowerCase() === state.cardColor.color.toLowerCase()),
+  );
+  const cardSimilarityWarning = backgroundCardSimilarityWarning(state.background, state.cardColor);
 
   return (
     <div className="space-y-5">
@@ -457,8 +481,8 @@ export function SettingsPanel({ state, update, setState }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Персонализация — фон</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Фон карточек и текст не меняются — можно поменять только цвет за их пределами, или
-          поставить свою фотографию.
+          Настрой цвет фона за пределами карточек (или свою фотографию) и, отдельно, цвет самих
+          карточек ниже — текст везде подстраивается автоматически.
         </p>
 
         <div className="mt-4">
@@ -578,6 +602,58 @@ export function SettingsPanel({ state, update, setState }: Props) {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="mt-5 border-t border-border pt-5">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Цвет карточек</p>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Текст внутри карточек сам подстраивается под выбранный цвет — тёмная карточка получит
+            светлый текст, светлая — тёмный.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {CARD_COLOR_PRESETS.map((preset) => {
+              const active = activeCardPreset?.id === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyCardColorPreset(preset.color)}
+                  title={preset.label}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
+                  }`}
+                >
+                  <span
+                    className="h-4 w-4 rounded-full border border-border/60"
+                    style={{ background: preset.color ?? "var(--color-card)" }}
+                  />
+                  {preset.label}
+                  {active && <span className="text-primary">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Свой цвет</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={
+                  isValidHex(state.cardColor.color)
+                    ? state.cardColor.color
+                    : DEFAULT_CARD_COLOR.color
+                }
+                onChange={(e) => setCustomCardColor(e.target.value)}
+                className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                aria-label="Свой цвет карточек"
+              />
+              <span className="text-xs text-muted-foreground">{state.cardColor.color}</span>
+            </div>
+            {cardSimilarityWarning && (
+              <p className="mt-1.5 text-[11px] text-destructive">{cardSimilarityWarning}</p>
+            )}
+          </div>
         </div>
       </section>
 

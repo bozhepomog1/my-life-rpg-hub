@@ -1,8 +1,10 @@
 import {
   DEFAULT_ACCENT_COLORS,
   DEFAULT_BACKGROUND,
+  DEFAULT_CARD_COLOR,
   type AccentColors,
   type BackgroundSettings,
+  type CardColorSettings,
 } from "@/lib/personalization";
 
 export type StatKey = "strength" | "intellect" | "will" | "appearance";
@@ -271,6 +273,9 @@ export interface GameState {
   // neutral default, a solid tint, or an uploaded photo with a dimming
   // scrim. See BackgroundSettings for the shape.
   background: BackgroundSettings;
+  // User's chosen card/panel surface color (Settings → Персонализация — фон
+  // → Цвет карточек). See CardColorSettings for the shape.
+  cardColor: CardColorSettings;
   // Manual fix-ups for PAST discipline-calendar days (e.g. forgot to log a
   // day but actually completed everything). Keyed by date (YYYY-MM-DD) →
   // forced status. Only ever consulted for days strictly before today — see
@@ -504,6 +509,7 @@ export function defaultState(): GameState {
     seasonSummarySeen: true,
     accentColors: { ...DEFAULT_ACCENT_COLORS },
     background: { ...DEFAULT_BACKGROUND },
+    cardColor: { ...DEFAULT_CARD_COLOR },
     manualDayOverrides: {},
   };
   // Draw the first day's random daily-quest rotation immediately, so a
@@ -548,6 +554,7 @@ export function loadState(userId?: string): GameState | null {
       seasonSummarySeen: parsed.seasonSummarySeen ?? true,
       accentColors: parsed.accentColors || { ...DEFAULT_ACCENT_COLORS },
       background: parsed.background || { ...DEFAULT_BACKGROUND },
+      cardColor: parsed.cardColor || { ...DEFAULT_CARD_COLOR },
       manualDayOverrides: parsed.manualDayOverrides || {},
     };
   } catch {

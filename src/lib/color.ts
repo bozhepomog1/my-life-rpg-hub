@@ -156,3 +156,24 @@ export const MIN_SAFE_CONTRAST = 3;
 export function pickForeground(bgHex: string, light = "#fefdfb", dark = "#201510"): string {
   return contrastRatio(bgHex, light) >= contrastRatio(bgHex, dark) ? light : dark;
 }
+
+/** Linear RGB blend between two hex colors; t=0 → hexA, t=1 → hexB. Used to derive a dimmer "muted" tone that sits between a foreground and the background it's read against. */
+export function mixHex(hexA: string, hexB: string, t: number): string {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  if (!a || !b) return hexA;
+  const tt = Math.max(0, Math.min(1, t));
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * tt,
+    g: a.g + (b.g - a.g) * tt,
+    b: a.b + (b.b - a.b) * tt,
+  });
+}
+
+/** Plain Euclidean distance between two colors' RGB triplets (0 = identical, ~441 = black vs white). Used where WCAG contrast ratio isn't a useful "are these visually distinct" signal — e.g. comparing two near-white or two near-black tones, which always have low contrast ratios by definition regardless of how different their hues are. */
+export function colorDistance(hexA: string, hexB: string): number {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  if (!a || !b) return Infinity;
+  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+}

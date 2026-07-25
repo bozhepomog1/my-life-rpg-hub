@@ -13,6 +13,11 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  /* Personalization: card surface's own muted/secondary text tone, scoped
+     independently from the page-level --muted-foreground (see the .panel
+     rule below) so it can follow a custom card color instead of the theme
+     default. Defaults match --muted-foreground exactly. */
+  --color-card-muted-foreground: var(--card-muted-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -50,6 +55,7 @@
   --foreground: #1a1a1a;
   --card: #ffffff;
   --card-foreground: #1a1a1a;
+  --card-muted-foreground: #6e6e73;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
   --primary: #af5f3c;
@@ -82,6 +88,7 @@
   --foreground: #ececf1;
   --card: #1a1c22;
   --card-foreground: #ececf1;
+  --card-muted-foreground: #9c9ca6;
   --popover: #1a1c22;
   --popover-foreground: #ececf1;
   --primary: #da9472;
@@ -141,6 +148,7 @@
 /* Card surface: soft shadow does the separating, border is just a faint hairline */
 @utility panel {
   background: var(--color-card);
+  color: var(--color-card-foreground);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: 0 1px 2px rgba(var(--shadow-color) / 0.05), 0 8px 20px -10px rgba(var(--shadow-color) / 0.12);
@@ -148,6 +156,7 @@
 
 @utility panel-glow {
   background: var(--color-card);
+  color: var(--color-card-foreground);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: 0 1px 3px rgba(var(--shadow-color) / 0.06), 0 14px 30px -14px rgba(var(--shadow-color) / 0.16);
@@ -155,9 +164,24 @@
 
 @utility card-elevated {
   background: var(--color-card);
+  color: var(--color-card-foreground);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: 0 1px 2px rgba(var(--shadow-color) / 0.05), 0 8px 20px -10px rgba(var(--shadow-color) / 0.12);
+}
+
+/* Personalization: re-scope --foreground/--muted-foreground to the card's
+   OWN --card-foreground/--card-muted-foreground inside any card surface.
+   Custom properties are inherited, so every `text-foreground`/
+   `text-muted-foreground` Tailwind utility used by content inside a card
+   (headings, labels, "×1.5" tags, everything) automatically resolves
+   against the card's actual color instead of the page's — a dark custom
+   card gets light text, a pale one gets dark text, independent of theme.
+   Defaults match the page foreground exactly, so untouched cards render
+   byte-identical to before. */
+.panel, .panel-glow, .card-elevated {
+  --foreground: var(--card-foreground);
+  --muted-foreground: var(--card-muted-foreground);
 }
 
 /* Cards feel alive on hover: a small lift + a deeper shadow */

@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { computeAccentCssVars, computeBackgroundCssVars } from "@/lib/personalization";
+import {
+  computeAccentCssVars,
+  computeBackgroundCssVars,
+  computeCardCssVars,
+} from "@/lib/personalization";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 
 // Every CSS custom property this component might set, so a value chosen in
@@ -17,17 +21,25 @@ const MANAGED_KEYS = [
   "--accent-2-foreground",
   "--accent-2-hover",
   "--background",
+  "--card",
+  "--card-foreground",
+  "--card-muted-foreground",
+  "--popover",
+  "--popover-foreground",
 ];
 
 /**
- * Applies the user's chosen accent colors AND background color as inline
- * CSS custom-property overrides on <html>. Inline styles always win over
- * the plain :root/.dark rules in styles.css, so this re-themes every
- * `bg-primary`/`text-accent`/etc. Tailwind utility (and the page background)
+ * Applies the user's chosen accent colors, background color, and card color
+ * as inline CSS custom-property overrides on <html>. Inline styles always
+ * win over the plain :root/.dark rules in styles.css, so this re-themes
+ * every `bg-primary`/`text-accent`/`panel` background/etc. Tailwind utility
  * without touching a single component — see the `@theme inline` block at
  * the top of styles.css for how those utilities are wired to these variable
- * names. A background PHOTO isn't handled here — see BackgroundPhotoLayer,
- * which renders an actual fixed image + scrim instead of a CSS variable.
+ * names, and the `.panel`/`.panel-glow`/`.card-elevated` rule that re-scopes
+ * `--foreground`/`--muted-foreground` to the card's own colors so text
+ * inside cards stays readable against whatever card color is picked. A
+ * background PHOTO isn't handled here — see BackgroundPhotoLayer, which
+ * renders an actual fixed image + scrim instead of a CSS variable.
  *
  * Renders nothing. Mounted once near the root, below GameStateProvider so it
  * can read the live state, and above everything else so it applies before
@@ -42,13 +54,14 @@ export function AccentApplier() {
     const vars: Record<string, string> = {
       ...computeAccentCssVars(state.accentColors, mode),
       ...computeBackgroundCssVars(state.background, mode),
+      ...computeCardCssVars(state.cardColor, mode),
     };
     const root = document.documentElement;
     for (const key of MANAGED_KEYS) {
       if (key in vars) root.style.setProperty(key, vars[key]);
       else root.style.removeProperty(key);
     }
-  }, [state.accentColors, state.background, dark]);
+  }, [state.accentColors, state.background, state.cardColor, dark]);
 
   return null;
 }

@@ -31,6 +31,11 @@ export function useGameState() {
     let cancelled = false;
     setHydrated(false);
 
+    // Purge the obsolete shared pre-auth cache if it's still sitting on this
+    // device — it's no longer read by anything, and leaving another person's
+    // progress blob in localStorage is exactly the exposure we just closed.
+    clearLegacyLocalState();
+
     const cached = loadState(userId);
     if (cached) setState(cached);
 
@@ -52,16 +57,20 @@ export function useGameState() {
         setState(remote);
         saveState(remote, userId);
       } else {
-        // No row for this user yet: migrate legacy anonymous local progress if
-        // present, otherwise seed a fresh default state, then push to Supabase.
-        const legacy = loadState();
-        const initial = legacy ?? cached ?? defaultState();
+        // No row for this user yet → start from a clean default state.
+        //
+        // SECURITY: this used to fall back to loadState() with no userId,
+        // reading the shared pre-auth localStorage key. On a device where
+        // someone else had used the app, the next account to sign in
+        // inherited THEIR entire progress (quests, nutrition, body stats)
+        // and then wrote it into their own cloud row. That's a real
+        // cross-account data leak on any shared/family/demo browser, so the
+        // legacy migration is gone. `cached` below is per-user
+        // (localCacheKey(userId)), so it's safe to keep.
+        const initial = cached ?? defaultState();
         setState(initial);
         saveState(initial, userId);
-        const { error: upsertError } = await supabase
-          .from("game_states")
-          .upsert({ user_id: userId, state: initial });
-        if (!upsertError && legacy) clearLegacyLocalState();
+        await supabase.from("game_states").upsert({ user_id: userId, state: initial });
       }
 
       if (!cancelled) setHydrated(true);

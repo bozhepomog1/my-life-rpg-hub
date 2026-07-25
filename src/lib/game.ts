@@ -310,15 +310,17 @@ function seedQuests(): Quest[] {
   return [
     // Daily quests are no longer seeded here — see DAILY_QUEST_POOL and
     // ensureDailyRotation() below, which draw a fresh random subset every
-    // day. This function now only seeds the one-off story/purchase quests.
+    // day. This function only seeds the one-off story/purchase quests.
+    //
+    // PRIVACY: everything in this function ships inside the public JS
+    // bundle and is handed to EVERY new account. It must therefore stay
+    // strictly generic — never put personal goals, purchases, order/SKU
+    // numbers, place names or anything else identifying in here. Personal
+    // quests belong in a user's own saved state (added from the UI), not
+    // in the seed. See commit history: an earlier version of this seed
+    // leaked the author's private quest list to every new signup.
 
-    // STORY
-    q({
-      title: "Съездить на восток и сделать генеральную уборку",
-      stat: "will",
-      reward: 30,
-      category: "story",
-    }),
+    // STORY — generic one-off goals
     q({
       title: "Выйти на пробежку",
       stat: "strength",
@@ -329,15 +331,7 @@ function seedQuests(): Quest[] {
       dayOffOnly: true,
     }),
     q({
-      title: "Разобраться в вайбкодинге",
-      stat: "intellect",
-      reward: 20,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Начать учить английский язык",
+      title: "Начать учить иностранный язык",
       stat: "intellect",
       reward: 15,
       category: "story",
@@ -345,23 +339,7 @@ function seedQuests(): Quest[] {
       dayOffOnly: true,
     }),
     q({
-      title: "Начать учить программирование",
-      stat: "intellect",
-      reward: 15,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Изучить уроки по вайтлистам",
-      stat: "intellect",
-      reward: 25,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Начать изучать, как создавать ТГ-ботов",
+      title: "Освоить новый навык или инструмент",
       stat: "intellect",
       reward: 20,
       category: "story",
@@ -369,36 +347,13 @@ function seedQuests(): Quest[] {
       dayOffOnly: true,
     }),
     q({
-      title: "Начать изучать, как создать нейросеть под себя",
-      stat: "intellect",
-      reward: 30,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Придумать схему по арбитражу (купил дешевле — продал дороже)",
-      stat: "will",
-      reward: 25,
-      category: "story",
-    }),
-    q({
-      title: "Разобраться в мультиварке и приготовить блюдо",
+      title: "Приготовить новое блюдо с нуля",
       stat: "will",
       reward: 10,
       category: "story",
       requiresPhoto: true,
       photoHint: "Фото готового блюда",
     }),
-    q({
-      title: "Сходить подстричься и сделать брови",
-      stat: "appearance",
-      reward: 20,
-      category: "story",
-      requiresPhoto: true,
-      photoHint: "Селфи «До/После»",
-    }),
-    q({ title: "Мб покрасить волосы", stat: "appearance", reward: 15, category: "story" }),
 
     // STORY — bodyweight training, personalized once a record is set in "Тело"
     q({
@@ -442,82 +397,37 @@ function seedQuests(): Quest[] {
       dayOffOnly: true,
     }),
 
-    // PURCHASE (already completed)
+    // PURCHASE — generic "manage / optimize / declutter" goals
     q({
-      title: "Найти умные очки Ray-Ban Meta Wayfarer Gen 2 RW4012 (1 700 ₽)",
+      title: "Составить список трат за месяц и посчитать, сколько удалось отложить",
       stat: "will",
       reward: 15,
       category: "purchase",
-      done: true,
-      completedAt: now,
     }),
     q({
-      title: "Найти мужские кварцевые часы на Ozon (SKU: 2162649348)",
-      stat: "will",
-      reward: 10,
-      category: "purchase",
-      done: true,
-      completedAt: now,
-    }),
-    q({
-      title: "Составить список трат на месяц и подсчитать отложенные деньги",
-      stat: "will",
-      reward: 15,
-      category: "purchase",
-      done: true,
-      completedAt: now,
-    }),
-    q({
-      title: "Глянуть все видосы в избранном в ТТ",
-      stat: "will",
-      reward: 5,
-      category: "purchase",
-      done: true,
-      completedAt: now,
-    }),
-    q({
-      title: "Заказать на ВБ всё самое необходимое",
-      stat: "will",
-      reward: 10,
-      category: "purchase",
-      done: true,
-      completedAt: now,
-    }),
-
-    // PURCHASE (open)
-    q({
-      title: "Продуть ПК от пыли",
+      title: "Разобрать и почистить рабочее место и технику",
       stat: "strength",
       reward: 15,
       category: "purchase",
       requiresPhoto: true,
-      photoHint: "Фото чистого ПК",
+      photoHint: "Фото до/после",
     }),
     q({
-      title: "Автосервис (СТО): комплексное ТО авто",
-      stat: "will",
-      reward: 50,
-      category: "purchase",
-      checklist: makeChecklist([
-        "Замена АБС",
-        "Кондиционер",
-        "Поменять резину",
-        "Поменять колодки",
-        "Сделать потолок в машине",
-      ]),
-    }),
-    q({
-      title: "Глянуть все сохранённые ссылки и убрать лишнее",
+      title: "Навести порядок в сохранённых ссылках и подписках",
       stat: "intellect",
       reward: 15,
       category: "purchase",
     }),
-    q({ title: "Сходить в секонд-хенды", stat: "appearance", reward: 10, category: "purchase" }),
     q({
-      title: "Разобраться в приложении с питанием",
-      stat: "will",
-      reward: 15,
+      title: "Разобрать гардероб и составить список того, что нужно обновить",
+      stat: "appearance",
+      reward: 10,
       category: "purchase",
+      checklist: makeChecklist([
+        "Разобрать шкаф",
+        "Отложить то, что не носишь",
+        "Составить список нужного",
+      ]),
     }),
   ];
 }
@@ -535,7 +445,7 @@ export function defaultState(): GameState {
       appearance: { level: 0, xp: 0 },
     },
     quests: seedQuests(),
-    completedCount: 5, // 5 seeded purchase quests already done
+    completedCount: 0,
     depositStartAt: Date.now(),
     depositAmount: 1000,
     depositLost: false,

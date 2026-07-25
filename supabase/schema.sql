@@ -14,21 +14,40 @@ create table if not exists public.game_states (
 
 alter table public.game_states enable row level security;
 
+-- Defence in depth: anon (signed-out) must never touch this table at all.
+-- The policies below would already block it (auth.uid() is NULL, so
+-- "auth.uid() = user_id" is NULL → not true → denied), but revoking the
+-- grant means a missing/dropped policy can't silently open it up either.
+revoke all on public.game_states from anon;
+grant select, insert, update on public.game_states to authenticated;
+
+-- One row per user, readable/writable ONLY by that user. Every policy is
+-- scoped `to authenticated` and matched on auth.uid() = user_id, so there
+-- is no path by which one account can read or modify another's row.
 drop policy if exists "select own game_state" on public.game_states;
 create policy "select own game_state"
   on public.game_states for select
+  to authenticated
   using (auth.uid() = user_id);
 
 drop policy if exists "insert own game_state" on public.game_states;
 create policy "insert own game_state"
   on public.game_states for insert
+  to authenticated
   with check (auth.uid() = user_id);
 
 drop policy if exists "update own game_state" on public.game_states;
 create policy "update own game_state"
   on public.game_states for update
+  to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+drop policy if exists "delete own game_state" on public.game_states;
+create policy "delete own game_state"
+  on public.game_states for delete
+  to authenticated
+  using (auth.uid() = user_id);
 
 -- keep updated_at fresh on every write
 create or replace function public.set_updated_at()

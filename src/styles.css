@@ -122,6 +122,17 @@
   html.dark {
     color-scheme: dark;
   }
+  /* Background-photo personalization (BackgroundPhotoLayer): html/body/#root
+     normally paint an opaque --color-background fill, which would sit in
+     front of the layer's fixed z-index:-1 image (ancestor backgrounds paint
+     before negative z-index children, but #root itself is an in-flow,
+     non-positioned descendant that paints AFTER them). Making all three
+     transparent while a photo is active lets the image show through. */
+  html.has-bg-photo,
+  html.has-bg-photo body,
+  html.has-bg-photo #root {
+    background: transparent;
+  }
   * {
     transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
   }

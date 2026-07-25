@@ -17,6 +17,7 @@ import { GameStateProvider } from "../lib/game-state-context";
 import { AchievementWatcher } from "../components/AchievementWatcher";
 import { DailyReminderService } from "../components/DailyReminderService";
 import { AccentApplier } from "../components/AccentApplier";
+import { BackgroundPhotoLayer } from "../components/BackgroundPhotoLayer";
 
 function NotFoundComponent() {
   return (
@@ -148,6 +149,7 @@ function RootComponent() {
         <AuthGate>
           <GameStateProvider>
             <AccentApplier />
+            <BackgroundPhotoLayer />
             <AchievementWatcher />
             <DailyReminderService />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}

@@ -1,4 +1,9 @@
-import { DEFAULT_ACCENT_COLORS, type AccentColors } from "@/lib/personalization";
+import {
+  DEFAULT_ACCENT_COLORS,
+  DEFAULT_BACKGROUND,
+  type AccentColors,
+  type BackgroundSettings,
+} from "@/lib/personalization";
 
 export type StatKey = "strength" | "intellect" | "will" | "appearance";
 export type QuestCategory = "daily" | "story" | "purchase";
@@ -262,6 +267,10 @@ export interface GameState {
   // states saved before this feature existed simply fall back to the
   // terracotta default wherever this is read — see DEFAULT_ACCENT_COLORS.
   accentColors: AccentColors;
+  // User's chosen app background (Settings → Персонализация → Фон): a
+  // neutral default, a solid tint, or an uploaded photo with a dimming
+  // scrim. See BackgroundSettings for the shape.
+  background: BackgroundSettings;
   // Manual fix-ups for PAST discipline-calendar days (e.g. forgot to log a
   // day but actually completed everything). Keyed by date (YYYY-MM-DD) →
   // forced status. Only ever consulted for days strictly before today — see
@@ -494,6 +503,7 @@ export function defaultState(): GameState {
     season: defaultSeason(),
     seasonSummarySeen: true,
     accentColors: { ...DEFAULT_ACCENT_COLORS },
+    background: { ...DEFAULT_BACKGROUND },
     manualDayOverrides: {},
   };
   // Draw the first day's random daily-quest rotation immediately, so a
@@ -537,6 +547,7 @@ export function loadState(userId?: string): GameState | null {
       lastSeasonSummary: parsed.lastSeasonSummary,
       seasonSummarySeen: parsed.seasonSummarySeen ?? true,
       accentColors: parsed.accentColors || { ...DEFAULT_ACCENT_COLORS },
+      background: parsed.background || { ...DEFAULT_BACKGROUND },
       manualDayOverrides: parsed.manualDayOverrides || {},
     };
   } catch {

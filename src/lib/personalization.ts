@@ -4,6 +4,7 @@ import {
   contrastRatio,
   MIN_SAFE_CONTRAST,
   pickForeground,
+  withLightness,
 } from "@/lib/color";
 
 export interface AccentColors {
@@ -121,6 +122,80 @@ export function accentContrastWarning(hex: string): string | null {
   const worstDark = contrastRatio(hex, darkBg);
   if (worstLight < MIN_SAFE_CONTRAST || worstDark < MIN_SAFE_CONTRAST) {
     return "Этот цвет может быть плохо виден на светлом или тёмном фоне.";
+  }
+  return null;
+}
+
+// ── Background personalization ──────────────────────────────────────────
+
+export interface BackgroundSettings {
+  /** "default" keeps the app's current neutral background untouched (byte-
+   *  identical CSS values, same as accent's default handling). "color" tints
+   *  the page background using `color`. "photo" shows an uploaded photo with
+   *  a dark scrim (opacity `dimOpacity`) instead of a flat color. */
+  mode: "default" | "color" | "photo";
+  /** Canonical (user-picked) hex for "color" mode. Re-targeted to a near-
+   *  white / near-black lightness per theme by computeBackgroundCssVars, the
+   *  same hue-preserving approach as accentForMode(). */
+  color: string;
+  /** Storage path of an uploaded background photo (quest-photos bucket, see
+   *  background-photo.ts) — set only in "photo" mode. */
+  photoPath?: string;
+  /** Darkening scrim strength over the photo, 0-90. */
+  dimOpacity: number;
+}
+
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  mode: "default",
+  color: "#e8d9c3",
+  dimOpacity: 55,
+};
+
+export interface BackgroundPreset {
+  id: string;
+  label: string;
+  /** null = the "default" neutral preset (no color override at all). */
+  color: string | null;
+}
+
+export const BACKGROUND_PRESETS: BackgroundPreset[] = [
+  { id: "neutral", label: "Нейтральный", color: null },
+  { id: "cream", label: "Тёплый беж", color: "#e8d9c3" },
+  { id: "sage", label: "Мягкая зелень", color: "#cdd9c8" },
+  { id: "sky", label: "Прохладное небо", color: "#c8d6e0" },
+  { id: "blush", label: "Пудровый розовый", color: "#e8d2d6" },
+];
+
+// Lightness targets that keep a background nearly-white in light mode and
+// nearly-black in dark mode regardless of the chosen hue — cards (which are
+// solid, separately-colored panels) and body text both stay exactly as
+// readable as with the current fixed neutral background.
+const LIGHT_BG_TARGET_L = 97;
+const DARK_BG_TARGET_L = 11;
+
+/** CSS var overrides for the page background in one theme. Empty for "default"/"photo" — those either keep the static CSS value or are handled by a dedicated fixed photo layer instead of a CSS variable. */
+export function computeBackgroundCssVars(
+  settings: BackgroundSettings,
+  mode: "light" | "dark",
+): Record<string, string> {
+  if (settings.mode !== "color") return {};
+  const bg = withLightness(settings.color, mode === "light" ? LIGHT_BG_TARGET_L : DARK_BG_TARGET_L);
+  return { "--background": bg };
+}
+
+/**
+ * Contrast check for a custom background color pick — same WCAG machinery
+ * as accentContrastWarning(), just checked against the actual per-theme
+ * foreground text color instead of a fixed reference background, since here
+ * the background itself is what's changing.
+ */
+export function backgroundContrastWarning(hex: string): string | null {
+  const lightBg = withLightness(hex, LIGHT_BG_TARGET_L);
+  const darkBg = withLightness(hex, DARK_BG_TARGET_L);
+  const lightOk = contrastRatio(lightBg, "#1a1a1a") >= MIN_SAFE_CONTRAST;
+  const darkOk = contrastRatio(darkBg, "#ececf1") >= MIN_SAFE_CONTRAST;
+  if (!lightOk || !darkOk) {
+    return "Этот фон может плохо сочетаться с текстом на светлой или тёмной теме.";
   }
   return null;
 }

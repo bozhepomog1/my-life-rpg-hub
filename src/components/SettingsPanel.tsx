@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { REMINDER_HOUR } from "@/lib/reminders";
@@ -7,9 +7,15 @@ import { isValidHex } from "@/lib/color";
 import {
   ACCENT_PRESETS,
   accentContrastWarning,
+  BACKGROUND_PRESETS,
+  backgroundContrastWarning,
+  DEFAULT_BACKGROUND,
   findMatchingPreset,
   type AccentColors,
+  type BackgroundSettings,
 } from "@/lib/personalization";
+import { useAuthContext } from "@/lib/use-auth-context";
+import { getBackgroundPhotoUrl, uploadBackgroundPhoto } from "@/lib/background-photo";
 
 type NotificationPermissionState = NotificationPermission | "unsupported";
 
@@ -22,8 +28,12 @@ interface Props {
 }
 
 export function SettingsPanel({ state, update, setState }: Props) {
+  const { user } = useAuthContext();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [permission, setPermission] = useState<NotificationPermissionState>("unsupported");
+  const [bgUploading, setBgUploading] = useState(false);
+  const [bgPreviewUrl, setBgPreviewUrl] = useState<string | null>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -32,6 +42,20 @@ export function SettingsPanel({ state, update, setState }: Props) {
     }
     setPermission(Notification.permission);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (state.background.mode !== "photo" || !state.background.photoPath) {
+      setBgPreviewUrl(null);
+      return;
+    }
+    getBackgroundPhotoUrl(state.background.photoPath).then((url) => {
+      if (!cancelled) setBgPreviewUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.background.mode, state.background.photoPath]);
 
   async function handleEnableReminders() {
     if (permission === "unsupported") return;
@@ -107,9 +131,60 @@ export function SettingsPanel({ state, update, setState }: Props) {
     update((s) => ({ ...s, accentColors: { ...s.accentColors, [key]: hex } }));
   }
 
+  function applyBackgroundPreset(color: string | null) {
+    update((s) => ({
+      ...s,
+      background: color
+        ? ({ ...s.background, mode: "color", color } as BackgroundSettings)
+        : ({ ...s.background, mode: "default" } as BackgroundSettings),
+    }));
+  }
+
+  function setCustomBackgroundColor(hex: string) {
+    if (!isValidHex(hex)) return;
+    update((s) => ({ ...s, background: { ...s.background, mode: "color", color: hex } }));
+  }
+
+  async function handleBackgroundFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user) return;
+    setBgUploading(true);
+    try {
+      const path = await uploadBackgroundPhoto(user.id, file);
+      update((s) => ({ ...s, background: { ...s.background, mode: "photo", photoPath: path } }));
+    } catch (err) {
+      console.warn("background photo upload failed", err);
+    } finally {
+      setBgUploading(false);
+    }
+  }
+
+  function removeBackgroundPhoto() {
+    update((s) => ({
+      ...s,
+      background: { ...s.background, mode: "default", photoPath: undefined },
+    }));
+  }
+
+  function setBackgroundDim(raw: string) {
+    const n = Math.min(90, Math.max(0, Math.round(Number(raw) || 0)));
+    update((s) => ({ ...s, background: { ...s.background, dimOpacity: n } }));
+  }
+
   const activePreset = findMatchingPreset(state.accentColors);
   const primaryWarning = accentContrastWarning(state.accentColors.primary);
   const secondaryWarning = accentContrastWarning(state.accentColors.secondary);
+
+  const activeBgPreset = BACKGROUND_PRESETS.find(
+    (p) =>
+      (p.color === null && state.background.mode === "default") ||
+      (p.color !== null &&
+        state.background.mode === "color" &&
+        p.color.toLowerCase() === state.background.color.toLowerCase()),
+  );
+  const bgWarning =
+    state.background.mode === "color" ? backgroundContrastWarning(state.background.color) : null;
 
   return (
     <div className="space-y-5">
@@ -376,6 +451,133 @@ export function SettingsPanel({ state, update, setState }: Props) {
           <p className="mt-3 text-[11px] text-muted-foreground">
             Оттенки для наведения и обеих тем (светлой/тёмной) подбираются автоматически.
           </p>
+        </div>
+      </section>
+
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Персонализация — фон</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Фон карточек и текст не меняются — можно поменять только цвет за их пределами, или
+          поставить свою фотографию.
+        </p>
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые варианты</p>
+          <div className="flex flex-wrap gap-2">
+            {BACKGROUND_PRESETS.map((preset) => {
+              const active = activeBgPreset?.id === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyBackgroundPreset(preset.color)}
+                  title={preset.label}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
+                  }`}
+                >
+                  <span
+                    className="h-4 w-4 rounded-full border border-border/60"
+                    style={{ background: preset.color ?? "var(--color-background)" }}
+                  />
+                  {preset.label}
+                  {active && <span className="text-primary">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Свой цвет</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={
+                isValidHex(state.background.color)
+                  ? state.background.color
+                  : DEFAULT_BACKGROUND.color
+              }
+              onChange={(e) => setCustomBackgroundColor(e.target.value)}
+              className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+              aria-label="Свой цвет фона"
+            />
+            <span className="text-xs text-muted-foreground">{state.background.color}</span>
+          </div>
+          {bgWarning && <p className="mt-1.5 text-[11px] text-destructive">{bgWarning}</p>}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Оттенок подстраивается под каждую тему — почти белый на светлой, почти чёрный на тёмной
+            — так же, как акцентные цвета.
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Своя фотография</p>
+          <input
+            ref={bgFileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleBackgroundFile}
+            className="hidden"
+          />
+          {state.background.mode === "photo" && state.background.photoPath ? (
+            <div className="flex items-center gap-3">
+              {bgPreviewUrl && (
+                <img
+                  src={bgPreviewUrl}
+                  alt=""
+                  className="h-14 w-14 rounded-lg border border-border object-cover"
+                />
+              )}
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  disabled={bgUploading}
+                  onClick={() => bgFileRef.current?.click()}
+                  className="text-left text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                >
+                  {bgUploading ? "Загрузка…" : "Заменить фото"}
+                </button>
+                <button
+                  type="button"
+                  onClick={removeBackgroundPhoto}
+                  className="text-left text-xs text-destructive underline hover:opacity-80"
+                >
+                  Убрать фото
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={bgUploading}
+              onClick={() => bgFileRef.current?.click()}
+              className="w-full rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bgUploading ? "Загрузка…" : "🖼️ Загрузить фотографию фона"}
+            </button>
+          )}
+
+          {state.background.mode === "photo" && (
+            <div className="mt-3">
+              <label className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Затемнение</span>
+                <span>{state.background.dimOpacity}%</span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={90}
+                value={state.background.dimOpacity}
+                onChange={(e) => setBackgroundDim(e.target.value)}
+                className="mt-1.5 w-full accent-primary"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Затемняющий слой поверх фото — подбери так, чтобы карточки и текст было удобно
+                читать.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

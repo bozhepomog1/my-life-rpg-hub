@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
 import { ProgressBar } from "@/components/ProgressBar";
+import { ShareCardModal } from "@/components/ShareCardModal";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
 
@@ -18,13 +20,16 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(state.name);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const need = xpForNextLevel(state.level);
   const currentLevelXp = state.totalXp - (state.level - 1) * need;
   const pct = Math.min(100, Math.max(0, (currentLevelXp / need) * 100));
 
   const strongest = (Object.keys(state.stats) as StatKey[]).reduce((a, b) =>
-    state.stats[a].level * 100 + state.stats[a].xp >= state.stats[b].level * 100 + state.stats[b].xp ? a : b
+    state.stats[a].level * 100 + state.stats[a].xp >= state.stats[b].level * 100 + state.stats[b].xp
+      ? a
+      : b,
   );
 
   return (
@@ -65,7 +70,10 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
               />
             ) : (
               <h1
-                onClick={() => { setNameDraft(state.name); setEditingName(true); }}
+                onClick={() => {
+                  setNameDraft(state.name);
+                  setEditingName(true);
+                }}
                 className="cursor-pointer truncate text-xl font-semibold sm:text-2xl"
                 title="Изменить имя"
               >
@@ -73,7 +81,10 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
               </h1>
             )}
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              Топ: <span style={{ color: STAT_META[strongest].color }}>{STAT_META[strongest].label}</span>
+              Топ:{" "}
+              <span style={{ color: STAT_META[strongest].color }}>
+                {STAT_META[strongest].label}
+              </span>
               {" · "}Всего XP: <span className="text-foreground">{state.totalXp}</span>
             </p>
           </div>
@@ -89,17 +100,37 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
       <div className="mt-5">
         <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
           <span>Прогресс уровня</span>
-          <span>{currentLevelXp} / {need} XP</span>
+          <span>
+            {currentLevelXp} / {need} XP
+          </span>
         </div>
         <ProgressBar value={pct} />
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShareOpen(true)}
+        className="mt-4 w-full rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+      >
+        📤 Поделиться профилем
+      </button>
+
+      {shareOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <ShareCardModal state={state} onClose={() => setShareOpen(false)} />,
+          document.body,
+        )}
 
       {pickerOpen && (
         <div className="mt-4 flex flex-wrap gap-2">
           {AVATARS.map((a) => (
             <button
               key={a}
-              onClick={() => { onChangeAvatar(a); setPickerOpen(false); }}
+              onClick={() => {
+                onChangeAvatar(a);
+                setPickerOpen(false);
+              }}
               className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-secondary text-2xl transition-transform hover:scale-110 hover:border-primary"
             >
               {a}

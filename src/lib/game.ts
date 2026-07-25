@@ -262,6 +262,12 @@ export interface GameState {
   // states saved before this feature existed simply fall back to the
   // terracotta default wherever this is read — see DEFAULT_ACCENT_COLORS.
   accentColors: AccentColors;
+  // Manual fix-ups for PAST discipline-calendar days (e.g. forgot to log a
+  // day but actually completed everything). Keyed by date (YYYY-MM-DD) →
+  // forced status. Only ever consulted for days strictly before today — see
+  // resolveDayStatus()/isDayFullyDone() — so this can never touch today's
+  // live automatic tracking or be used to get ahead of the real rules.
+  manualDayOverrides: Record<string, "green" | "red">;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -488,6 +494,7 @@ export function defaultState(): GameState {
     season: defaultSeason(),
     seasonSummarySeen: true,
     accentColors: { ...DEFAULT_ACCENT_COLORS },
+    manualDayOverrides: {},
   };
   // Draw the first day's random daily-quest rotation immediately, so a
   // brand-new account isn't left with an empty daily list.
@@ -530,6 +537,7 @@ export function loadState(userId?: string): GameState | null {
       lastSeasonSummary: parsed.lastSeasonSummary,
       seasonSummarySeen: parsed.seasonSummarySeen ?? true,
       accentColors: parsed.accentColors || { ...DEFAULT_ACCENT_COLORS },
+      manualDayOverrides: parsed.manualDayOverrides || {},
     };
   } catch {
     return null;
@@ -1078,6 +1086,28 @@ export interface DayStatus {
   dayNum: number;
 }
 
+/**
+ * Resolves a single day's discipline status. Manual overrides (Settings →
+ * calendar edit) are only ever consulted for days strictly before today —
+ * today and future days always take the live automatic path, so editing the
+ * past can never affect (or be used to game) the current day's real-time
+ * tracking.
+ */
+function resolveDayStatus(
+  state: GameState,
+  dateKey: string,
+  todayK: string,
+  isFuture: boolean,
+): DayStatus["status"] {
+  if (isFuture) return "future";
+  if (dateKey === todayK) return "pending";
+  const override = state.manualDayOverrides[dateKey];
+  if (override) return override;
+  const assigned = mandatoryCountFor(state, dateKey);
+  const done = state.dailyCompletions[dateKey] || [];
+  return assigned > 0 && done.length >= assigned ? "green" : "red";
+}
+
 export function computeDiscipline(state: GameState) {
   const start = new Date(state.depositStartAt);
   start.setHours(0, 0, 0, 0);
@@ -1089,14 +1119,8 @@ export function computeDiscipline(state: GameState) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const k = todayKey(d);
-    let status: DayStatus["status"];
-    if (d > now && k !== todayK) status = "future";
-    else if (k === todayK) status = "pending";
-    else {
-      const assigned = mandatoryCountFor(state, k);
-      const done = state.dailyCompletions[k] || [];
-      status = assigned > 0 && done.length >= assigned ? "green" : "red";
-    }
+    const isFuture = d > now && k !== todayK;
+    const status = resolveDayStatus(state, k, todayK, isFuture);
     days.push({ date: k, status, dayNum: d.getDate() });
   }
   const redCount = days.filter((d) => d.status === "red").length;
@@ -1117,10 +1141,35 @@ export const STREAK_MILESTONES = [7, 30, 100];
  * since rotated daily quests get fresh ids every day.
  */
 export function isDayFullyDone(state: GameState, dateKey: string): boolean {
+  // A manual override for a past day (backfilling a forgotten log entry)
+  // counts exactly like the real thing here too, so the streak stays
+  // consistent with what the calendar shows. Never consulted for today —
+  // callers pass today's key while it's still "pending", which isn't in
+  // manualDayOverrides anyway since edits are blocked for today/future.
+  const override = state.manualDayOverrides[dateKey];
+  if (override) return override === "green";
   const assigned = mandatoryCountFor(state, dateKey);
   if (assigned === 0) return false;
   const done = state.dailyCompletions[dateKey] || [];
   return done.length >= assigned;
+}
+
+/**
+ * Applies (or clears, with status=null) a manual discipline-day override.
+ * Hard-guarded to strictly-past dates — attempting to edit today or a future
+ * date is a no-op, so this can't be used to shortcut the live automatic
+ * tracking no matter what the UI does.
+ */
+export function setManualDayOverride(
+  state: GameState,
+  dateKey: string,
+  status: "green" | "red" | null,
+): GameState {
+  if (dateKey >= todayKey()) return state;
+  const next = { ...state.manualDayOverrides };
+  if (status === null) delete next[dateKey];
+  else next[dateKey] = status;
+  return { ...state, manualDayOverrides: next };
 }
 
 /**

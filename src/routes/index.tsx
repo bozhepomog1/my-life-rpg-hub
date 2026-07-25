@@ -362,7 +362,7 @@ function Home() {
           </div>
         </section>
 
-        <DisciplineCalendar state={state} />
+        <DisciplineCalendar state={state} update={update} />
 
         <section>
           <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">Квесты</h2>

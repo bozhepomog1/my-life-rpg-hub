@@ -269,7 +269,9 @@ export const STAT_META: Record<StatKey, { label: string; color: string; icon: st
   strength: { label: "Сила", color: "#b8925a", icon: "⚔️" },
   intellect: { label: "Интеллект", color: "#5c8b99", icon: "🧠" },
   will: { label: "Воля", color: "#7a9471", icon: "🔥" },
-  appearance: { label: "Внешность", color: "#9b7a96", icon: "💎" },
+  // Display label only — the StatKey stays "appearance" so existing saved
+  // states (which key stats by this string) keep working after the rename.
+  appearance: { label: "Харизма", color: "#9b7a96", icon: "💎" },
 };
 
 export const CATEGORY_META: Record<
@@ -766,7 +768,7 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     photoHint: "Фото результата",
   },
 
-  // ── Внешность ──
+  // ── Харизма ──
   {
     title: "Выпить 2 литра воды за день",
     stat: "appearance",

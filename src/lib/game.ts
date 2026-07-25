@@ -280,6 +280,24 @@ export const STAT_META: Record<StatKey, { label: string; color: string; icon: st
   appearance: { label: "Харизма", color: "#9b7a96", icon: "💎" },
 };
 
+/**
+ * The one fixed display order for characteristics across the whole app:
+ * stat cards, quest lists/tags, anywhere stats are enumerated for a person
+ * to read (as opposed to sorted by value, like the achievements leaderboard).
+ * Defined once here instead of relying on object key insertion order, so it
+ * can't silently drift if STAT_META/defaultState() are ever reordered later.
+ */
+export const STAT_ORDER: StatKey[] = ["strength", "intellect", "will", "appearance"];
+
+/**
+ * Sorts any list of stat-tagged items (quests, etc.) into STAT_ORDER groups,
+ * preserving each item's relative order within its own stat group (stable
+ * sort) — so daily quests no longer render in a random per-stat jumble.
+ */
+export function sortByStatOrder<T extends { stat: StatKey }>(items: T[]): T[] {
+  return [...items].sort((a, b) => STAT_ORDER.indexOf(a.stat) - STAT_ORDER.indexOf(b.stat));
+}
+
 export const CATEGORY_META: Record<
   QuestCategory,
   { label: string; icon: string; description: string }

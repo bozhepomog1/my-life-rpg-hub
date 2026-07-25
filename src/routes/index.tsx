@@ -23,7 +23,9 @@ import {
   ensureDailyRotation,
   ensureSeason,
   isWorkDay,
+  sortByStatOrder,
   STAT_META,
+  STAT_ORDER,
   STREAK_MILESTONES,
   todayKey,
   undoReward,
@@ -317,14 +319,17 @@ function Home() {
     .filter((q) => q.category === tab)
     .filter((q) => !q.dayOffOnly || !isWork)
     .map((q) => effectiveQuest(q, isWork));
-  const active = questsByCat.filter((q) => !q.done);
-  const done = questsByCat.filter((q) => q.done);
+  // Grouped by characteristic in the app-wide fixed order (Сила → Интеллект
+  // → Воля → Харизма) rather than creation/rotation order, so quests of the
+  // same stat sit together instead of appearing in a random jumble.
+  const active = sortByStatOrder(questsByCat.filter((q) => !q.done));
+  const done = sortByStatOrder(questsByCat.filter((q) => q.done));
   const lost = disc?.lost;
 
   const dailyQuests = state.quests.filter((q) => q.category === "daily");
   const noActiveDailies = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
-  const bonusActive = state.bonusQuests.filter((q) => !q.done);
-  const bonusDone = state.bonusQuests.filter((q) => q.done);
+  const bonusActive = sortByStatOrder(state.bonusQuests.filter((q) => !q.done));
+  const bonusDone = sortByStatOrder(state.bonusQuests.filter((q) => q.done));
 
   return (
     <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
@@ -351,7 +356,7 @@ function Home() {
             Характеристики
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-            {(Object.keys(state.stats) as StatKey[]).map((k) => (
+            {STAT_ORDER.map((k) => (
               <StatBar key={k} stat={k} level={state.stats[k].level} xp={state.stats[k].xp} />
             ))}
           </div>

@@ -108,7 +108,7 @@ export function QuestCard({
             </span>
           )}
           {quest.bonus && (
-            <span className="rounded-full border border-primary/40 px-1.5 py-0.5 text-[10px] text-primary">
+            <span className="rounded-full border border-accent-2/40 px-1.5 py-0.5 text-[10px] text-accent-2">
               ×1.5
             </span>
           )}

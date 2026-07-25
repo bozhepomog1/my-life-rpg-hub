@@ -24,7 +24,7 @@ export function StreakBanner({ current, longest }: Props) {
       </div>
       <div className="shrink-0 rounded-xl border border-border bg-secondary px-3 py-2 text-center">
         <div className="text-[11px] tracking-wide text-muted-foreground">Рекорд</div>
-        <div className="text-xl font-semibold text-primary sm:text-2xl">{longest}</div>
+        <div className="text-xl font-semibold text-accent-2 sm:text-2xl">{longest}</div>
       </div>
     </div>
   );

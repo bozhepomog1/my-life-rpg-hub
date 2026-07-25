@@ -3,6 +3,13 @@ import { createPortal } from "react-dom";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
+import { isValidHex } from "@/lib/color";
+import {
+  ACCENT_PRESETS,
+  accentContrastWarning,
+  findMatchingPreset,
+  type AccentColors,
+} from "@/lib/personalization";
 
 type NotificationPermissionState = NotificationPermission | "unsupported";
 
@@ -91,6 +98,19 @@ export function SettingsPanel({ state, update, setState }: Props) {
     setConfirmOpen(false);
   }
 
+  function applyPreset(colors: AccentColors) {
+    update((s) => ({ ...s, accentColors: { ...colors } }));
+  }
+
+  function setCustomColor(key: keyof AccentColors, hex: string) {
+    if (!isValidHex(hex)) return;
+    update((s) => ({ ...s, accentColors: { ...s.accentColors, [key]: hex } }));
+  }
+
+  const activePreset = findMatchingPreset(state.accentColors);
+  const primaryWarning = accentContrastWarning(state.accentColors.primary);
+  const secondaryWarning = accentContrastWarning(state.accentColors.secondary);
+
   return (
     <div className="space-y-5">
       <section className="panel p-6">
@@ -154,7 +174,7 @@ export function SettingsPanel({ state, update, setState }: Props) {
           <button
             type="button"
             onClick={handleEnableReminders}
-            className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
+            className="btn-accent-hover mt-3 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
           >
             Включить напоминания
           </button>
@@ -279,6 +299,84 @@ export function SettingsPanel({ state, update, setState }: Props) {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Персонализация</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Акцентные цвета приложения — фон и текст остаются как есть, меняются только кнопки,
+          прогресс-бары и теги.
+        </p>
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые наборы</p>
+          <div className="flex flex-wrap gap-2">
+            {ACCENT_PRESETS.map((preset) => {
+              const active = activePreset?.id === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset.colors)}
+                  title={preset.label}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
+                  }`}
+                >
+                  <span className="flex h-4 w-4 overflow-hidden rounded-full border border-border/60">
+                    <span className="w-1/2" style={{ background: preset.colors.primary }} />
+                    <span className="w-1/2" style={{ background: preset.colors.secondary }} />
+                  </span>
+                  {preset.label}
+                  {active && <span className="text-primary">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Свои цвета</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Основной акцент</label>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="color"
+                  value={state.accentColors.primary}
+                  onChange={(e) => setCustomColor("primary", e.target.value)}
+                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                  aria-label="Основной акцент"
+                />
+                <span className="text-xs text-muted-foreground">{state.accentColors.primary}</span>
+              </div>
+              {primaryWarning && (
+                <p className="mt-1.5 text-[11px] text-destructive">{primaryWarning}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Вторичный акцент</label>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="color"
+                  value={state.accentColors.secondary}
+                  onChange={(e) => setCustomColor("secondary", e.target.value)}
+                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                  aria-label="Вторичный акцент"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {state.accentColors.secondary}
+                </span>
+              </div>
+              {secondaryWarning && (
+                <p className="mt-1.5 text-[11px] text-destructive">{secondaryWarning}</p>
+              )}
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Оттенки для наведения и обеих тем (светлой/тёмной) подбираются автоматически.
+          </p>
+        </div>
       </section>
 
       <section className="panel p-6">

@@ -253,7 +253,7 @@ export function ShareCardModal({ state, onClose }: Props) {
           <button
             type="button"
             onClick={download}
-            className="w-full rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
+            className="btn-accent-hover w-full rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
           >
             Скачать как изображение
           </button>

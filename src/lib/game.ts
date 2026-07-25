@@ -1,3 +1,5 @@
+import { DEFAULT_ACCENT_COLORS, type AccentColors } from "@/lib/personalization";
+
 export type StatKey = "strength" | "intellect" | "will" | "appearance";
 export type QuestCategory = "daily" | "story" | "purchase";
 
@@ -256,6 +258,10 @@ export interface GameState {
   // kept around as the last completed season's summary.
   lastSeasonSummary?: SeasonSummary;
   seasonSummarySeen: boolean;
+  // User's chosen accent colors (Settings → Персонализация). Optional so
+  // states saved before this feature existed simply fall back to the
+  // terracotta default wherever this is read — see DEFAULT_ACCENT_COLORS.
+  accentColors: AccentColors;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -463,6 +469,7 @@ export function defaultState(): GameState {
     remindersEnabled: false,
     season: defaultSeason(),
     seasonSummarySeen: true,
+    accentColors: { ...DEFAULT_ACCENT_COLORS },
   };
   // Draw the first day's random daily-quest rotation immediately, so a
   // brand-new account isn't left with an empty daily list.
@@ -504,6 +511,7 @@ export function loadState(userId?: string): GameState | null {
       season: parsed.season || defaultSeason(),
       lastSeasonSummary: parsed.lastSeasonSummary,
       seasonSummarySeen: parsed.seasonSummarySeen ?? true,
+      accentColors: parsed.accentColors || { ...DEFAULT_ACCENT_COLORS },
     };
   } catch {
     return null;

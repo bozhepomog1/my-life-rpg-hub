@@ -691,20 +691,20 @@ export interface DailyQuestTemplate {
 
 export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
   // ── Сила ──
-  {
-    title: "Сделать разминку или растяжку 10 минут",
-    stat: "strength",
-    reward: 8,
-    requiresPhoto: true,
-    photoHint: "Фото/видео разминки",
-  },
+  // NOTE: only one generic "stretch" quest lives in this pool — see
+  // "Растяжка всего тела 15 минут перед сном" below — so it doesn't get
+  // drawn twice in the same day's rotation under near-identical wording.
+  // A standalone "Сделать разминку или растяжку 10 минут" quest used to
+  // exist here too, and this entry's own work-day title used to be
+  // "Короткая разминка/растяжка 5-10 минут" — i.e. two different pool
+  // entries that could both surface as "do a stretch" on the same day.
   {
     title: "Мини-тренировка: отжимания, приседания или планка",
     stat: "strength",
     reward: 12,
     requiresPhoto: true,
     photoHint: "Фото после тренировки",
-    workModeTitle: "Короткая разминка/растяжка 5-10 минут",
+    workModeTitle: "Короткая мини-тренировка 5 минут: пара подходов",
     workModeReward: 8,
   },
   { title: "Сделать 30 приседаний", stat: "strength", reward: 8 },

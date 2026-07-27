@@ -95,9 +95,12 @@ interface FoodItem extends Macro {
 }
 
 /**
- * Local database of ~50 common foods/dishes with approximate calories and
- * macros. Values are rough averages for a simple text-based estimator, not
- * precise nutritional data.
+ * Local database of 120+ common foods/dishes with approximate calories and
+ * macros — raw ingredients as well as composed/regional dishes (soups,
+ * garnishes, fast food, pastries, borsch/holodnik/okroshka/plov and the
+ * like), not just "raw" products. Values are rough averages for a simple
+ * text-based estimator, not precise nutritional data. Still entirely a
+ * local keyword lookup — no external/AI calls.
  *
  * Two conventions are used, matching how people actually describe food:
  * - Starchy staples that are normally cooked from a raw/dry form (rice,
@@ -285,6 +288,193 @@ const FOOD_DB: FoodItem[] = [
     carbs: 4.8,
   },
   { label: "Огурец", keywords: ["огурец", "огурц"], kcal: 15, protein: 0.8, fat: 0.1, carbs: 3.6 },
+
+  // --- soups (region/national) ---
+  { label: "Щи", keywords: ["щи"], kcal: 90, protein: 4, fat: 4, carbs: 8 },
+  { label: "Солянка", keywords: ["солянк"], kcal: 140, protein: 8, fat: 9, carbs: 6 },
+  { label: "Харчо", keywords: ["харчо"], kcal: 130, protein: 7, fat: 7, carbs: 10 },
+  { label: "Окрошка", keywords: ["окрошк"], kcal: 90, protein: 4, fat: 3, carbs: 10 },
+  // "холодник" — холодный свекольный суп (белорусский/литовский), the
+  // dish this whole expansion was originally requested for.
+  { label: "Холодник", keywords: ["холодник"], kcal: 70, protein: 3, fat: 2, carbs: 10 },
+  { label: "Свекольник", keywords: ["свекольник"], kcal: 65, protein: 2, fat: 2, carbs: 10 },
+  { label: "Рассольник", keywords: ["рассольник"], kcal: 100, protein: 4, fat: 5, carbs: 10 },
+  { label: "Гаспачо", keywords: ["гаспачо"], kcal: 50, protein: 1.5, fat: 2, carbs: 7 },
+  { label: "Уха", keywords: ["уха", "ухи"], kcal: 80, protein: 8, fat: 3, carbs: 4 },
+  {
+    label: "Крем-суп / суп-пюре",
+    keywords: ["крем-суп", "суп-пюре"],
+    kcal: 110,
+    protein: 3,
+    fat: 6,
+    carbs: 10,
+  },
+  { label: "Минестроне", keywords: ["минестроне"], kcal: 70, protein: 3, fat: 2, carbs: 10 },
+  { label: "Том ям", keywords: ["том ям", "том-ям"], kcal: 90, protein: 6, fat: 4, carbs: 8 },
+  { label: "Рамен", keywords: ["рамен"], kcal: 436, protein: 18, fat: 15, carbs: 60 },
+  { label: "Лагман", keywords: ["лагман"], kcal: 150, protein: 7, fat: 6, carbs: 18 },
+  { label: "Шурпа", keywords: ["шурпа"], kcal: 130, protein: 8, fat: 7, carbs: 8 },
+
+  // --- regional/national mains ---
+  { label: "Хинкали", keywords: ["хинкал"], kcal: 220, protein: 10, fat: 8, carbs: 27 },
+  { label: "Манты", keywords: ["мант"], kcal: 250, protein: 11, fat: 10, carbs: 28 },
+  { label: "Чебуреки", keywords: ["чебурек"], kcal: 280, protein: 9, fat: 18, carbs: 22 },
+  { label: "Беляши", keywords: ["беляш"], kcal: 260, protein: 9, fat: 15, carbs: 22 },
+  { label: "Вареники", keywords: ["вареник"], kcal: 220, protein: 7, fat: 5, carbs: 38 },
+  { label: "Голубцы", keywords: ["голубц"], kcal: 150, protein: 8, fat: 7, carbs: 14 },
+  { label: "Бешбармак", keywords: ["бешбармак"], kcal: 280, protein: 18, fat: 15, carbs: 20 },
+  { label: "Азу", keywords: ["азу"], kcal: 180, protein: 12, fat: 10, carbs: 10 },
+  { label: "Гуляш", keywords: ["гуляш"], kcal: 200, protein: 15, fat: 12, carbs: 8 },
+  {
+    label: "Бефстроганов",
+    keywords: ["бефстроганов", "строганов"],
+    kcal: 220,
+    protein: 18,
+    fat: 14,
+    carbs: 5,
+  },
+  { label: "Котлета", keywords: ["котлет"], kcal: 220, protein: 14, fat: 16, carbs: 8 },
+  { label: "Тефтели", keywords: ["тефтел"], kcal: 200, protein: 12, fat: 12, carbs: 10 },
+  { label: "Шашлык", keywords: ["шашлык"], kcal: 250, protein: 22, fat: 17, carbs: 0 },
+  { label: "Стейк", keywords: ["стейк"], kcal: 271, protein: 25, fat: 19, carbs: 0 },
+  { label: "Отбивная", keywords: ["отбивн"], kcal: 260, protein: 20, fat: 18, carbs: 5 },
+
+  // --- fast food ---
+  { label: "Куриные крылышки", keywords: ["крыл"], kcal: 290, protein: 18, fat: 24, carbs: 0 },
+  {
+    label: "Наггетсы",
+    keywords: ["наггетс", "нагетс"],
+    kcal: 260,
+    protein: 14,
+    fat: 15,
+    carbs: 17,
+  },
+  { label: "Хот-дог", keywords: ["хот-дог", "хотдог"], kcal: 300, protein: 11, fat: 17, carbs: 26 },
+  {
+    label: "Чизбургер",
+    keywords: ["чизбургер"],
+    kcal: 550,
+    protein: 28,
+    fat: 30,
+    carbs: 40,
+  },
+  {
+    label: "Донер-кебаб",
+    keywords: ["донер", "дёнер"],
+    kcal: 500,
+    protein: 22,
+    fat: 24,
+    carbs: 45,
+  },
+  { label: "Тако", keywords: ["тако"], kcal: 200, protein: 9, fat: 9, carbs: 22 },
+  { label: "Буррито", keywords: ["буррито"], kcal: 350, protein: 15, fat: 12, carbs: 45 },
+  { label: "Кесадилья", keywords: ["кесадиль"], kcal: 300, protein: 13, fat: 16, carbs: 28 },
+  { label: "Начос", keywords: ["начос"], kcal: 350, protein: 8, fat: 20, carbs: 35 },
+  { label: "Фалафель", keywords: ["фалафел"], kcal: 330, protein: 13, fat: 17, carbs: 34 },
+  {
+    label: "Сэндвич",
+    keywords: ["сэндвич", "сендвич"],
+    kcal: 300,
+    protein: 12,
+    fat: 12,
+    carbs: 35,
+  },
+  {
+    label: "Лапша быстрого приготовления",
+    keywords: ["доширак", "роллтон"],
+    kcal: 400,
+    protein: 8,
+    fat: 16,
+    carbs: 55,
+  },
+
+  // --- garnishes / legumes ---
+  { label: "Кускус", keywords: ["кускус"], kcal: 112, protein: 3.8, fat: 0.2, carbs: 23 },
+  { label: "Булгур", keywords: ["булгур"], kcal: 83, protein: 3, fat: 0.2, carbs: 19 },
+  { label: "Киноа", keywords: ["киноа", "квиноа"], kcal: 120, protein: 4.4, fat: 1.9, carbs: 21 },
+  { label: "Чечевица", keywords: ["чечевиц"], kcal: 116, protein: 9, fat: 0.4, carbs: 20 },
+  { label: "Горох", keywords: ["горох"], kcal: 90, protein: 6, fat: 0.4, carbs: 16 },
+  { label: "Фасоль", keywords: ["фасол"], kcal: 127, protein: 9, fat: 0.5, carbs: 23 },
+  { label: "Хумус", keywords: ["хумус"], kcal: 166, protein: 8, fat: 10, carbs: 14 },
+  // Specific vegetable dishes go before the plain "Капуста" entry below, so
+  // they claim their words first (same "specific before generic" rule as
+  // the top-of-file note).
+  {
+    label: "Тушёная капуста",
+    keywords: ["тушёная капуст", "тушеная капуст"],
+    kcal: 80,
+    protein: 2,
+    fat: 4,
+    carbs: 9,
+  },
+  {
+    label: "Цветная капуста",
+    keywords: ["цветная капуст", "цветной капуст"],
+    kcal: 30,
+    protein: 2,
+    fat: 0.3,
+    carbs: 5,
+  },
+  { label: "Брокколи", keywords: ["брокколи"], kcal: 34, protein: 2.8, fat: 0.4, carbs: 7 },
+  { label: "Спаржа", keywords: ["спарж"], kcal: 20, protein: 2.2, fat: 0.2, carbs: 3.9 },
+  {
+    label: "Овощи гриль / рагу",
+    keywords: ["овощи гриль", "овощное рагу"],
+    kcal: 90,
+    protein: 2,
+    fat: 5,
+    carbs: 10,
+  },
+  { label: "Капуста", keywords: ["капуст"], kcal: 27, protein: 1.8, fat: 0.1, carbs: 6.6 },
+  { label: "Морковь", keywords: ["морков"], kcal: 41, protein: 0.9, fat: 0.2, carbs: 10 },
+
+  // --- pastries / desserts ---
+  { label: "Круассан", keywords: ["круассан"], kcal: 280, protein: 6, fat: 16, carbs: 30 },
+  { label: "Булочка", keywords: ["булочк"], kcal: 250, protein: 6, fat: 8, carbs: 40 },
+  { label: "Пирожок", keywords: ["пирожк", "пирожок"], kcal: 220, protein: 5, fat: 10, carbs: 28 },
+  { label: "Пирог (кусок)", keywords: ["пирог"], kcal: 300, protein: 5, fat: 13, carbs: 40 },
+  { label: "Ватрушка", keywords: ["ватрушк"], kcal: 260, protein: 8, fat: 9, carbs: 38 },
+  { label: "Торт (кусок)", keywords: ["торт"], kcal: 380, protein: 5, fat: 20, carbs: 45 },
+  { label: "Чизкейк", keywords: ["чизкейк"], kcal: 320, protein: 6, fat: 22, carbs: 26 },
+  { label: "Тирамису", keywords: ["тирамису"], kcal: 300, protein: 5, fat: 18, carbs: 28 },
+  { label: "Эклер", keywords: ["эклер"], kcal: 250, protein: 4, fat: 14, carbs: 27 },
+  { label: "Маффин", keywords: ["маффин"], kcal: 350, protein: 5, fat: 16, carbs: 45 },
+  { label: "Вафли", keywords: ["вафл"], kcal: 280, protein: 4, fat: 12, carbs: 40 },
+  { label: "Оладьи", keywords: ["оладь"], kcal: 220, protein: 6, fat: 8, carbs: 30 },
+  { label: "Сырники", keywords: ["сырник"], kcal: 220, protein: 14, fat: 10, carbs: 18 },
+  {
+    label: "Творожная запеканка",
+    keywords: ["запеканк"],
+    kcal: 200,
+    protein: 13,
+    fat: 8,
+    carbs: 18,
+  },
+  { label: "Панкейки", keywords: ["панкейк"], kcal: 230, protein: 6, fat: 8, carbs: 34 },
+
+  // --- drinks ---
+  { label: "Смузи", keywords: ["смузи"], kcal: 150, protein: 3, fat: 1, carbs: 32 },
+  { label: "Компот", keywords: ["компот"], kcal: 60, protein: 0.2, fat: 0, carbs: 15 },
+  { label: "Кисель", keywords: ["кисель"], kcal: 90, protein: 0.2, fat: 0, carbs: 22 },
+  { label: "Морс", keywords: ["морс"], kcal: 50, protein: 0.1, fat: 0, carbs: 12 },
+  { label: "Квас", keywords: ["квас"], kcal: 27, protein: 0.2, fat: 0, carbs: 5.2 },
+  {
+    label: "Лимонад / газировка",
+    keywords: ["лимонад", "газировк", "кола"],
+    kcal: 42,
+    protein: 0,
+    fat: 0,
+    carbs: 10.6,
+  },
+  { label: "Сок", keywords: ["сок"], kcal: 45, protein: 0.5, fat: 0.1, carbs: 10 },
+
+  // --- more fruit/snacks ---
+  { label: "Виноград", keywords: ["виноград"], kcal: 67, protein: 0.6, fat: 0.2, carbs: 17 },
+  { label: "Груша", keywords: ["груш"], kcal: 57, protein: 0.4, fat: 0.1, carbs: 15 },
+  { label: "Клубника", keywords: ["клубник"], kcal: 32, protein: 0.7, fat: 0.3, carbs: 7.7 },
+  { label: "Финики", keywords: ["финик"], kcal: 277, protein: 2, fat: 0.4, carbs: 75 },
+  { label: "Курага", keywords: ["кураг"], kcal: 241, protein: 3.4, fat: 0.5, carbs: 63 },
+  { label: "Изюм", keywords: ["изюм"], kcal: 299, protein: 3, fat: 0.5, carbs: 79 },
 ];
 
 /**
@@ -348,6 +538,17 @@ export interface ParsedMeal {
  * "AI analysis". Matches are consumed (blanked out) as they're found so a
  * generic keyword can't double-count text already claimed by a more
  * specific phrase.
+ *
+ * Handles a comma-separated (or otherwise free-form) list of several dishes
+ * in one message by design: the outer loop below checks EVERY entry in
+ * FOOD_DB against the remaining text, so "борщ, блины, кофе" recognizes and
+ * sums all three, not just the first. The inner loop additionally keeps
+ * matching the same dish's keyword as many times as it actually appears
+ * ("2 яйца, ещё яйцо" → two separate entries), instead of stopping after
+ * the first occurrence. Matching itself is root-based, not exact-word: a
+ * keyword like "борщ" matches "борща"/"борщом"/etc via plain substring
+ * search anchored at a word start (see findWordAligned) — no need for the
+ * message to use the dictionary form of a word.
  */
 export function parseMeal(rawText: string): ParsedMeal | null {
   let working = ` ${rawText.toLowerCase()} `;
@@ -355,45 +556,56 @@ export function parseMeal(rawText: string): ParsedMeal | null {
 
   for (const food of FOOD_DB) {
     for (const kw of food.keywords) {
-      let from = 0;
-      let idx = -1;
-      // Skip past negated occurrences ("без сахара") to look for a real one.
+      let matchedThisKeyword = false;
+
+      // Keep matching this SAME keyword for as long as it keeps appearing,
+      // so every mention of a repeated dish gets its own summed entry.
       for (;;) {
-        const found = findWordAligned(working, kw, from);
-        if (found === -1) break;
-        if (precededByNegation(working, found)) {
-          working =
-            working.slice(0, found) + " ".repeat(kw.length) + working.slice(found + kw.length);
-          from = found;
-          continue;
+        let from = 0;
+        let idx = -1;
+        // Skip past negated occurrences ("без сахара") to look for a real one.
+        for (;;) {
+          const found = findWordAligned(working, kw, from);
+          if (found === -1) break;
+          if (precededByNegation(working, found)) {
+            working =
+              working.slice(0, found) + " ".repeat(kw.length) + working.slice(found + kw.length);
+            from = found;
+            continue;
+          }
+          idx = found;
+          break;
         }
-        idx = found;
-        break;
-      }
-      if (idx === -1) continue;
+        if (idx === -1) break;
+        matchedThisKeyword = true;
 
-      // "картофель/картошка фри": avoid the generic potato entry also
-      // double-counting the same words once "фри" claims them here.
-      if (kw === "фри") {
-        const potatoBefore = working.slice(0, idx).match(/(картофел[а-яё]*|картошк[а-яё]*)\s+$/);
-        if (potatoBefore) {
-          const start = idx - potatoBefore[0].length;
-          working =
-            working.slice(0, start) + " ".repeat(potatoBefore[0].length) + working.slice(start);
+        // "картофель/картошка фри": avoid the generic potato entry also
+        // double-counting the same words once "фри" claims them here.
+        if (kw === "фри") {
+          const potatoBefore = working.slice(0, idx).match(/(картофел[а-яё]*|картошк[а-яё]*)\s+$/);
+          if (potatoBefore) {
+            const start = idx - potatoBefore[0].length;
+            working =
+              working.slice(0, start) + " ".repeat(potatoBefore[0].length) + working.slice(start);
+          }
         }
+
+        const qty = quantityBefore(working, idx);
+        items.push({
+          label: food.label,
+          qty,
+          kcal: food.kcal * qty,
+          protein: food.protein * qty,
+          fat: food.fat * qty,
+          carbs: food.carbs * qty,
+        });
+        working = working.slice(0, idx) + " ".repeat(kw.length) + working.slice(idx + kw.length);
       }
 
-      const qty = quantityBefore(working, idx);
-      items.push({
-        label: food.label,
-        qty,
-        kcal: food.kcal * qty,
-        protein: food.protein * qty,
-        fat: food.fat * qty,
-        carbs: food.carbs * qty,
-      });
-      working = working.slice(0, idx) + " ".repeat(kw.length) + working.slice(idx + kw.length);
-      break;
+      // Only one keyword "wins" per food (the first in its list with any
+      // match) — same as before — but now every occurrence of that keyword
+      // has already been captured above.
+      if (matchedThisKeyword) break;
     }
   }
 

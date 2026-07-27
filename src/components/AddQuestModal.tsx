@@ -53,10 +53,10 @@ export function AddQuestModal({ category, onClose, onCreate }: Props) {
         className="panel-glow w-full max-w-sm p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label={category === "story" ? "Новая сюжетная цель" : "Новая закупка"}
+        aria-label={category === "story" ? "Новая сюжетная цель" : "Новая крупная цель"}
       >
         <h3 className="text-lg font-semibold">
-          {category === "story" ? "Новая крупная цель" : "Новая закупка"}
+          {category === "story" ? "Новая крупная цель" : "Новая крупная личная цель"}
         </h3>
 
         <div className="mt-4">

@@ -350,7 +350,16 @@ export const CATEGORY_META: Record<
     description: "Сброс в полночь. Требуют подтверждения.",
   },
   story: { label: "Сюжетные квесты", icon: "📜", description: "Крупные разовые цели с дедлайном." },
-  purchase: { label: "Квесты-закупки", icon: "🛒", description: "Поиск, менеджмент, оптимизация." },
+  // Renamed from "Квесты-закупки" — that name only fit shopping-related
+  // goals, but this tab is really any big one-off personal goal a user
+  // adds via AddQuestModal (the QuestCategory value itself stays "purchase"
+  // internally — only the user-facing label/description/copy changed, to
+  // keep this a display-only rename rather than a wider refactor).
+  purchase: {
+    label: "Крупные цели",
+    icon: "🎯",
+    description: "Большие разовые личные задачи с дедлайном — не только покупки.",
+  },
 };
 
 export const DEPOSIT_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -438,7 +447,7 @@ function seedQuests(): Quest[] {
     }),
 
     // PURCHASE has no seeded quests at all — see the comment above. A new
-    // account's "Квесты-закупки" tab starts empty; index.tsx shows an
+    // account's "Крупные цели" tab starts empty; index.tsx shows an
     // "add your first goal" prompt (AddQuestModal) instead.
   ];
 }

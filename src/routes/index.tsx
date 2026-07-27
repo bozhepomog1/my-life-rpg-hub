@@ -419,7 +419,7 @@ function Home() {
               className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
             >
               <Plus size={15} />
-              {tab === "story" ? "Добавить цель" : "Добавить закупку"}
+              {tab === "story" ? "Добавить цель" : "Добавить крупную цель"}
             </button>
           )}
 

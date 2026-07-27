@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Pin } from "lucide-react";
 import { STAT_META, trainingHint, type BodyStats, type Quest } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { uploadQuestPhoto, getQuestPhotoUrl } from "@/lib/quest-photos";
@@ -17,6 +18,11 @@ interface Props {
   onToggleChecklist?: (questId: string, itemId: string) => void;
   onDelete: (id: string) => void;
   onPhoto: (id: string, path: string) => void;
+  // Pin toggle is only offered for user-created story/purchase quests (see
+  // sortQuestsForDisplay in game.ts) — daily quests rotate fresh every day
+  // and aren't something a user curates by hand, so index.tsx omits this
+  // prop for the daily tab.
+  onTogglePin?: (id: string) => void;
 }
 
 export function QuestCard({
@@ -26,6 +32,7 @@ export function QuestCard({
   onToggleChecklist,
   onDelete,
   onPhoto,
+  onTogglePin,
 }: Props) {
   const meta = STAT_META[quest.stat];
   const { user } = useAuthContext();
@@ -93,7 +100,7 @@ export function QuestCard({
 
   return (
     <div
-      className={`panel group relative overflow-hidden p-5 transition-opacity ${justCompleted ? "animate-quest-complete" : ""}`}
+      className={`panel group relative overflow-hidden p-5 transition-opacity ${justCompleted ? "animate-quest-complete" : ""} ${quest.pinned ? "ring-1 ring-primary/50" : ""}`}
       style={{ opacity: quest.done ? 0.6 : 1 }}
     >
       <div className="absolute inset-y-0 left-0 w-1" style={{ background: meta.color }} />
@@ -112,7 +119,29 @@ export function QuestCard({
               ×1.5
             </span>
           )}
-          <span className="ml-auto shrink-0 text-sm font-medium text-primary">
+          {quest.pinned && (
+            <span className="flex items-center gap-1 rounded-full border border-primary/40 px-1.5 py-0.5 text-[10px] text-primary">
+              <Pin size={10} className="fill-current" /> Важно
+            </span>
+          )}
+          {onTogglePin && (
+            <button
+              type="button"
+              onClick={() => onTogglePin(quest.id)}
+              aria-label={quest.pinned ? "Открепить квест" : "Закрепить квест как важный"}
+              title={quest.pinned ? "Открепить" : "Закрепить как важное"}
+              className={`ml-auto shrink-0 rounded-full p-1 transition-colors ${
+                quest.pinned
+                  ? "text-primary"
+                  : "text-muted-foreground opacity-0 hover:text-primary group-hover:opacity-100"
+              }`}
+            >
+              <Pin size={14} className={quest.pinned ? "fill-current" : ""} />
+            </button>
+          )}
+          <span
+            className={`${onTogglePin ? "" : "ml-auto"} shrink-0 text-sm font-medium text-primary`}
+          >
             +{quest.reward} XP
           </span>
         </div>

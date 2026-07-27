@@ -52,6 +52,12 @@ export interface Quest {
   // Bonus quests: drawn from BONUS_QUEST_POOL when no daily quests remain
   // today, rewarded at 1.5x. Purely a display flag (badge).
   bonus?: boolean;
+  // User-pinned "important" quest (story/purchase — the user's own
+  // one-off goals). Pinned quests float to the top of their category's
+  // list — see sortQuestsForDisplay() — and get a visual highlight in
+  // QuestCard. Not offered for daily quests, which already rotate fresh
+  // every day and aren't something a user curates by hand.
+  pinned?: boolean;
 }
 
 export interface StatState {
@@ -317,6 +323,21 @@ export const STAT_ORDER: StatKey[] = ["strength", "intellect", "will", "appearan
  */
 export function sortByStatOrder<T extends { stat: StatKey }>(items: T[]): T[] {
   return [...items].sort((a, b) => STAT_ORDER.indexOf(a.stat) - STAT_ORDER.indexOf(b.stat));
+}
+
+/**
+ * Same STAT_ORDER grouping as sortByStatOrder(), but pinned quests (see
+ * Quest.pinned) float to the very top of the list first — pinned items
+ * sorted among themselves by stat order, then everything else sorted by
+ * stat order. Used for the main quest list so a user's pinned goals stay
+ * visible at a glance instead of scattered across stat groups.
+ */
+export function sortQuestsForDisplay<T extends { stat: StatKey; pinned?: boolean }>(
+  items: T[],
+): T[] {
+  const pinned = sortByStatOrder(items.filter((i) => i.pinned));
+  const rest = sortByStatOrder(items.filter((i) => !i.pinned));
+  return [...pinned, ...rest];
 }
 
 export const CATEGORY_META: Record<

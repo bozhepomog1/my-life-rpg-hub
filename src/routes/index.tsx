@@ -26,6 +26,7 @@ import {
   ensureSeason,
   isWorkDay,
   sortByStatOrder,
+  sortQuestsForDisplay,
   STAT_META,
   STAT_ORDER,
   STREAK_MILESTONES,
@@ -315,6 +316,13 @@ function Home() {
     update((s) => ({ ...s, quests: s.quests.filter((q) => q.id !== id) }));
   }
 
+  function togglePinQuest(id: string) {
+    update((s) => ({
+      ...s,
+      quests: s.quests.map((q) => (q.id === id ? { ...q, pinned: !q.pinned } : q)),
+    }));
+  }
+
   function addCustomQuest(input: Parameters<typeof createQuest>[0]) {
     update((s) => ({ ...s, quests: [...s.quests, createQuest(input)] }));
   }
@@ -328,9 +336,11 @@ function Home() {
     .map((q) => effectiveQuest(q, isWork));
   // Grouped by characteristic in the app-wide fixed order (Сила → Интеллект
   // → Воля → Харизма) rather than creation/rotation order, so quests of the
-  // same stat sit together instead of appearing in a random jumble.
-  const active = sortByStatOrder(questsByCat.filter((q) => !q.done));
-  const done = sortByStatOrder(questsByCat.filter((q) => q.done));
+  // same stat sit together instead of appearing in a random jumble. Pinned
+  // quests (story/purchase only — see canAddQuest below) float to the top
+  // of each list first.
+  const active = sortQuestsForDisplay(questsByCat.filter((q) => !q.done));
+  const done = sortQuestsForDisplay(questsByCat.filter((q) => q.done));
   const lost = disc?.lost;
   // Story/purchase are user-populated one-off goals (no seeded pool, see
   // game.ts) — daily quests come from the auto-rotated pool instead, so
@@ -451,6 +461,7 @@ function Home() {
                 onToggleChecklist={togglChecklist}
                 onDelete={deleteQuest}
                 onPhoto={setPhoto}
+                onTogglePin={canAddQuest ? togglePinQuest : undefined}
               />
             ))}
           </div>
@@ -470,6 +481,7 @@ function Home() {
                     onToggleChecklist={togglChecklist}
                     onDelete={deleteQuest}
                     onPhoto={setPhoto}
+                    onTogglePin={canAddQuest ? togglePinQuest : undefined}
                   />
                 ))}
               </div>

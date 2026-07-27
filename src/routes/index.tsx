@@ -360,6 +360,7 @@ function Home() {
         <ProfileHeader
           state={state}
           onChangeAvatar={(a) => update((s) => ({ ...s, avatar: a }))}
+          onChangeAvatarPhoto={(path) => update((s) => ({ ...s, avatarPhotoPath: path }))}
           onChangeName={(n) => update((s) => ({ ...s, name: n }))}
           levelUpPulse={levelPulse}
         />

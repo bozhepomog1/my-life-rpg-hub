@@ -1,22 +1,31 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Camera, X } from "lucide-react";
 import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { useMyShortCode } from "@/hooks/use-my-short-code";
+import { getAvatarPhotoUrl, uploadAvatarPhoto } from "@/lib/avatar-photo";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
 
 interface Props {
   state: GameState;
   onChangeAvatar: (a: string) => void;
+  onChangeAvatarPhoto: (path: string | undefined) => void;
   onChangeName: (n: string) => void;
   levelUpPulse: boolean;
 }
 
-export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPulse }: Props) {
+export function ProfileHeader({
+  state,
+  onChangeAvatar,
+  onChangeAvatarPhoto,
+  onChangeName,
+  levelUpPulse,
+}: Props) {
   const { user } = useAuthContext();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -24,6 +33,38 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
   const [shareOpen, setShareOpen] = useState(false);
   const { code: myCode } = useMyShortCode();
   const [codeCopied, setCodeCopied] = useState(false);
+  const [avatarPhotoUrl, setAvatarPhotoUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!state.avatarPhotoPath) {
+      setAvatarPhotoUrl(null);
+      return;
+    }
+    getAvatarPhotoUrl(state.avatarPhotoPath).then((url) => {
+      if (!cancelled) setAvatarPhotoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.avatarPhotoPath]);
+
+  async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user) return;
+    setAvatarUploading(true);
+    try {
+      const path = await uploadAvatarPhoto(user.id, file);
+      onChangeAvatarPhoto(path);
+    } catch (err) {
+      console.warn("avatar photo upload failed", err);
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function copyMyCode() {
     if (!myCode) return;
@@ -62,13 +103,45 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
       )}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:flex sm:justify-between">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <button
-            onClick={() => setPickerOpen((v) => !v)}
-            className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
-            title="Сменить аватар"
-          >
-            {state.avatar}
-          </button>
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setPickerOpen((v) => !v)}
+              className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
+              title={avatarPhotoUrl ? "Сменить эмодзи-аватар" : "Сменить аватар"}
+            >
+              {avatarPhotoUrl ? (
+                <img src={avatarPhotoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                state.avatar
+              )}
+            </button>
+            <input
+              ref={avatarFileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarFile}
+              className="hidden"
+            />
+            <button
+              type="button"
+              disabled={avatarUploading}
+              onClick={() => avatarFileRef.current?.click()}
+              title="Загрузить свою фотографию"
+              className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-primary disabled:opacity-50"
+            >
+              <Camera size={12} />
+            </button>
+            {avatarPhotoUrl && (
+              <button
+                type="button"
+                onClick={() => onChangeAvatarPhoto(undefined)}
+                title="Убрать фото, вернуться к эмодзи"
+                className="absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-destructive"
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
           <div className="min-w-0">
             {editingName ? (
               <input

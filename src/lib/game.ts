@@ -218,6 +218,11 @@ export function fitnessLevelLabel(index: number): string {
 
 export interface GameState {
   avatar: string;
+  // Storage path of an uploaded profile-photo avatar (quest-photos bucket,
+  // see avatar-photo.ts) — when set, ProfileHeader shows this photo in a
+  // round frame instead of the `avatar` emoji. Removing the photo (or never
+  // uploading one) falls back to the emoji picker as before.
+  avatarPhotoPath?: string;
   name: string;
   totalXp: number;
   level: number;

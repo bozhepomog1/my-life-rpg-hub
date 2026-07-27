@@ -701,7 +701,7 @@ export interface DailyQuestTemplate {
 export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
   // ── Сила ──
   // NOTE: only one generic "stretch" quest lives in this pool — see
-  // "Растяжка всего тела 15 минут перед сном" below — so it doesn't get
+  // "Растяжка, йога или пилатес 15 минут" below — so it doesn't get
   // drawn twice in the same day's rotation under near-identical wording.
   // A standalone "Сделать разминку или растяжку 10 минут" quest used to
   // exist here too, and this entry's own work-day title used to be
@@ -735,7 +735,11 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     workModeReward: 15,
   },
   { title: "100 приседаний за день суммарно, в любое время", stat: "strength", reward: 20 },
-  { title: "Растяжка всего тела 15 минут перед сном", stat: "strength", reward: 10 },
+  // Broadened beyond a gym-specific "тренировка" — yoga/pilates/dance are
+  // just as legitimate a route to the same Сила stat, and the pool leaned
+  // heavily on gym/sport-style examples before this.
+  { title: "Растяжка, йога или пилатес 15 минут", stat: "strength", reward: 10 },
+  { title: "Потанцевать под любимую музыку 15 минут", stat: "strength", reward: 8 },
   { title: "Подниматься по лестнице вместо лифта весь день", stat: "strength", reward: 6 },
   { title: "Пройти 10000 шагов за день (по трекеру)", stat: "strength", reward: 20 },
 

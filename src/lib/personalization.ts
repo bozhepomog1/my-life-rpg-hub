@@ -50,6 +50,20 @@ export const ACCENT_PRESETS: AccentPreset[] = [
     label: "Графит",
     colors: { primary: "#55606e", secondary: "#c08a3e" },
   },
+  // Two additional softer/pastel pairs, alongside (not replacing) the five
+  // above — the existing set skewed toward bold/saturated hues (terracotta,
+  // ocean, forest, berry, slate), so these round out the choices with a
+  // gentler aesthetic for anyone who prefers it.
+  {
+    id: "blush",
+    label: "Пудра",
+    colors: { primary: "#c97a94", secondary: "#7fa896" },
+  },
+  {
+    id: "lilac",
+    label: "Сирень",
+    colors: { primary: "#9a86c4", secondary: "#d99b5c" },
+  },
 ];
 
 export const DEFAULT_ACCENT_COLORS: AccentColors = ACCENT_PRESETS[0].colors;

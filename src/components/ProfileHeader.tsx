@@ -9,7 +9,25 @@ import { ShareCardModal } from "@/components/ShareCardModal";
 import { useMyShortCode } from "@/hooks/use-my-short-code";
 import { getAvatarPhotoUrl, uploadAvatarPhoto } from "@/lib/avatar-photo";
 
-const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
+// Kept gender-neutral throughout — two more added (🧚, 🦋) alongside the
+// existing set for a softer aesthetic option, without removing any of the
+// originals.
+const AVATARS = [
+  "🥷",
+  "🧙",
+  "🧝",
+  "🧛",
+  "🦸",
+  "🧑‍🚀",
+  "🧑‍🎤",
+  "🧑‍💻",
+  "🐉",
+  "🦁",
+  "🦄",
+  "👑",
+  "🧚",
+  "🦋",
+];
 
 interface Props {
   state: GameState;

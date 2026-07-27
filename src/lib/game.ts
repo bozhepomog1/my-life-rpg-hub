@@ -340,10 +340,6 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-function makeChecklist(items: string[]): ChecklistItem[] {
-  return items.map((t) => ({ id: uid(), text: t, done: false }));
-}
-
 function seedQuests(): Quest[] {
   const now = Date.now();
   const q = (partial: Omit<Quest, "id" | "createdAt" | "done"> & { done?: boolean }): Quest => ({
@@ -365,43 +361,19 @@ function seedQuests(): Quest[] {
     // quests belong in a user's own saved state (added from the UI), not
     // in the seed. See commit history: an earlier version of this seed
     // leaked the author's private quest list to every new signup.
+    //
+    // STORY/PURCHASE (beyond the bodyweight-training set below) are
+    // deliberately NOT pre-seeded with generic filler goals either — those
+    // are "big one-off personal goals," which only mean something coming
+    // from the person themselves. A brand-new account sees an empty list
+    // with a prompt to add their own via AddQuestModal (see index.tsx)
+    // instead of a designer-picked placeholder ("Выйти на пробежку" etc.)
+    // that isn't actually the user's goal.
 
-    // STORY — generic one-off goals
-    q({
-      title: "Выйти на пробежку",
-      stat: "strength",
-      reward: 15,
-      category: "story",
-      requiresPhoto: true,
-      photoHint: "Фото с улицы",
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Начать учить иностранный язык",
-      stat: "intellect",
-      reward: 15,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Освоить новый навык или инструмент",
-      stat: "intellect",
-      reward: 20,
-      category: "story",
-      requiresText: true,
-      dayOffOnly: true,
-    }),
-    q({
-      title: "Приготовить новое блюдо с нуля",
-      stat: "will",
-      reward: 10,
-      category: "story",
-      requiresPhoto: true,
-      photoHint: "Фото готового блюда",
-    }),
-
-    // STORY — bodyweight training, personalized once a record is set in "Тело"
+    // STORY — bodyweight training, personalized once a record is set in "Тело".
+    // Kept (unlike the removed filler goals above): this is a generic,
+    // feature-integral quest set tied to the user's OWN "Тело" records, not
+    // a personal-goal placeholder.
     q({
       title: "Сделать подход отжиманий от пола",
       stat: "strength",
@@ -443,39 +415,36 @@ function seedQuests(): Quest[] {
       dayOffOnly: true,
     }),
 
-    // PURCHASE — generic "manage / optimize / declutter" goals
-    q({
-      title: "Составить список трат за месяц и посчитать, сколько удалось отложить",
-      stat: "will",
-      reward: 15,
-      category: "purchase",
-    }),
-    q({
-      title: "Разобрать и почистить рабочее место и технику",
-      stat: "strength",
-      reward: 15,
-      category: "purchase",
-      requiresPhoto: true,
-      photoHint: "Фото до/после",
-    }),
-    q({
-      title: "Навести порядок в сохранённых ссылках и подписках",
-      stat: "intellect",
-      reward: 15,
-      category: "purchase",
-    }),
-    q({
-      title: "Разобрать гардероб и составить список того, что нужно обновить",
-      stat: "appearance",
-      reward: 10,
-      category: "purchase",
-      checklist: makeChecklist([
-        "Разобрать шкаф",
-        "Отложить то, что не носишь",
-        "Составить список нужного",
-      ]),
-    }),
+    // PURCHASE has no seeded quests at all — see the comment above. A new
+    // account's "Квесты-закупки" tab starts empty; index.tsx shows an
+    // "add your first goal" prompt (AddQuestModal) instead.
   ];
+}
+
+/**
+ * Builds a user-created one-off quest (story/purchase — AddQuestModal).
+ * Fills in the same id/createdAt/done bookkeeping seedQuests()'s internal
+ * `q()` helper does, so hand-created and seeded quests behave identically.
+ */
+export function createQuest(input: {
+  title: string;
+  stat: StatKey;
+  reward: number;
+  category: "story" | "purchase";
+  requiresPhoto?: boolean;
+  requiresText?: boolean;
+}): Quest {
+  return {
+    id: uid(),
+    createdAt: Date.now(),
+    done: false,
+    title: input.title,
+    stat: input.stat,
+    reward: input.reward,
+    category: input.category,
+    requiresPhoto: input.requiresPhoto,
+    requiresText: input.requiresText,
+  };
 }
 
 export function defaultState(): GameState {

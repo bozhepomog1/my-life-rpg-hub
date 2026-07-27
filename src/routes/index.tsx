@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Settings } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
+import { AddQuestModal } from "@/components/AddQuestModal";
 import { DepositWidget } from "@/components/DepositWidget";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
@@ -18,6 +19,7 @@ import {
   CATEGORY_META,
   computeDiscipline,
   computeStreak,
+  createQuest,
   effectiveQuest,
   ensureBonusQuests,
   ensureDailyRotation,
@@ -74,6 +76,7 @@ function Home() {
   const [floats, setFloats] = useState<FloatXp[]>([]);
   const [levelPulse, setLevelPulse] = useState(false);
   const [tab, setTab] = useState<QuestCategory>("daily");
+  const [addQuestOpen, setAddQuestOpen] = useState(false);
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
@@ -312,6 +315,10 @@ function Home() {
     update((s) => ({ ...s, quests: s.quests.filter((q) => q.id !== id) }));
   }
 
+  function addCustomQuest(input: Parameters<typeof createQuest>[0]) {
+    update((s) => ({ ...s, quests: [...s.quests, createQuest(input)] }));
+  }
+
   if (!hydrated) return null;
 
   const isWork = isWorkDay(state.schedule);
@@ -325,6 +332,10 @@ function Home() {
   const active = sortByStatOrder(questsByCat.filter((q) => !q.done));
   const done = sortByStatOrder(questsByCat.filter((q) => q.done));
   const lost = disc?.lost;
+  // Story/purchase are user-populated one-off goals (no seeded pool, see
+  // game.ts) — daily quests come from the auto-rotated pool instead, so
+  // there's no "add your own" affordance for that tab.
+  const canAddQuest = tab === "story" || tab === "purchase";
 
   const dailyQuests = state.quests.filter((q) => q.category === "daily");
   const noActiveDailies = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
@@ -391,8 +402,34 @@ function Home() {
             })}
           </div>
 
+          {canAddQuest && (
+            <button
+              type="button"
+              onClick={() => setAddQuestOpen(true)}
+              className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+            >
+              <Plus size={15} />
+              {tab === "story" ? "Добавить цель" : "Добавить закупку"}
+            </button>
+          )}
+
           <div className="space-y-3">
-            {active.length === 0 && done.length === 0 && (
+            {active.length === 0 && done.length === 0 && canAddQuest && (
+              <div className="panel p-8 text-center">
+                <div className="text-3xl">{CATEGORY_META[tab].icon}</div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  У тебя пока нет крупных целей — добавь первую!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAddQuestOpen(true)}
+                  className="btn-accent-hover mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
+                >
+                  + Добавить первую цель
+                </button>
+              </div>
+            )}
+            {active.length === 0 && done.length === 0 && !canAddQuest && (
               <div className="panel p-8 text-center">
                 <div className="text-3xl">{CATEGORY_META[tab].icon}</div>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -538,6 +575,14 @@ function Home() {
         <SeasonSummaryModal
           summary={state.lastSeasonSummary}
           onContinue={() => update((s) => ({ ...s, seasonSummarySeen: true }))}
+        />
+      )}
+
+      {addQuestOpen && canAddQuest && (
+        <AddQuestModal
+          category={tab === "story" ? "story" : "purchase"}
+          onClose={() => setAddQuestOpen(false)}
+          onCreate={addCustomQuest}
         />
       )}
     </div>

@@ -10,7 +10,7 @@ import {
   sendFriendRequest,
   type FriendRequest,
 } from "@/lib/friends";
-import { findProfileByEmail, getProfiles, type PublicProfile } from "@/lib/profiles";
+import { findProfileByCode, getProfiles, type PublicProfile } from "@/lib/profiles";
 
 interface Props {
   state: GameState;
@@ -32,7 +32,7 @@ export function FriendsPanel({ state, update }: Props) {
   const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({});
   const [loading, setLoading] = useState(true);
 
-  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
 
   const load = useCallback(async () => {
@@ -64,6 +64,7 @@ export function FriendsPanel({ state, update }: Props) {
     total_xp: state.totalXp,
     level: state.level,
     fitness_index: computeFitnessIndex(state.body),
+    short_code: null,
   };
   const leaderboard = [myEntry, ...friendIds.map((id) => profiles[id]).filter(Boolean)].sort(
     (a, b) => b.total_xp - a.total_xp,
@@ -83,11 +84,13 @@ export function FriendsPanel({ state, update }: Props) {
   }, [loading, friendIds.length, myRank, update]);
 
   async function handleSearch() {
-    const q = email.trim();
+    const q = code.trim();
     if (!q) return;
     setSearch({ kind: "searching" });
-    const found = await findProfileByEmail(q);
-    if (!found) {
+    const found = await findProfileByCode(q);
+    // Unlike the old email RPC, a direct table lookup has no built-in
+    // "never find yourself" guard — add it here on the client.
+    if (!found || found.user_id === myId) {
       setSearch({ kind: "none" });
       return;
     }
@@ -101,7 +104,7 @@ export function FriendsPanel({ state, update }: Props) {
       return;
     }
     setSearch({ kind: "idle" });
-    setEmail("");
+    setCode("");
     await load();
   }
 
@@ -117,23 +120,27 @@ export function FriendsPanel({ state, update }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Add friend by email */}
+      {/* Add friend by short code */}
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Добавить друга</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Найди пользователя по email.</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Найди пользователя по его короткому коду — попроси прислать код текстом (свой код смотри в
+          профиле или настройках).
+        </p>
         <div className="mt-3 flex gap-2">
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="friend@example.com"
-            className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            placeholder="K7X9QP"
+            maxLength={8}
+            className="min-w-0 flex-1 rounded-xl border border-border bg-input px-3 py-2 text-sm uppercase tracking-widest outline-none focus:border-primary"
           />
           <button
             type="button"
             onClick={handleSearch}
-            disabled={!email.trim() || search.kind === "searching"}
+            disabled={!code.trim() || search.kind === "searching"}
             className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {search.kind === "searching" ? "Ищем…" : "Найти"}
@@ -142,7 +149,7 @@ export function FriendsPanel({ state, update }: Props) {
 
         {search.kind === "none" && (
           <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-            Пользователь с таким email не найден. Он должен хотя бы раз войти в приложение.
+            Пользователь с таким кодом не найден. Проверь код — он должен совпадать точно.
           </p>
         )}
         {search.kind === "error" && (

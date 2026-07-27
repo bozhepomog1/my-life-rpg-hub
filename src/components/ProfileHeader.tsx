@@ -5,6 +5,7 @@ import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ShareCardModal } from "@/components/ShareCardModal";
+import { useMyShortCode } from "@/hooks/use-my-short-code";
 
 const AVATARS = ["🥷", "🧙", "🧝", "🧛", "🦸", "🧑‍🚀", "🧑‍🎤", "🧑‍💻", "🐉", "🦁", "🦄", "👑"];
 
@@ -21,6 +22,19 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(state.name);
   const [shareOpen, setShareOpen] = useState(false);
+  const { code: myCode } = useMyShortCode();
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  async function copyMyCode() {
+    if (!myCode) return;
+    try {
+      await navigator.clipboard.writeText(myCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    } catch (e) {
+      console.warn("copy failed", e);
+    }
+  }
 
   const need = xpForNextLevel(state.level);
   const currentLevelXp = state.totalXp - (state.level - 1) * need;
@@ -106,6 +120,22 @@ export function ProfileHeader({ state, onChangeAvatar, onChangeName, levelUpPuls
         </div>
         <ProgressBar value={pct} />
       </div>
+
+      {myCode && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-2.5">
+          <div className="min-w-0">
+            <div className="text-[11px] text-muted-foreground">Твой код друга</div>
+            <div className="text-lg font-semibold tracking-widest">{myCode}</div>
+          </div>
+          <button
+            type="button"
+            onClick={copyMyCode}
+            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 hover:bg-background"
+          >
+            {codeCopied ? "Скопировано ✓" : "Скопировать"}
+          </button>
+        </div>
+      )}
 
       <button
         type="button"

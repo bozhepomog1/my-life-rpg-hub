@@ -6,6 +6,7 @@ import {
   type BackgroundSettings,
   type CardColorSettings,
 } from "@/lib/personalization";
+import { generateNickname } from "@/lib/nickname";
 
 export type StatKey = "strength" | "intellect" | "will" | "appearance";
 export type QuestCategory = "daily" | "story" | "purchase";
@@ -450,7 +451,11 @@ export function createQuest(input: {
 export function defaultState(): GameState {
   const base: GameState = {
     avatar: "🥷",
-    name: "Герой",
+    // Friendly, gender-neutral random starting nickname (e.g. "Тихое
+    // Облако") instead of a fixed "Герой" — this is the freely-renamable
+    // display name (Settings → "Как тебя зовут в игре?"), separate from the
+    // immutable short friend-code generated server-side (profiles.short_code).
+    name: generateNickname(),
     totalXp: 0,
     level: 1,
     stats: {

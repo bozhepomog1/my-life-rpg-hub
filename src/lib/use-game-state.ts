@@ -15,7 +15,6 @@ const SAVE_DEBOUNCE_MS = 1000;
 export function useGameState() {
   const { user } = useAuthContext();
   const userId = user?.id ?? null;
-  const email = user?.email ?? null;
 
   const [state, setState] = useState<GameState>(defaultState);
   const [hydrated, setHydrated] = useState(false);
@@ -95,13 +94,13 @@ export function useGameState() {
           if (error) console.warn("cloud save failed", error);
         });
       // Mirror the public-safe subset into `profiles` for friends/leaderboard.
-      void syncProfile(userId, email, state);
+      void syncProfile(userId, state);
     }, SAVE_DEBOUNCE_MS);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state, hydrated, userId, email]);
+  }, [state, hydrated, userId]);
 
   const update = useCallback((fn: (s: GameState) => GameState) => {
     setState((prev) => fn(prev));

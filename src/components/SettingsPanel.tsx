@@ -19,6 +19,7 @@ import {
 } from "@/lib/personalization";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { getBackgroundPhotoUrl, uploadBackgroundPhoto } from "@/lib/background-photo";
+import { useMyShortCode } from "@/hooks/use-my-short-code";
 
 type NotificationPermissionState = NotificationPermission | "unsupported";
 
@@ -37,6 +38,19 @@ export function SettingsPanel({ state, update, setState }: Props) {
   const [bgUploading, setBgUploading] = useState(false);
   const [bgPreviewUrl, setBgPreviewUrl] = useState<string | null>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
+  const { code: myCode, loading: myCodeLoading } = useMyShortCode();
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  async function copyMyCode() {
+    if (!myCode) return;
+    try {
+      await navigator.clipboard.writeText(myCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    } catch (e) {
+      console.warn("copy failed", e);
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -212,6 +226,27 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
   return (
     <div className="space-y-5">
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Мой код друга</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Неизменяемый код — только по нему друзья могут найти тебя и добавить в друзья (не по имени
+          и не по email). Скинь его текстом тому, кого хочешь добавить.
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
+          <div className="text-xl font-semibold tracking-widest">
+            {myCode ?? (myCodeLoading ? "…" : "—")}
+          </div>
+          <button
+            type="button"
+            disabled={!myCode}
+            onClick={copyMyCode}
+            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {codeCopied ? "Скопировано ✓" : "Скопировать"}
+          </button>
+        </div>
+      </section>
+
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Как тебя зовут в игре?</h2>
         <p className="mt-1 text-xs text-muted-foreground">

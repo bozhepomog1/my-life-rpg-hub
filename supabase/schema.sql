@@ -294,7 +294,105 @@ create policy "delete own friend_requests"
   using (auth.uid() = from_user or auth.uid() = to_user);
 
 -- ─────────────────────────────────────────────────────────────
--- 7. Auth settings (do this in the Dashboard, not SQL):
+-- 7. profiles.short_code: the immutable, unique short ID friends actually
+--    search by (NOT email, NOT username — usernames aren't unique and can
+--    change any time, see the "username" column above). Generated once,
+--    server-side, on insert; a trigger blocks any later UPDATE from
+--    changing it. profiles is already readable by every authenticated user
+--    (see policy "read profiles (authenticated)" above), so a short_code
+--    lookup is a plain SELECT — no SECURITY DEFINER function needed the
+--    way email search required one, because a short code is MEANT to be
+--    shared/discoverable, unlike an email address.
+-- ─────────────────────────────────────────────────────────────
+alter table public.profiles add column if not exists short_code text;
+
+-- Unambiguous alphabet: uppercase letters + digits, excluding characters
+-- that are easy to misread (0/O, 1/I/L) since people will be typing these
+-- in by hand from a screenshot or a message.
+create or replace function public.generate_short_code()
+returns text
+language sql
+as $$
+  select string_agg(substr(alphabet, (random() * length(alphabet))::int + 1, 1), '')
+  from (select 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' as alphabet) a,
+       generate_series(1, 7);
+$$;
+
+create or replace function public.set_profile_short_code()
+returns trigger
+language plpgsql
+as $$
+declare
+  candidate text;
+  tries int := 0;
+begin
+  if new.short_code is not null and length(new.short_code) > 0 then
+    return new;
+  end if;
+  loop
+    candidate := public.generate_short_code();
+    exit when not exists (select 1 from public.profiles where short_code = candidate);
+    tries := tries + 1;
+    if tries > 20 then
+      raise exception 'could not generate a unique short_code after 20 attempts';
+    end if;
+  end loop;
+  new.short_code := candidate;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_short_code on public.profiles;
+create trigger trg_profiles_short_code
+  before insert on public.profiles
+  for each row execute function public.set_profile_short_code();
+
+-- Backfill any existing rows created before this column existed.
+do $$
+declare
+  r record;
+  candidate text;
+  tries int;
+begin
+  for r in select user_id from public.profiles where short_code is null loop
+    tries := 0;
+    loop
+      candidate := public.generate_short_code();
+      exit when not exists (select 1 from public.profiles where short_code = candidate);
+      tries := tries + 1;
+      if tries > 20 then
+        raise exception 'could not generate a unique short_code after 20 attempts for %', r.user_id;
+      end if;
+    end loop;
+    update public.profiles set short_code = candidate where user_id = r.user_id;
+  end loop;
+end $$;
+
+alter table public.profiles alter column short_code set not null;
+create unique index if not exists profiles_short_code_idx on public.profiles (short_code);
+
+-- Immutability: block any UPDATE that changes short_code, so it can't be
+-- changed even by a bug elsewhere in the app, not just "the UI doesn't
+-- expose a way to edit it."
+create or replace function public.prevent_short_code_change()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.short_code is distinct from old.short_code then
+    raise exception 'short_code cannot be changed once set';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_protect_short_code on public.profiles;
+create trigger trg_profiles_protect_short_code
+  before update on public.profiles
+  for each row execute function public.prevent_short_code_change();
+
+-- ─────────────────────────────────────────────────────────────
+-- 8. Auth settings (do this in the Dashboard, not SQL):
 --    Authentication → Providers → Email: enable "Email" provider.
 --    Authentication → URL Configuration: set Site URL and add your
 --    dev/prod URLs (e.g. http://localhost:3000, your deployed domain)

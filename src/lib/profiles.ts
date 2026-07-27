@@ -4,8 +4,9 @@ import { computeFitnessIndex, type GameState } from "./game";
 /**
  * Public-safe profile fields. Deliberately contains NO email: RLS is
  * row-level, so any column readable here would be readable for every user's
- * row. Emails live in the private `user_emails` table and are only ever
- * matched through the find_user_by_email() SECURITY DEFINER function.
+ * row. `short_code` is the immutable friend-search ID (see
+ * profiles.short_code in schema.sql) — unlike email it's meant to be shared,
+ * so no SECURITY DEFINER lookup function is needed for it.
  */
 export interface PublicProfile {
   user_id: string;
@@ -14,22 +15,21 @@ export interface PublicProfile {
   total_xp: number;
   level: number;
   fitness_index: number | null;
+  short_code: string | null;
 }
 
-const PUBLIC_COLUMNS = "user_id, username, avatar, total_xp, level, fitness_index";
+const PUBLIC_COLUMNS = "user_id, username, avatar, total_xp, level, fitness_index, short_code";
 
 /**
- * Mirrors the public-safe subset of a user's progress into `profiles`, and
- * their email into the private `user_emails` lookup table, so friends can
- * find them by address and see them on the leaderboard. Called (best-effort)
- * on every cloud save. Never throws — if the tables aren't set up yet, it
- * just logs, so it can't break the core save flow.
+ * Mirrors the public-safe subset of a user's progress into `profiles`, so
+ * friends can see them on the leaderboard. Called (best-effort) on every
+ * cloud save. Never throws — if the table isn't set up yet, it just logs, so
+ * it can't break the core save flow.
+ *
+ * Note: no longer touches `user_emails` — friend search is by short_code
+ * now, not email (see findProfileByCode below).
  */
-export async function syncProfile(
-  userId: string,
-  email: string | null,
-  state: GameState,
-): Promise<void> {
+export async function syncProfile(userId: string, state: GameState): Promise<void> {
   try {
     const { error } = await supabase.from("profiles").upsert({
       user_id: userId,
@@ -40,33 +40,30 @@ export async function syncProfile(
       fitness_index: computeFitnessIndex(state.body),
     });
     if (error) console.warn("profile sync failed", error);
-
-    if (email) {
-      const { error: emailError } = await supabase
-        .from("user_emails")
-        .upsert({ user_id: userId, email });
-      if (emailError) console.warn("email sync failed", emailError);
-    }
   } catch (e) {
     console.warn("profile sync error", e);
   }
 }
 
 /**
- * Looks up a single user by exact email via the SECURITY DEFINER RPC. The
- * client never reads the email table directly, and the function returns only
- * public profile fields — no address is ever sent back.
+ * Looks up a single user by their exact short_code. profiles is already
+ * readable by every authenticated user (see the RLS policy in schema.sql),
+ * so this is a plain SELECT — short codes are meant to be shared/discovered,
+ * unlike an email address.
  */
-export async function findProfileByEmail(email: string): Promise<PublicProfile | null> {
-  const { data, error } = await supabase.rpc("find_user_by_email", {
-    p_email: email.trim(),
-  });
+export async function findProfileByCode(code: string): Promise<PublicProfile | null> {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PUBLIC_COLUMNS)
+    .eq("short_code", normalized)
+    .maybeSingle();
   if (error) {
     console.warn("profile search failed", error);
     return null;
   }
-  const rows = (data as PublicProfile[] | null) ?? [];
-  return rows[0] ?? null;
+  return (data as PublicProfile | null) ?? null;
 }
 
 export async function getProfiles(userIds: string[]): Promise<PublicProfile[]> {

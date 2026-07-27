@@ -72,29 +72,39 @@ export function findMatchingPreset(colors: AccentColors): AccentPreset | undefin
  * - hover shades (lighter in dark mode, darker in light mode)
  * via HSL lightness math, so nobody has to hand-pick 6+ shades themselves.
  *
- * The default terracotta primary keeps the exact hex values already baked
- * into styles.css (rather than the HSL round-trip) so users who never touch
- * this feature see a byte-identical result to before.
+ * Returns {} for the untouched terracotta default — same "no override at
+ * all" rule computeBackgroundCssVars()/computeCardCssVars() follow. This
+ * used to special-case the default primary's hex instead of skipping the
+ * override outright, which meant AccentApplier permanently pinned --primary/
+ * --accent/--ring/etc as inline styles on <html> for every user, including
+ * ones who never touched Personalization — inline styles always beat the
+ * plain :root/.dark rules, so those 9 variables were only ever "correct"
+ * for the current theme because JS recomputed them in step with the .dark
+ * class. Any lag or hiccup in that JS-side theme detection (a MutationObserver
+ * on a class attribute, running independently of the actual theme toggle)
+ * made primary buttons/accent color/focus rings appear stuck on toggle even
+ * though the page background and cards — which already skipped the override
+ * when untouched — flipped correctly. Short-circuiting to {} here makes
+ * accent colors pure-CSS (and therefore theme-toggle-proof) for the vast
+ * majority of users who haven't customized them, exactly like background
+ * and card color already were.
  */
 export function computeAccentCssVars(
   colors: AccentColors,
   mode: "light" | "dark",
 ): Record<string, string> {
+  if (
+    sameHex(colors.primary, DEFAULT_ACCENT_COLORS.primary) &&
+    sameHex(colors.secondary, DEFAULT_ACCENT_COLORS.secondary)
+  ) {
+    return {};
+  }
+
   const dark = mode === "dark";
   const hoverDelta = dark ? 8 : -8;
-  const isDefaultPrimary = sameHex(colors.primary, DEFAULT_ACCENT_COLORS.primary);
 
-  const primary = isDefaultPrimary
-    ? dark
-      ? "#da9472"
-      : "#af5f3c"
-    : accentForMode(colors.primary, mode);
-  const primaryForeground = isDefaultPrimary
-    ? dark
-      ? "#201510"
-      : "#fefdfb"
-    : pickForeground(primary);
-
+  const primary = accentForMode(colors.primary, mode);
+  const primaryForeground = pickForeground(primary);
   const secondary = accentForMode(colors.secondary, mode);
   const secondaryForeground = pickForeground(secondary);
 

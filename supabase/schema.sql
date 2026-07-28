@@ -392,7 +392,102 @@ create trigger trg_profiles_protect_short_code
   for each row execute function public.prevent_short_code_change();
 
 -- ─────────────────────────────────────────────────────────────
--- 8. Auth settings (do this in the Dashboard, not SQL):
+-- 8. friend_profiles: the EXTENDED profile shown on a friend's profile
+--    screen — stat levels, fitness index, streak and unlocked
+--    achievements.
+--
+--    SECURITY: this is deliberately a SEPARATE table from `profiles`
+--    rather than more columns on it. `profiles` is readable by EVERY
+--    authenticated user (policy "read profiles (authenticated)" above),
+--    which it has to be for short-code friend search to work at all.
+--    RLS is row-level, not column-level, so anything added to `profiles`
+--    would immediately be world-readable to any signed-in account. This
+--    table instead has its own policy that requires an ACCEPTED
+--    friendship in either direction (see is_accepted_friend below), so
+--    achievements/stats/streak are visible only to real friends.
+--
+--    Note what is NOT in here: quests, quest proof photos, nutrition
+--    entries and raw body measurements (height/weight/personal records)
+--    stay in game_states, which is readable only by its owner. Friends
+--    never get access to those — only the derived, non-reversible
+--    fitness_index is shared.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.friend_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  stat_strength integer not null default 0,
+  stat_intellect integer not null default 0,
+  stat_will integer not null default 0,
+  stat_appearance integer not null default 0,
+  fitness_index integer,
+  current_streak integer not null default 0,
+  longest_streak integer not null default 0,
+  -- { achievement_id: unlocked_at_epoch_ms }, mirroring
+  -- GameState.unlockedAchievements.
+  achievements jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.friend_profiles enable row level security;
+
+-- Is the CALLER an accepted friend of p_other (in either direction)?
+--
+-- SECURITY DEFINER so the check can't be weakened by whatever read policy
+-- friend_requests happens to have, and so an RLS policy on this table
+-- never recurses back through another table's policies. It's safe to
+-- expose: it takes one user id the caller must already know and returns
+-- only a boolean — never any rows — so it can't be used to enumerate
+-- users or list anyone's friends.
+create or replace function public.is_accepted_friend(p_other uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.friend_requests
+    where status = 'accepted'
+      and (
+        (from_user = auth.uid() and to_user = p_other)
+        or (from_user = p_other and to_user = auth.uid())
+      )
+  );
+$$;
+
+revoke all on function public.is_accepted_friend(uuid) from public, anon;
+grant execute on function public.is_accepted_friend(uuid) to authenticated;
+
+-- THE access rule: your own row, or the row of somebody you have an
+-- accepted friend_request with. Pending/declined//no relationship → no
+-- read. Deliberately NOT "using (true)" the way profiles is.
+drop policy if exists "read own or friends extended profile" on public.friend_profiles;
+create policy "read own or friends extended profile"
+  on public.friend_profiles for select
+  to authenticated
+  using (auth.uid() = user_id or public.is_accepted_friend(user_id));
+
+-- Writes are always self-only: nobody can write to anyone else's row.
+drop policy if exists "insert own extended profile" on public.friend_profiles;
+create policy "insert own extended profile"
+  on public.friend_profiles for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "update own extended profile" on public.friend_profiles;
+create policy "update own extended profile"
+  on public.friend_profiles for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop trigger if exists trg_friend_profiles_updated_at on public.friend_profiles;
+create trigger trg_friend_profiles_updated_at
+  before update on public.friend_profiles
+  for each row execute function public.set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────
+-- 9. Auth settings (do this in the Dashboard, not SQL):
 --    Authentication → Providers → Email: enable "Email" provider.
 --    Authentication → URL Configuration: set Site URL and add your
 --    dev/prod URLs (e.g. http://localhost:3000, your deployed domain)

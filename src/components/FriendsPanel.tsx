@@ -11,6 +11,7 @@ import {
   type FriendRequest,
 } from "@/lib/friends";
 import { findProfileByCode, getProfiles, type PublicProfile } from "@/lib/profiles";
+import { FriendProfileModal } from "@/components/FriendProfileModal";
 
 interface Props {
   state: GameState;
@@ -34,6 +35,10 @@ export function FriendsPanel({ state, update }: Props) {
 
   const [code, setCode] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
+  // Friend whose extended profile is open. Only ever set for ACCEPTED
+  // friends — the modal's data is RLS-gated to accepted friends anyway
+  // (see friend-profile.ts), this just avoids offering a dead link.
+  const [viewing, setViewing] = useState<PublicProfile | null>(null);
 
   const load = useCallback(async () => {
     if (!myId) return;
@@ -263,11 +268,19 @@ export function FriendsPanel({ state, update }: Props) {
         ) : (
           <ul className="mt-3 space-y-2">
             {leaderboard.map((p, i) => (
-              <LeaderboardRow key={p.user_id} rank={i + 1} profile={p} isMe={p.user_id === myId} />
+              <LeaderboardRow
+                key={p.user_id}
+                rank={i + 1}
+                profile={p}
+                isMe={p.user_id === myId}
+                onOpen={p.user_id === myId ? undefined : () => setViewing(p)}
+              />
             ))}
           </ul>
         )}
       </section>
+
+      {viewing && <FriendProfileModal profile={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
@@ -278,10 +291,13 @@ function LeaderboardRow({
   rank,
   profile,
   isMe,
+  onOpen,
 }: {
   rank: number;
   profile: PublicProfile;
   isMe: boolean;
+  /** Omitted for your own row — there's nothing to "visit" on yourself. */
+  onOpen?: () => void;
 }) {
   return (
     <li
@@ -294,10 +310,21 @@ function LeaderboardRow({
       </span>
       <span className="text-2xl">{profile.avatar ?? "🙂"}</span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {profile.username ?? "Без имени"}
-          {isMe && <span className="ml-1 text-xs text-primary">(ты)</span>}
-        </div>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            title="Открыть профиль"
+            className="block max-w-full truncate text-left text-sm font-medium underline-offset-2 hover:text-primary hover:underline"
+          >
+            {profile.username ?? "Без имени"}
+          </button>
+        ) : (
+          <div className="truncate text-sm font-medium">
+            {profile.username ?? "Без имени"}
+            {isMe && <span className="ml-1 text-xs text-primary">(ты)</span>}
+          </div>
+        )}
         <div className="text-xs text-muted-foreground">
           Уровень {profile.level}
           {profile.fitness_index != null && <> · Форма {profile.fitness_index}</>}

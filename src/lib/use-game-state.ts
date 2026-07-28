@@ -3,6 +3,7 @@ import { useAuthContext } from "./use-auth-context";
 import { supabase } from "./supabase";
 import { clearLegacyLocalState, defaultState, loadState, saveState, type GameState } from "./game";
 import { syncProfile } from "./profiles";
+import { syncFriendProfile } from "./friend-profile";
 
 const SAVE_DEBOUNCE_MS = 1000;
 
@@ -95,6 +96,9 @@ export function useGameState() {
         });
       // Mirror the public-safe subset into `profiles` for friends/leaderboard.
       void syncProfile(userId, state);
+      // ...and the friends-only extended subset (stats/streak/achievements)
+      // into `friend_profiles`, which is RLS-gated to accepted friends.
+      void syncFriendProfile(userId, state);
     }, SAVE_DEBOUNCE_MS);
 
     return () => {

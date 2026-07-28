@@ -1,6 +1,15 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Home as HomeIcon, Plus, Settings, Trophy, Users, Utensils } from "lucide-react";
+import {
+  Activity,
+  Home as HomeIcon,
+  Plus,
+  Settings,
+  ShoppingBag,
+  Trophy,
+  Users,
+  Utensils,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
@@ -24,11 +33,17 @@ import {
   createQuestFromIdea,
   effectiveQuest,
   ensureBonusQuests,
+  ensureBossQuest,
   ensureDailyMandatoryCount,
   ensureDailyQuestsReset,
   ensureSeason,
+  isQuestPostponedOn,
   isWorkDay,
+  canPostponeQuest,
+  postponeQuest,
+  POSTPONE_PRICE_GOLD,
   QUEST_IDEA_POOL,
+  registerBossProgress,
   sortByStatOrder,
   sortQuestsForDisplay,
   STARTER_QUEST_IDEAS,
@@ -135,7 +150,7 @@ function Home() {
     if (!pendingUndo) return;
     const { questId, source, stat, reward, dailyKey } = pendingUndo;
     update((s) => {
-      let next = undoReward(s, stat, reward);
+      let next = registerBossProgress(undoReward(s, stat, reward), stat, -1);
       if (source === "quests") {
         next = {
           ...next,
@@ -170,7 +185,9 @@ function Home() {
     if (!hydrated) return;
     const run = () =>
       update((s) =>
-        ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+        ensureBossQuest(
+          ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+        ),
       );
     run();
     const t = setInterval(run, 60_000);
@@ -233,7 +250,11 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = applyReward(s, quest.stat, quest.reward);
+      const rewarded = registerBossProgress(
+        applyReward(s, quest.stat, quest.reward),
+        quest.stat,
+        1,
+      );
       if (rewarded.level > prev) {
         setTimeout(() => {
           setLevelPulse(true);
@@ -277,6 +298,10 @@ function Home() {
     });
   }
 
+  function postponeQuestToTomorrow(id: string) {
+    update((s) => postponeQuest(s, id));
+  }
+
   function completeBonusQuest(
     id: string,
     _photoPath: string | undefined,
@@ -302,7 +327,11 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = applyReward(s, quest.stat, quest.reward);
+      const rewarded = registerBossProgress(
+        applyReward(s, quest.stat, quest.reward),
+        quest.stat,
+        1,
+      );
       if (rewarded.level > prev) {
         setTimeout(() => {
           setLevelPulse(true);
@@ -382,9 +411,13 @@ function Home() {
   if (!hydrated) return <LoadingScreen />;
 
   const isWork = isWorkDay(state.schedule);
+  const todayK = todayKey();
   const questsByCat = state.quests
     .filter((q) => q.category === tab)
     .filter((q) => !q.dayOffOnly || !isWork)
+    // Shop-postponed quests (see QuestCard "Отложить") are hidden from
+    // today's list entirely — they reappear once postponedUntil arrives.
+    .filter((q) => !isQuestPostponedOn(q, todayK))
     .map((q) => effectiveQuest(q, isWork));
   // Grouped by characteristic in the app-wide fixed order (Сила → Интеллект
   // → Воля → Харизма) rather than creation/rotation order, so quests of the
@@ -538,6 +571,9 @@ function Home() {
                 onDelete={deleteQuest}
                 onPhoto={setPhoto}
                 onTogglePin={canPinQuest ? togglePinQuest : undefined}
+                onPostpone={tab === "daily" ? postponeQuestToTomorrow : undefined}
+                canPostpone={tab === "daily" ? canPostponeQuest(state, q.id) : false}
+                postponePrice={POSTPONE_PRICE_GOLD}
               />
             ))}
           </div>
@@ -692,6 +728,7 @@ const NAV_TABS = [
   { to: "/body", label: "Тело", icon: Activity },
   { to: "/friends", label: "Друзья", icon: Users },
   { to: "/achievements", label: "Достижения", icon: Trophy },
+  { to: "/shop", label: "Магазин", icon: ShoppingBag },
 ] as const;
 
 export function TabNav({ pathname }: { pathname: string }) {

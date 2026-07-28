@@ -50,8 +50,12 @@ export function cheatMealsUsedThisMonth(state: GameState): number {
   return state.cheatMealsUsed[monthKey()] ?? 0;
 }
 
+/** Free monthly limit plus any extra cheat meals bought in the Shop this
+ * month (see shop.ts buyCheatMealBonus) — kept here rather than duplicated
+ * so every caller of cheatMealsRemaining automatically accounts for it. */
 export function cheatMealsRemaining(state: GameState): number {
-  return Math.max(0, MONTHLY_CHEAT_LIMIT - cheatMealsUsedThisMonth(state));
+  const bonus = state.cheatMealBonus[monthKey()] ?? 0;
+  return Math.max(0, MONTHLY_CHEAT_LIMIT + bonus - cheatMealsUsedThisMonth(state));
 }
 
 /**

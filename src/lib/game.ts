@@ -11,6 +11,25 @@ import { generateNickname } from "@/lib/nickname";
 export type StatKey = "strength" | "intellect" | "will" | "appearance";
 export type QuestCategory = "daily" | "story" | "purchase";
 
+export interface BossQuestTarget {
+  stat: StatKey;
+  count: number;
+}
+
+/** Weekly composite challenge combining 2 stat categories (e.g. "5 Сила +
+ * 3 Интеллект quests this week") for a bigger reward than any single quest.
+ * Counts ANY completed quest (daily/story/purchase) matching that stat —
+ * not just daily ones. Expires without penalty at the next Monday reset. */
+export interface BossQuest {
+  weekKey: string; // Monday's date key — identifies which week this belongs to
+  title: string;
+  targets: BossQuestTarget[];
+  progress: Record<StatKey, number>;
+  goldReward: number;
+  xpReward: number;
+  claimed: boolean;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -59,6 +78,12 @@ export interface Quest {
   // checklist rather than a mixed list of one-off goals, so there's less
   // need to single one out above the rest.
   pinned?: boolean;
+  // Shop "postpone" (daily quests only, see shop.ts): a date key. While set
+  // to a date strictly after today, the quest is hidden from today's list
+  // and excluded from today's mandatory discipline count — it isn't "done",
+  // it just doesn't count against today. Cleared automatically once that
+  // date arrives (see ensureDailyQuestsReset).
+  postponedUntil?: string;
 }
 
 export interface StatState {
@@ -314,6 +339,26 @@ export interface GameState {
   // and the list is empty again, since daily quests are no longer an
   // auto-rotated pool the app can "refill" behind the user's back.
   dailyOnboardingDismissed: boolean;
+  // Gold: a separate currency from XP, earned 1:1 alongside a quest's XP
+  // reward, spent in the Shop (see shop.ts). Purely a spending currency —
+  // doesn't affect level/stats itself.
+  gold: number;
+  // Shop cosmetics: purely visual, never affect progress. "equipped*" is
+  // null/"classic" until the user actively picks something they own.
+  unlockedFrames: string[];
+  equippedFrame: string | null;
+  unlockedCardThemes: string[];
+  equippedCardTheme: string;
+  unlockedTitles: string[];
+  equippedTitle: string | null;
+  // Shop "postpone quest" daily limit tracker, keyed by date (YYYY-MM-DD).
+  postponesUsed: Record<string, number>;
+  // Shop "extra cheat meal" purchases, keyed by month (YYYY-MM) — adds to
+  // the free monthly limit in nutrition.ts.
+  cheatMealBonus: Record<string, number>;
+  // Weekly boss quest (see generateBossQuest/ensureBossQuest below). Null
+  // only very briefly before the periodic effect first runs.
+  bossQuest: BossQuest | null;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -564,6 +609,16 @@ export function defaultState(): GameState {
     cardColor: { ...DEFAULT_CARD_COLOR },
     manualDayOverrides: {},
     dailyOnboardingDismissed: false,
+    gold: 0,
+    unlockedFrames: [],
+    equippedFrame: null,
+    unlockedCardThemes: ["classic"],
+    equippedCardTheme: "classic",
+    unlockedTitles: [],
+    equippedTitle: null,
+    postponesUsed: {},
+    cheatMealBonus: {},
+    bossQuest: null,
   };
   return base;
 }
@@ -1005,21 +1060,64 @@ export function ensureDailyQuestsReset(state: GameState): GameState {
   const needsReset = state.quests.some(
     (q) => q.category === "daily" && q.done && q.lastResetDate !== today,
   );
-  if (!needsReset) return state;
+  // Shop-postponed quests whose target date has arrived (or passed) go back
+  // to being a normal, visible, mandatory quest again.
+  const needsUnpostpone = state.quests.some((q) => q.postponedUntil && q.postponedUntil <= today);
+  if (!needsReset && !needsUnpostpone) return state;
   return {
     ...state,
-    quests: state.quests.map((q) =>
-      q.category === "daily" && q.done && q.lastResetDate !== today
-        ? {
-            ...q,
-            done: false,
-            completedAt: undefined,
-            proofNote: undefined,
-            photoPath: undefined,
-            lastResetDate: today,
-          }
-        : q,
-    ),
+    quests: state.quests.map((q) => {
+      let next = q;
+      if (q.category === "daily" && q.done && q.lastResetDate !== today) {
+        next = {
+          ...next,
+          done: false,
+          completedAt: undefined,
+          proofNote: undefined,
+          photoPath: undefined,
+          lastResetDate: today,
+        };
+      }
+      if (next.postponedUntil && next.postponedUntil <= today) {
+        next = { ...next, postponedUntil: undefined };
+      }
+      return next;
+    }),
+  };
+}
+
+export const POSTPONE_PRICE_GOLD = 15;
+export const POSTPONE_DAILY_LIMIT = 2;
+
+export function postponesUsedToday(state: GameState): number {
+  return state.postponesUsed[todayKey()] ?? 0;
+}
+
+export function canPostponeQuest(state: GameState, questId: string): boolean {
+  const q = state.quests.find((qq) => qq.id === questId);
+  if (!q || q.category !== "daily" || q.done) return false;
+  if (isQuestPostponedOn(q, todayKey())) return false;
+  if (state.gold < POSTPONE_PRICE_GOLD) return false;
+  if (postponesUsedToday(state) >= POSTPONE_DAILY_LIMIT) return false;
+  return true;
+}
+
+/**
+ * "Отложить квест на завтра" (Shop): removes a specific daily quest from
+ * today's list at the cost of gold, WITHOUT counting against today's
+ * discipline requirement and WITHOUT granting any XP/gold for it — it just
+ * reappears tomorrow like normal. Capped per day (POSTPONE_DAILY_LIMIT) so
+ * it stays an occasional escape valve, not a way to skip quests entirely.
+ */
+export function postponeQuest(state: GameState, questId: string): GameState {
+  if (!canPostponeQuest(state, questId)) return state;
+  const today = todayKey();
+  const tomorrow = todayKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  return {
+    ...state,
+    gold: state.gold - POSTPONE_PRICE_GOLD,
+    postponesUsed: { ...state.postponesUsed, [today]: postponesUsedToday(state) + 1 },
+    quests: state.quests.map((q) => (q.id === questId ? { ...q, postponedUntil: tomorrow } : q)),
   };
 }
 
@@ -1268,6 +1366,7 @@ export function applyReward(state: GameState, stat: StatKey, reward: number): Ga
     next.level += 1;
   }
   next.completedCount += 1;
+  next.gold += reward;
   next.season = {
     ...next.season,
     xp: next.season.xp + reward,
@@ -1296,6 +1395,7 @@ export function undoReward(state: GameState, stat: StatKey, reward: number): Gam
   next.level = level;
 
   next.completedCount = Math.max(0, next.completedCount - 1);
+  next.gold = Math.max(0, next.gold - reward);
   next.season = {
     ...next.season,
     xp: Math.max(0, next.season.xp - reward),
@@ -1326,11 +1426,22 @@ export function todayKey(d = new Date()) {
  */
 function mandatoryCountFor(state: GameState, dateKey: string): number {
   if (dateKey === todayKey()) {
-    return state.quests.filter((q) => q.category === "daily" && q.mandatory).length;
+    // Quests postponed to a later date (Shop → "Отложить квест") don't count
+    // toward today's requirement — that's the whole point of postponing:
+    // no discipline-calendar penalty for skipping them today.
+    return state.quests.filter(
+      (q) => q.category === "daily" && q.mandatory && !isQuestPostponedOn(q, dateKey),
+    ).length;
   }
   const recorded = state.dailyMandatoryCounts[dateKey];
   if (recorded != null) return recorded;
   return state.quests.filter((q) => q.category === "daily" && q.mandatory).length;
+}
+
+/** True if a quest is currently postponed away from the given date (i.e. its
+ * postponedUntil is still in the future relative to that date). */
+export function isQuestPostponedOn(q: Quest, dateKey: string): boolean {
+  return !!q.postponedUntil && q.postponedUntil > dateKey;
 }
 
 export interface DayStatus {
@@ -1390,6 +1501,86 @@ export function computeDiscipline(state: GameState) {
 
 /** Streak milestones that trigger a celebration when first reached. */
 export const STREAK_MILESTONES = [7, 30, 100];
+
+// ── Weekly boss quest ──
+
+function mondayOf(d: Date): Date {
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+export function currentBossWeekKey(d = new Date()): string {
+  return todayKey(mondayOf(d));
+}
+
+const emptyStatRecord = (): Record<StatKey, number> => ({
+  strength: 0,
+  intellect: 0,
+  will: 0,
+  appearance: 0,
+});
+
+/** Picks 2 distinct stats and a random target count (3-5) for each — kept
+ * modest on purpose so the weekly challenge is reachable through normal
+ * quest completion rather than requiring a grind. */
+export function generateBossQuest(weekKey: string): BossQuest {
+  const shuffled = [...STAT_ORDER].sort(() => Math.random() - 0.5);
+  const targets: BossQuestTarget[] = shuffled.slice(0, 2).map((stat) => ({
+    stat,
+    count: 3 + Math.floor(Math.random() * 3), // 3-5
+  }));
+  const totalCount = targets.reduce((sum, t) => sum + t.count, 0);
+  return {
+    weekKey,
+    title: `Испытание недели: ${targets.map((t) => `${t.count}× ${STAT_META[t.stat].label}`).join(" + ")}`,
+    targets,
+    progress: emptyStatRecord(),
+    goldReward: totalCount * 10,
+    xpReward: totalCount * 8,
+    claimed: false,
+  };
+}
+
+/** Generates a fresh boss quest for the current week if none exists yet, or
+ * the stored one belongs to a past week — the old one just disappears with
+ * no penalty for not finishing it, per spec. Cheap no-op otherwise, safe to
+ * call on every tick of the periodic effect in index.tsx. */
+export function ensureBossQuest(state: GameState): GameState {
+  const weekKey = currentBossWeekKey();
+  if (state.bossQuest && state.bossQuest.weekKey === weekKey) return state;
+  return { ...state, bossQuest: generateBossQuest(weekKey) };
+}
+
+export function bossQuestComplete(bq: BossQuest): boolean {
+  return bq.targets.every((t) => (bq.progress[t.stat] ?? 0) >= t.count);
+}
+
+/**
+ * Keeps the weekly boss quest's progress in sync with quest completions
+ * (delta +1) and undos (delta -1) — counts ANY completed quest matching a
+ * target stat, daily or otherwise. Auto-grants the gold/XP reward the
+ * instant all targets are met (no manual "claim" button) and marks it
+ * claimed so a completions/undo cycle afterward can't grant it twice.
+ */
+export function registerBossProgress(state: GameState, stat: StatKey, delta: number): GameState {
+  if (!state.bossQuest) return state;
+  const bq = state.bossQuest;
+  if (!bq.targets.some((t) => t.stat === stat)) return state;
+  const nextProgress = { ...bq.progress, [stat]: Math.max(0, (bq.progress[stat] ?? 0) + delta) };
+  const nextBossQuest = { ...bq, progress: nextProgress };
+  const next: GameState = { ...state, bossQuest: nextBossQuest };
+  if (!bq.claimed && delta > 0 && bossQuestComplete(nextBossQuest)) {
+    next.totalXp += bq.xpReward;
+    while (next.totalXp >= xpForNextLevel(next.level)) next.level += 1;
+    next.gold += bq.goldReward;
+    next.bossQuest = { ...nextBossQuest, claimed: true };
+  }
+  return next;
+}
 
 /**
  * True if every mandatory daily quest was completed on the given date.

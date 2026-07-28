@@ -8,6 +8,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { useMyShortCode } from "@/hooks/use-my-short-code";
 import { getAvatarPhotoUrl, uploadAvatarPhoto } from "@/lib/avatar-photo";
+import { AVATAR_FRAMES, TITLES } from "@/lib/shop";
 
 // Kept gender-neutral throughout — two more added (🧚, 🦋) alongside the
 // existing set for a softer aesthetic option, without removing any of the
@@ -105,6 +106,13 @@ export function ProfileHeader({
       : b,
   );
 
+  const equippedFrame = state.equippedFrame
+    ? AVATAR_FRAMES.find((f) => f.id === state.equippedFrame)
+    : undefined;
+  const equippedTitle = state.equippedTitle
+    ? TITLES.find((t) => t.id === state.equippedTitle)
+    : undefined;
+
   return (
     <div className="panel-glow p-6">
       {user && (
@@ -124,7 +132,17 @@ export function ProfileHeader({
           <div className="relative shrink-0">
             <button
               onClick={() => setPickerOpen((v) => !v)}
-              className="emoji grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
+              className="emoji grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
+              style={
+                equippedFrame
+                  ? {
+                      borderWidth: equippedFrame.style.borderWidth,
+                      borderColor: equippedFrame.style.borderColor,
+                      borderStyle: "solid",
+                      boxShadow: equippedFrame.style.boxShadow,
+                    }
+                  : { borderWidth: 1, borderStyle: "solid" }
+              }
               title={avatarPhotoUrl ? "Сменить эмодзи-аватар" : "Сменить аватар"}
             >
               {avatarPhotoUrl ? (
@@ -174,16 +192,23 @@ export function ProfileHeader({
                 className="w-full border-b border-primary bg-transparent text-xl font-semibold outline-none sm:text-2xl"
               />
             ) : (
-              <h1
-                onClick={() => {
-                  setNameDraft(state.name);
-                  setEditingName(true);
-                }}
-                className="cursor-pointer truncate text-xl font-semibold sm:text-2xl"
-                title="Изменить имя"
-              >
-                {state.name}
-              </h1>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h1
+                  onClick={() => {
+                    setNameDraft(state.name);
+                    setEditingName(true);
+                  }}
+                  className="cursor-pointer truncate text-xl font-semibold sm:text-2xl"
+                  title="Изменить имя"
+                >
+                  {state.name}
+                </h1>
+                {equippedTitle && (
+                  <span className="rounded-full border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    «{equippedTitle.label}»
+                  </span>
+                )}
+              </div>
             )}
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
               Топ:{" "}
@@ -194,11 +219,17 @@ export function ProfileHeader({
             </p>
           </div>
         </div>
-        <div
-          className={`shrink-0 rounded-xl border border-border bg-secondary px-4 py-2 text-right ${levelUpPulse ? "animate-level-up" : ""}`}
-        >
-          <div className="text-[11px] tracking-wide text-muted-foreground">Уровень</div>
-          <div className="text-2xl font-semibold text-primary sm:text-3xl">{state.level}</div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="rounded-xl border border-border bg-secondary px-3 py-2 text-right">
+            <div className="text-[11px] tracking-wide text-muted-foreground">Золото</div>
+            <div className="text-sm font-semibold text-primary sm:text-base">💰 {state.gold}</div>
+          </div>
+          <div
+            className={`rounded-xl border border-border bg-secondary px-4 py-2 text-right ${levelUpPulse ? "animate-level-up" : ""}`}
+          >
+            <div className="text-[11px] tracking-wide text-muted-foreground">Уровень</div>
+            <div className="text-2xl font-semibold text-primary sm:text-3xl">{state.level}</div>
+          </div>
         </div>
       </div>
 

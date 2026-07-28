@@ -16,17 +16,49 @@ interface Props {
 
 const SIZE = 1080;
 
-/** Fixed palette rather than the app's CSS variables: the card is meant to be
- *  posted outside the app, so it should look the same regardless of whether
- *  the user happens to be in light or dark theme when they export it. */
-const C = {
-  bgTop: "#1c1714",
-  bgBottom: "#120f0d",
-  frame: "#b8925a",
-  text: "#f4efe9",
-  muted: "#9a8e83",
-  tile: "#241d19",
-  accent: "#b8925a",
+interface CardPalette {
+  bgTop: string;
+  bgBottom: string;
+  frame: string;
+  text: string;
+  muted: string;
+  tile: string;
+  accent: string;
+}
+
+/** Fixed palettes rather than the app's CSS variables: the card is meant to
+ *  be posted outside the app, so it should look the same regardless of
+ *  whether the user happens to be in light or dark theme when they export
+ *  it. Ids match shop.ts's CARD_THEMES — "classic" is the free default,
+ *  the other two are purchasable Shop cosmetics. */
+const THEMES: Record<string, CardPalette> = {
+  classic: {
+    bgTop: "#1c1714",
+    bgBottom: "#120f0d",
+    frame: "#b8925a",
+    text: "#f4efe9",
+    muted: "#9a8e83",
+    tile: "#241d19",
+    accent: "#b8925a",
+  },
+  ocean: {
+    bgTop: "#0d2430",
+    bgBottom: "#081418",
+    frame: "#3fa7d6",
+    text: "#eaf6fb",
+    muted: "#7fa5b3",
+    tile: "#122e38",
+    accent: "#3fa7d6",
+  },
+  midnight: {
+    bgTop: "#1a1330",
+    bgBottom: "#0e0a1c",
+    frame: "#a05fff",
+    text: "#f1ecff",
+    muted: "#9284b8",
+    tile: "#221a3d",
+    accent: "#a05fff",
+  },
 };
 
 function roundRect(
@@ -73,6 +105,8 @@ export function ShareCardModal({ state, onClose }: Props) {
   useEffect(() => {
     setCanNativeShare(typeof navigator !== "undefined" && !!navigator.canShare);
   }, []);
+
+  const C = THEMES[state.equippedCardTheme] ?? THEMES.classic;
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;

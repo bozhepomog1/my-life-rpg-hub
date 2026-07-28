@@ -23,6 +23,11 @@ interface Props {
   // and aren't something a user curates by hand, so index.tsx omits this
   // prop for the daily tab.
   onTogglePin?: (id: string) => void;
+  // Shop "Отложить на завтра" (daily quests only — see POSTPONE_PRICE_GOLD
+  // in game.ts). Omitted entirely outside the daily tab.
+  onPostpone?: (id: string) => void;
+  canPostpone?: boolean;
+  postponePrice?: number;
 }
 
 export function QuestCard({
@@ -33,6 +38,9 @@ export function QuestCard({
   onDelete,
   onPhoto,
   onTogglePin,
+  onPostpone,
+  canPostpone,
+  postponePrice,
 }: Props) {
   const meta = STAT_META[quest.stat];
   const { user } = useAuthContext();
@@ -212,13 +220,29 @@ export function QuestCard({
         )}
 
         <div className="mt-4 flex items-center justify-between gap-3">
-          <button
-            onClick={() => onDelete(quest.id)}
-            className="text-xs text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-            aria-label="Удалить квест"
-          >
-            Удалить
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onDelete(quest.id)}
+              className="text-xs text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              aria-label="Удалить квест"
+            >
+              Удалить
+            </button>
+            {onPostpone && !quest.done && (
+              <button
+                onClick={() => onPostpone(quest.id)}
+                disabled={!canPostpone}
+                title={
+                  canPostpone
+                    ? `Снять этот квест с сегодняшнего списка без штрафа — появится завтра. Стоит ${postponePrice ?? ""}💰, без XP/золота за него.`
+                    : "Недостаточно золота или лимит откладываний на сегодня исчерпан"
+                }
+                className="text-xs text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 disabled:group-hover:opacity-40"
+              >
+                Отложить ({postponePrice ?? ""}💰) →
+              </button>
+            )}
+          </div>
           <button
             onClick={handleMainClick}
             disabled={quest.done || !checklistDone}

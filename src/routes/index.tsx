@@ -16,6 +16,7 @@ import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
 import { AddQuestModal } from "@/components/AddQuestModal";
 import { DepositSection } from "@/components/DepositSection";
+import { BossQuestCard } from "@/components/BossQuestCard";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
@@ -462,6 +463,8 @@ function Home() {
         <WorkScheduleStatus isWork={isWork} />
 
         <SeasonProgress season={state.season} />
+
+        <BossQuestCard bossQuest={state.bossQuest} />
 
         <DepositSection state={state} update={update} />
 

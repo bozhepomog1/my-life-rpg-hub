@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { sendMagicLink, signInWithGoogle } from "@/lib/auth";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const { session, loading } = useAuthContext();
 
-  if (loading) return null;
+  if (loading) return <LoadingScreen />;
   if (!session) return <LoginScreen />;
   return <>{children}</>;
 }

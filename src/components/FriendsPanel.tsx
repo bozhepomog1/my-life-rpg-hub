@@ -32,6 +32,12 @@ export function FriendsPanel({ state, update }: Props) {
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({});
   const [loading, setLoading] = useState(true);
+  // getFriendRequests/getProfiles already swallow their own Supabase errors
+  // and return [] (so a genuine outage otherwise looks identical to "you
+  // have no friends yet"). This flag is set only if load() itself throws
+  // (e.g. the network request never completes), so we can show a distinct
+  // "couldn't load" message instead of a false empty state.
+  const [loadError, setLoadError] = useState(false);
 
   const [code, setCode] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
@@ -43,14 +49,25 @@ export function FriendsPanel({ state, update }: Props) {
   const load = useCallback(async () => {
     if (!myId) return;
     setLoading(true);
-    const reqs = await getFriendRequests(myId);
-    const otherIds = Array.from(
-      new Set(reqs.map((r) => (r.from_user === myId ? r.to_user : r.from_user))),
-    );
-    const profs = await getProfiles(otherIds);
-    setRequests(reqs);
-    setProfiles(Object.fromEntries(profs.map((p) => [p.user_id, p])));
-    setLoading(false);
+    setLoadError(false);
+    try {
+      const reqs = await getFriendRequests(myId);
+      const otherIds = Array.from(
+        new Set(reqs.map((r) => (r.from_user === myId ? r.to_user : r.from_user))),
+      );
+      const profs = await getProfiles(otherIds);
+      setRequests(reqs);
+      setProfiles(Object.fromEntries(profs.map((p) => [p.user_id, p])));
+    } catch (err) {
+      // A thrown error here (as opposed to one swallowed inside
+      // getFriendRequests/getProfiles) means the request never came back at
+      // all — without this catch, `loading` would stay true forever
+      // ("зависшая загрузка навсегда").
+      console.warn("failed to load friends", err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [myId]);
 
   useEffect(() => {
@@ -257,7 +274,23 @@ export function FriendsPanel({ state, update }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Таблица рейтингов</h2>
         {loading ? (
-          <p className="mt-3 text-sm text-muted-foreground">Загрузка…</p>
+          <div className="mt-4 flex items-center justify-center py-6">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+          </div>
+        ) : loadError ? (
+          <div className="mt-4 rounded-lg bg-secondary px-4 py-6 text-center">
+            <div className="text-3xl">⚠️</div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Не удалось загрузить друзей — проверь соединение с интернетом.
+            </p>
+            <button
+              type="button"
+              onClick={() => load()}
+              className="mt-3 rounded-full border border-border px-4 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
+            >
+              Повторить
+            </button>
+          </div>
         ) : friendIds.length === 0 ? (
           <div className="mt-4 rounded-lg bg-secondary px-4 py-6 text-center">
             <div className="text-3xl">🏅</div>

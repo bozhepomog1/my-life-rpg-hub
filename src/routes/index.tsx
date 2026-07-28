@@ -45,6 +45,7 @@ import {
 import { DailyOnboardingPrompt } from "@/components/DailyOnboardingPrompt";
 import { QuestIdeaCatalog } from "@/components/QuestIdeaCatalog";
 import { RandomGoalRoller } from "@/components/RandomGoalRoller";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 const UNDO_WINDOW_MS = 10_000;
 
@@ -378,7 +379,7 @@ function Home() {
     update((s) => ({ ...s, dailyOnboardingDismissed: true }));
   }
 
-  if (!hydrated) return null;
+  if (!hydrated) return <LoadingScreen />;
 
   const isWork = isWorkDay(state.schedule);
   const questsByCat = state.quests
@@ -694,8 +695,22 @@ const NAV_TABS = [
 ] as const;
 
 export function TabNav({ pathname }: { pathname: string }) {
+  // Read directly from context rather than threading a prop through all six
+  // route files that render TabNav — simplest way to surface a Supabase
+  // sync failure in one shared place.
+  const { syncError } = useGameStateContext();
+
   return (
     <>
+      {syncError && (
+        <div
+          role="status"
+          className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          Не удалось синхронизироваться с сервером — показаны последние сохранённые локально данные.
+          Проверь соединение с интернетом.
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6">
         {/* Desktop/tablet: horizontal pill tabs, unchanged. Hidden below md
             — the fixed BottomNav takes over navigation on narrow screens

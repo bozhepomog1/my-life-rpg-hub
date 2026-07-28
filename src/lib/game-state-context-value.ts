@@ -6,6 +6,8 @@ export interface GameStateContextValue {
   setState: (s: GameState) => void;
   update: (fn: (s: GameState) => GameState) => void;
   hydrated: boolean;
+  /** True when the last Supabase sync attempt failed — see use-game-state.ts. */
+  syncError: boolean;
 }
 
 export const GameStateContext = createContext<GameStateContextValue>({
@@ -13,4 +15,5 @@ export const GameStateContext = createContext<GameStateContextValue>({
   setState: () => {},
   update: () => {},
   hydrated: false,
+  syncError: false,
 });

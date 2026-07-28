@@ -9,11 +9,21 @@ export function useAuth() {
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setSession(data.session);
+        setLoading(false);
+      })
+      .catch(() => {
+        // Network failure on the initial session check (e.g. Supabase
+        // unreachable). Without this, `loading` would stay true forever and
+        // AuthGate would spin indefinitely instead of falling through to the
+        // login screen, which is at least usable and retryable.
+        if (!active) return;
+        setLoading(false);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);

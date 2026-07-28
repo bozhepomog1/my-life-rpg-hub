@@ -14,6 +14,7 @@ import {
 } from "@/lib/achievements";
 import { TabNav } from "./index";
 import { ProgressBar } from "@/components/ProgressBar";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 export const Route = createFileRoute("/achievements")({
   head: () => ({
@@ -29,7 +30,7 @@ function Achievements() {
   const { state, setState, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  if (!hydrated) return null;
+  if (!hydrated) return <LoadingScreen />;
 
   const stats = (Object.keys(state.stats) as StatKey[])
     .map((k) => ({ key: k, total: state.stats[k].level * 100 + state.stats[k].xp }))

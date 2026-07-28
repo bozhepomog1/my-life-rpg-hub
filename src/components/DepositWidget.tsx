@@ -44,7 +44,7 @@ export function DepositWidget({ state }: Props) {
               style={{ background: statusColor }}
             />
             <span className="truncate">
-              Залог · {active ? "заблокировано" : lost ? "сгорели" : "высвобождены"}
+              Залог · {active ? "заблокировано" : lost ? "не возвращены" : "возвращены"}
             </span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -70,7 +70,7 @@ export function DepositWidget({ state }: Props) {
 
       {lost && (
         <div className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-center text-[11px] text-destructive">
-          Вы проиграли — ${state.depositAmount} сгорели
+          Условия не выполнены — ${state.depositAmount} остаются не возвращены
         </div>
       )}
     </div>

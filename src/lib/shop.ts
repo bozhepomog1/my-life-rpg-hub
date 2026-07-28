@@ -24,6 +24,8 @@ export interface AvatarFrame {
   style: { borderColor: string; borderWidth: number; boxShadow?: string };
 }
 
+// Prices rebalanced around GOLD_PER_XP in game.ts (~15 gold for a typical
+// fully-completed day): common ≈ 3-5 days, rare ≈ 1-2 weeks, epic ≈ a month.
 export const AVATAR_FRAMES: AvatarFrame[] = [
   {
     id: "bronze",
@@ -35,28 +37,28 @@ export const AVATAR_FRAMES: AvatarFrame[] = [
   {
     id: "silver",
     label: "Серебряное кольцо",
-    price: 120,
+    price: 70,
     rarity: "common",
     style: { borderColor: "#c3c9d1", borderWidth: 3 },
   },
   {
     id: "gold",
     label: "Золотое кольцо",
-    price: 250,
+    price: 150,
     rarity: "rare",
     style: { borderColor: "#e0b23d", borderWidth: 4, boxShadow: "0 0 0 2px #e0b23d33" },
   },
   {
     id: "emerald",
     label: "Изумрудная рамка",
-    price: 350,
+    price: 200,
     rarity: "rare",
     style: { borderColor: "#3fae6a", borderWidth: 4, boxShadow: "0 0 0 2px #3fae6a33" },
   },
   {
     id: "prismatic",
     label: "Радужная рамка",
-    price: 600,
+    price: 450,
     rarity: "epic",
     // box-shadow can't hold a gradient — layered glow in two accent hues
     // instead, still visibly the "flashiest" of the set.
@@ -78,8 +80,8 @@ export interface CardTheme {
 /** IDs match ShareCardModal.tsx's THEMES map. "classic" is free/default. */
 export const CARD_THEMES: CardTheme[] = [
   { id: "classic", label: "Тёмное золото (стандарт)", price: 0, rarity: "common" },
-  { id: "ocean", label: "Океан", price: 150, rarity: "rare" },
-  { id: "midnight", label: "Полночь", price: 300, rarity: "epic" },
+  { id: "ocean", label: "Океан", price: 120, rarity: "rare" },
+  { id: "midnight", label: "Полночь", price: 450, rarity: "epic" },
 ];
 
 export interface Title {
@@ -90,16 +92,16 @@ export interface Title {
 }
 
 export const TITLES: Title[] = [
-  { id: "early_bird", label: "Ранняя пташка", price: 60, rarity: "common" },
-  { id: "night_owl", label: "Ночная сова", price: 60, rarity: "common" },
-  { id: "quest_machine", label: "Квестовая машина", price: 100, rarity: "common" },
-  { id: "snack_slayer", label: "Гроза перекусов", price: 100, rarity: "common" },
-  { id: "iron_will", label: "Железная воля", price: 180, rarity: "rare" },
-  { id: "calendar_wizard", label: "Волшебник календаря", price: 180, rarity: "rare" },
-  { id: "gains_goblin", label: "Гоблин прогресса", price: 220, rarity: "rare" },
-  { id: "legend_in_progress", label: "Легенда в процессе", price: 350, rarity: "epic" },
-  { id: "unstoppable", label: "Неудержимый", price: 350, rarity: "epic" },
-  { id: "chaos_gremlin", label: "Гремлин хаоса", price: 150, rarity: "rare" },
+  { id: "early_bird", label: "Ранняя пташка", price: 55, rarity: "common" },
+  { id: "night_owl", label: "Ночная сова", price: 55, rarity: "common" },
+  { id: "quest_machine", label: "Квестовая машина", price: 65, rarity: "common" },
+  { id: "snack_slayer", label: "Гроза перекусов", price: 65, rarity: "common" },
+  { id: "chaos_gremlin", label: "Гремлин хаоса", price: 120, rarity: "rare" },
+  { id: "iron_will", label: "Железная воля", price: 140, rarity: "rare" },
+  { id: "calendar_wizard", label: "Волшебник календаря", price: 140, rarity: "rare" },
+  { id: "gains_goblin", label: "Гоблин прогресса", price: 160, rarity: "rare" },
+  { id: "legend_in_progress", label: "Легенда в процессе", price: 450, rarity: "epic" },
+  { id: "unstoppable", label: "Неудержимый", price: 450, rarity: "epic" },
 ];
 
 export function ownsFrame(state: GameState, id: string): boolean {

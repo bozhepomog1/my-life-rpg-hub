@@ -1383,6 +1383,22 @@ export function randomBigGoalIdea(excludeTitle?: string): BigGoalIdea {
   return source[Math.floor(Math.random() * source.length)];
 }
 
+/**
+ * Gold used to be granted 1:1 with a quest's XP reward, which meant a single
+ * fully-completed day (~120+ XP across daily quests) bought the cheapest
+ * Shop cosmetic (50-60 gold) same-day. Scaled down so gold accumulates
+ * separately from XP/levels (which this deliberately leaves untouched):
+ * at ~15 gold for a typical full day, the cheapest item takes ~3-5 days,
+ * mid-rarity ~1-2 weeks, and epic items about a month — see shop.ts prices,
+ * which were rebalanced to match this rate rather than the other way
+ * around (changing one constant here beats re-tuning every price twice).
+ */
+export const GOLD_PER_XP = 0.15;
+
+export function goldForReward(reward: number): number {
+  return Math.max(1, Math.round(reward * GOLD_PER_XP));
+}
+
 export function applyReward(state: GameState, stat: StatKey, reward: number): GameState {
   const next = structuredClone(state);
   const s = next.stats[stat];
@@ -1396,7 +1412,7 @@ export function applyReward(state: GameState, stat: StatKey, reward: number): Ga
     next.level += 1;
   }
   next.completedCount += 1;
-  next.gold += reward;
+  next.gold += goldForReward(reward);
   next.season = {
     ...next.season,
     xp: next.season.xp + reward,
@@ -1425,7 +1441,7 @@ export function undoReward(state: GameState, stat: StatKey, reward: number): Gam
   next.level = level;
 
   next.completedCount = Math.max(0, next.completedCount - 1);
-  next.gold = Math.max(0, next.gold - reward);
+  next.gold = Math.max(0, next.gold - goldForReward(reward));
   next.season = {
     ...next.season,
     xp: Math.max(0, next.season.xp - reward),
@@ -1569,7 +1585,9 @@ export function generateBossQuest(weekKey: string): BossQuest {
     title: `Испытание недели: ${targets.map((t) => `${t.count}× ${STAT_META[t.stat].label}`).join(" + ")}`,
     targets,
     progress: emptyStatRecord(),
-    goldReward: totalCount * 10,
+    // Gold reward scaled down to match GOLD_PER_XP (see goldForReward) —
+    // this was tuned back when gold matched XP 1:1; XP reward is untouched.
+    goldReward: Math.max(1, Math.round(totalCount * 10 * GOLD_PER_XP)),
     xpReward: totalCount * 8,
     claimed: false,
   };

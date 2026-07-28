@@ -39,7 +39,7 @@ export function DepositSection({ state, update }: Props) {
         <div className="min-w-0">
           <p className="text-xs font-medium text-foreground">Хочешь мотивацию посерьёзнее?</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Внеси залог, который потеряешь при провале.
+            Не получишь деньги обратно, пока не выполнишь все поставленные задачи.
           </p>
         </div>
         <button

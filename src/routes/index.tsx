@@ -41,10 +41,11 @@ import {
   isQuestPostponedOn,
   isWorkDay,
   canPostponeQuest,
+  checkBossQuestCompletion,
   postponeQuest,
   POSTPONE_PRICE_GOLD,
   QUEST_IDEA_POOL,
-  registerBossProgress,
+  registerBossActivity,
   sortByStatOrder,
   sortQuestsForDisplay,
   STARTER_QUEST_IDEAS,
@@ -89,6 +90,7 @@ interface PendingUndo {
   questId: string;
   source: "quests" | "bonusQuests";
   stat: StatKey;
+  category: QuestCategory;
   reward: number;
   /** Set only for daily-category quests, to also remove them from dailyCompletions on undo. */
   dailyKey?: string;
@@ -149,9 +151,9 @@ function Home() {
 
   function handleUndo() {
     if (!pendingUndo) return;
-    const { questId, source, stat, reward, dailyKey } = pendingUndo;
+    const { questId, source, stat, category, reward, dailyKey } = pendingUndo;
     update((s) => {
-      let next = registerBossProgress(undoReward(s, stat, reward), stat, -1);
+      let next = registerBossActivity(undoReward(s, stat, reward), stat, category, -1);
       if (source === "quests") {
         next = {
           ...next,
@@ -186,8 +188,10 @@ function Home() {
     if (!hydrated) return;
     const run = () =>
       update((s) =>
-        ensureBossQuest(
-          ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+        checkBossQuestCompletion(
+          ensureBossQuest(
+            ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+          ),
         ),
       );
     run();
@@ -251,9 +255,10 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = registerBossProgress(
+      const rewarded = registerBossActivity(
         applyReward(s, quest.stat, quest.reward),
         quest.stat,
+        quest.category,
         1,
       );
       if (rewarded.level > prev) {
@@ -270,7 +275,7 @@ function Home() {
         if (!arr.includes(quest.id)) arr.push(quest.id);
         dailyCompletions[k] = arr;
       }
-      return {
+      return checkBossQuestCompletion({
         ...rewarded,
         dailyCompletions,
         quests: rewarded.quests.map((q) =>
@@ -284,7 +289,7 @@ function Home() {
               }
             : q,
         ),
-      };
+      });
     });
 
     setPendingUndo({
@@ -293,6 +298,7 @@ function Home() {
       questId: id,
       source: "quests",
       stat: quest.stat,
+      category: quest.category,
       reward: quest.reward,
       dailyKey: quest.category === "daily" ? todayKey() : undefined,
       expiresAt: Date.now() + UNDO_WINDOW_MS,
@@ -328,9 +334,10 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = registerBossProgress(
+      const rewarded = registerBossActivity(
         applyReward(s, quest.stat, quest.reward),
         quest.stat,
+        quest.category,
         1,
       );
       if (rewarded.level > prev) {
@@ -339,12 +346,12 @@ function Home() {
           setTimeout(() => setLevelPulse(false), 1500);
         }, 200);
       }
-      return {
+      return checkBossQuestCompletion({
         ...rewarded,
         bonusQuests: rewarded.bonusQuests.map((q) =>
           q.id === id ? { ...q, done: true, completedAt: Date.now() } : q,
         ),
-      };
+      });
     });
 
     setPendingUndo({
@@ -353,6 +360,7 @@ function Home() {
       questId: id,
       source: "bonusQuests",
       stat: quest.stat,
+      category: quest.category,
       reward: quest.reward,
       expiresAt: Date.now() + UNDO_WINDOW_MS,
     });
@@ -464,7 +472,7 @@ function Home() {
 
         <SeasonProgress season={state.season} />
 
-        <BossQuestCard bossQuest={state.bossQuest} />
+        <BossQuestCard state={state} bossQuest={state.bossQuest} />
 
         <DepositSection state={state} update={update} />
 

@@ -51,7 +51,7 @@ export function ShopPanel({ state, update }: Props) {
           Чисто визуальные — обрамление вокруг твоего аватара на главном экране.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {AVATAR_FRAMES.map((f) => (
+          {AVATAR_FRAMES.filter((f) => !f.exclusive).map((f) => (
             <FrameRow
               key={f.id}
               item={f}
@@ -92,7 +92,7 @@ export function ShopPanel({ state, update }: Props) {
           Показываются рядом с именем на главном экране.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {TITLES.map((t) => (
+          {TITLES.filter((t) => !t.exclusive).map((t) => (
             <TitleRow
               key={t.id}
               item={t}
@@ -100,6 +100,41 @@ export function ShopPanel({ state, update }: Props) {
               equipped={state.equippedTitle === t.id}
               gold={state.gold}
               onBuy={() => update((s) => buyTitle(s, t.id))}
+              onEquip={() => update((s) => equipTitle(s, t.id))}
+              onUnequip={() => update((s) => equipTitle(s, null))}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="panel p-6">
+        <h3 className="text-sm font-semibold">🏆 Эксклюзив за испытания</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Нельзя купить за золото — только заработать, пройдя босс-квест недели хотя бы раз.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {AVATAR_FRAMES.filter((f) => f.exclusive).map((f) => (
+            <FrameRow
+              key={f.id}
+              item={f}
+              owned={ownsFrame(state, f.id)}
+              equipped={state.equippedFrame === f.id}
+              gold={state.gold}
+              locked
+              onBuy={() => {}}
+              onEquip={() => update((s) => equipFrame(s, f.id))}
+              onUnequip={() => update((s) => equipFrame(s, null))}
+            />
+          ))}
+          {TITLES.filter((t) => t.exclusive).map((t) => (
+            <TitleRow
+              key={t.id}
+              item={t}
+              owned={ownsTitle(state, t.id)}
+              equipped={state.equippedTitle === t.id}
+              gold={state.gold}
+              locked
+              onBuy={() => {}}
               onEquip={() => update((s) => equipTitle(s, t.id))}
               onUnequip={() => update((s) => equipTitle(s, null))}
             />
@@ -142,6 +177,7 @@ function FrameRow({
   owned,
   equipped,
   gold,
+  locked,
   onBuy,
   onEquip,
   onUnequip,
@@ -150,6 +186,9 @@ function FrameRow({
   owned: boolean;
   equipped: boolean;
   gold: number;
+  /** True for exclusive boss-quest-reward items — replaces the buy button
+   * with a plain "locked" state instead, since these can't be purchased. */
+  locked?: boolean;
   onBuy: () => void;
   onEquip: () => void;
   onUnequip: () => void;
@@ -170,13 +209,14 @@ function FrameRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{item.label}</div>
         <div className="text-[11px]" style={{ color: RARITY_COLOR[item.rarity] }}>
-          {RARITY_LABEL[item.rarity]} · {item.price}💰
+          {locked ? RARITY_LABEL[item.rarity] : `${RARITY_LABEL[item.rarity]} · ${item.price}💰`}
         </div>
       </div>
       <ShopAction
         owned={owned}
         equipped={equipped}
         canAfford={gold >= item.price}
+        locked={locked}
         onBuy={onBuy}
         onEquip={onEquip}
         onUnequip={onUnequip}
@@ -226,6 +266,7 @@ function TitleRow({
   owned,
   equipped,
   gold,
+  locked,
   onBuy,
   onEquip,
   onUnequip,
@@ -234,6 +275,7 @@ function TitleRow({
   owned: boolean;
   equipped: boolean;
   gold: number;
+  locked?: boolean;
   onBuy: () => void;
   onEquip: () => void;
   onUnequip: () => void;
@@ -245,13 +287,14 @@ function TitleRow({
       <div className="min-w-0">
         <div className="truncate text-sm font-medium">«{item.label}»</div>
         <div className="text-[11px]" style={{ color: RARITY_COLOR[item.rarity] }}>
-          {RARITY_LABEL[item.rarity]} · {item.price}💰
+          {locked ? RARITY_LABEL[item.rarity] : `${RARITY_LABEL[item.rarity]} · ${item.price}💰`}
         </div>
       </div>
       <ShopAction
         owned={owned}
         equipped={equipped}
         canAfford={gold >= item.price}
+        locked={locked}
         onBuy={onBuy}
         onEquip={onEquip}
         onUnequip={onUnequip}
@@ -264,6 +307,7 @@ function ShopAction({
   owned,
   equipped,
   canAfford,
+  locked,
   onBuy,
   onEquip,
   onUnequip,
@@ -271,11 +315,21 @@ function ShopAction({
   owned: boolean;
   equipped: boolean;
   canAfford: boolean;
+  /** Exclusive boss-quest-reward item not yet earned — show a plain locked
+   * badge instead of a buy button (see FrameRow/TitleRow). */
+  locked?: boolean;
   onBuy: () => void;
   onEquip: () => void;
   onUnequip?: () => void;
 }) {
   if (!owned) {
+    if (locked) {
+      return (
+        <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground">
+          🔒 Заработай в испытании
+        </span>
+      );
+    }
     return (
       <button
         type="button"

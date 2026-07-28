@@ -16,19 +16,76 @@ export interface BossQuestTarget {
   count: number;
 }
 
-/** Weekly composite challenge combining 2 stat categories (e.g. "5 Сила +
- * 3 Интеллект quests this week") for a bigger reward than any single quest.
- * Counts ANY completed quest (daily/story/purchase) matching that stat —
- * not just daily ones. Expires without penalty at the next Monday reset. */
+/** The 6 challenge shapes generateBossQuest() picks between each Monday —
+ * see generateBossQuest for the exact rules/ranges of each. */
+export type BossQuestKind =
+  | "stat_pair" // N quests in each of 2 stats
+  | "quest_count" // N quests total, any stat/category
+  | "streak_hold" // hold a fully-completed-day streak of N days
+  | "combo" // N quests total AND a streak of M days
+  | "category_focus" // N quests within a single category (daily/story/purchase)
+  | "perfect_week"; // every day this week fully completed, no gaps
+
+/** Incremental counters for the current boss quest, kept in sync via
+ * registerBossActivity() on every quest completion/undo (see index.tsx).
+ * Reset to all-zero whenever a fresh BossQuest is generated. Streak-based
+ * kinds (streak_hold/combo/perfect_week) don't use this — they read
+ * computeStreak()/isDayFullyDone() live instead, since "current streak" is
+ * already a live concept and doesn't need its own counter. */
+export interface BossQuestProgress {
+  byStat: Record<StatKey, number>;
+  byCategory: Record<QuestCategory, number>;
+  total: number;
+}
+
+/** Weekly composite challenge — one of 6 templates (BossQuestKind), chosen
+ * randomly each Monday for variety. Counts ANY completed quest
+ * (daily/story/purchase/bonus) matching the relevant dimension. Expires
+ * without penalty at the next Monday reset — see ensureBossQuest. */
 export interface BossQuest {
   weekKey: string; // Monday's date key — identifies which week this belongs to
+  weekStartMs: number; // that Monday at local midnight, as a timestamp
+  kind: BossQuestKind;
   title: string;
-  targets: BossQuestTarget[];
-  progress: Record<StatKey, number>;
+  description: string;
+  // Only the fields relevant to `kind` are populated — see generateBossQuest.
+  targets?: BossQuestTarget[]; // stat_pair
+  questCount?: number; // quest_count, combo
+  streakDays?: number; // streak_hold, combo
+  category?: QuestCategory; // category_focus
+  categoryCount?: number; // category_focus
+  progress: BossQuestProgress;
   goldReward: number;
   xpReward: number;
   claimed: boolean;
 }
+
+export interface BossQuestProgressBar {
+  label: string;
+  current: number;
+  target: number;
+}
+
+export interface BossQuestStatus {
+  complete: boolean;
+  bars: BossQuestProgressBar[];
+}
+
+/** One permanent Hall-of-Fame entry for a won boss quest — see
+ * checkBossQuestCompletion(). Logged on EVERY win, not just the first. */
+export interface BossWinRecord {
+  weekKey: string;
+  weekNumber: number; // ISO week-of-year, for a human "Босс недели №N" label
+  title: string;
+  wonAt: number;
+}
+
+// Cosmetic ids granted the first time a boss quest is ever won — see
+// checkBossQuestCompletion() below and the matching catalog entries in
+// shop.ts (AVATAR_FRAMES/TITLES), which mark these `exclusive: true` so they
+// can never be bought with gold, only earned here.
+export const BOSS_EXCLUSIVE_FRAME_ID = "boss_victor";
+export const BOSS_EXCLUSIVE_TITLE_ID = "boss_slayer";
 
 export interface ChecklistItem {
   id: string;
@@ -359,6 +416,9 @@ export interface GameState {
   // Weekly boss quest (see generateBossQuest/ensureBossQuest below). Null
   // only very briefly before the periodic effect first runs.
   bossQuest: BossQuest | null;
+  // Permanent history of won boss quests, newest first — see
+  // checkBossQuestCompletion(). Surfaced in achievements.tsx's Hall of Fame.
+  bossWins: BossWinRecord[];
   // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
   // skipped. Only ever false for a genuinely brand-new account: see the
   // explicit `?? true` patches in loadState() and use-game-state.ts, which
@@ -912,6 +972,7 @@ export function defaultState(): GameState {
     postponesUsed: {},
     cheatMealBonus: {},
     bossQuest: null,
+    bossWins: [],
     statQuizDone: false,
   };
   return base;
@@ -956,6 +1017,7 @@ export function loadState(userId?: string): GameState | null {
       cardColor: parsed.cardColor || { ...DEFAULT_CARD_COLOR },
       manualDayOverrides: parsed.manualDayOverrides || {},
       dailyOnboardingDismissed: parsed.dailyOnboardingDismissed ?? false,
+      bossWins: parsed.bossWins || [],
       // Any save that already exists locally predates or postdates the quiz
       // feature either way — if the field's simply missing, this is an
       // established local cache, not a fresh account, so treat it as done
@@ -1832,69 +1894,303 @@ export function currentBossWeekKey(d = new Date()): string {
   return todayKey(mondayOf(d));
 }
 
-const emptyStatRecord = (): Record<StatKey, number> => ({
-  strength: 0,
-  intellect: 0,
-  will: 0,
-  appearance: 0,
-});
-
-/** Picks 2 distinct stats and a random target count (3-5) for each — kept
- * modest on purpose so the weekly challenge is reachable through normal
- * quest completion rather than requiring a grind. */
-export function generateBossQuest(weekKey: string): BossQuest {
-  const shuffled = [...STAT_ORDER].sort(() => Math.random() - 0.5);
-  const targets: BossQuestTarget[] = shuffled.slice(0, 2).map((stat) => ({
-    stat,
-    count: 3 + Math.floor(Math.random() * 3), // 3-5
-  }));
-  const totalCount = targets.reduce((sum, t) => sum + t.count, 0);
+function emptyBossProgress(): BossQuestProgress {
   return {
-    weekKey,
-    title: `Испытание недели: ${targets.map((t) => `${t.count}× ${STAT_META[t.stat].label}`).join(" + ")}`,
-    targets,
-    progress: emptyStatRecord(),
-    // Gold reward scaled down to match GOLD_PER_XP (see goldForReward) —
-    // this was tuned back when gold matched XP 1:1; XP reward is untouched.
-    goldReward: Math.max(1, Math.round(totalCount * 10 * GOLD_PER_XP)),
-    xpReward: totalCount * 8,
-    claimed: false,
+    byStat: { strength: 0, intellect: 0, will: 0, appearance: 0 },
+    byCategory: { daily: 0, story: 0, purchase: 0 },
+    total: 0,
   };
 }
 
-/** Generates a fresh boss quest for the current week if none exists yet, or
- * the stored one belongs to a past week — the old one just disappears with
- * no penalty for not finishing it, per spec. Cheap no-op otherwise, safe to
- * call on every tick of the periodic effect in index.tsx. */
-export function ensureBossQuest(state: GameState): GameState {
-  const weekKey = currentBossWeekKey();
-  if (state.bossQuest && state.bossQuest.weekKey === weekKey) return state;
-  return { ...state, bossQuest: generateBossQuest(weekKey) };
+/** ISO-8601 week-of-year number (1-53) — used purely for the human-readable
+ * "Босс недели №N" label in Hall of Fame, not for any date math. */
+function isoWeekNumber(d: Date): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-export function bossQuestComplete(bq: BossQuest): boolean {
-  return bq.targets.every((t) => (bq.progress[t.stat] ?? 0) >= t.count);
+function rewardGold(difficulty: number): number {
+  // Same scaling as before (see GOLD_PER_XP) — just generalized to a
+  // difficulty scalar instead of a fixed sum-of-target-counts.
+  return Math.max(1, Math.round(difficulty * 10 * GOLD_PER_XP));
+}
+function rewardXp(difficulty: number): number {
+  return difficulty * 8;
+}
+
+const BOSS_QUEST_KINDS: BossQuestKind[] = [
+  "stat_pair",
+  "quest_count",
+  "streak_hold",
+  "combo",
+  "category_focus",
+  "perfect_week",
+];
+
+/** Picks one of 6 challenge templates at random each Monday for variety —
+ * ranges are kept modest on purpose so the weekly challenge stays reachable
+ * through normal quest completion rather than requiring a grind. */
+export function generateBossQuest(weekKey: string, weekStartMs: number): BossQuest {
+  const kind = BOSS_QUEST_KINDS[Math.floor(Math.random() * BOSS_QUEST_KINDS.length)];
+  const base = {
+    weekKey,
+    weekStartMs,
+    progress: emptyBossProgress(),
+    claimed: false,
+  };
+
+  switch (kind) {
+    case "stat_pair": {
+      const shuffled = [...STAT_ORDER].sort(() => Math.random() - 0.5);
+      const targets: BossQuestTarget[] = shuffled.slice(0, 2).map((stat) => ({
+        stat,
+        count: 4 + Math.floor(Math.random() * 4), // 4-7
+      }));
+      const difficulty = targets.reduce((sum, t) => sum + t.count, 0);
+      return {
+        ...base,
+        kind,
+        targets,
+        title: `Испытание недели: ${targets.map((t) => `${t.count}× ${STAT_META[t.stat].label}`).join(" + ")}`,
+        description: "Заверши указанное число квестов по каждой характеристике за неделю.",
+        goldReward: rewardGold(difficulty),
+        xpReward: rewardXp(difficulty),
+      };
+    }
+    case "quest_count": {
+      const questCount = 10 + Math.floor(Math.random() * 6); // 10-15
+      return {
+        ...base,
+        kind,
+        questCount,
+        title: `Испытание недели: ${questCount} квестов`,
+        description: `Заверши ${questCount} любых квестов за неделю.`,
+        goldReward: rewardGold(questCount),
+        xpReward: rewardXp(questCount),
+      };
+    }
+    case "streak_hold": {
+      const streakDays = 4 + Math.floor(Math.random() * 3); // 4-6
+      return {
+        ...base,
+        kind,
+        streakDays,
+        title: `Испытание недели: серия ${streakDays} дней`,
+        description: `Удержи серию полностью закрытых дней не короче ${streakDays} дней подряд.`,
+        goldReward: rewardGold(streakDays * 3),
+        xpReward: rewardXp(streakDays * 3),
+      };
+    }
+    case "combo": {
+      const questCount = 6 + Math.floor(Math.random() * 5); // 6-10
+      const streakDays = 3 + Math.floor(Math.random() * 3); // 3-5
+      return {
+        ...base,
+        kind,
+        questCount,
+        streakDays,
+        title: `Испытание недели: ${questCount} квестов + серия ${streakDays} дней`,
+        description: `Заверши ${questCount} квестов за неделю И удержи серию не короче ${streakDays} дней подряд.`,
+        goldReward: rewardGold(questCount + streakDays * 3),
+        xpReward: rewardXp(questCount + streakDays * 3),
+      };
+    }
+    case "category_focus": {
+      const categories: QuestCategory[] = ["daily", "story", "purchase"];
+      const category = categories[Math.floor(Math.random() * categories.length)];
+      // Daily quests get completed far more often than story/purchase ones,
+      // so the target count is scaled per category to stay equally reachable.
+      const categoryCount =
+        category === "daily"
+          ? 12 + Math.floor(Math.random() * 8)
+          : 2 + Math.floor(Math.random() * 3);
+      return {
+        ...base,
+        kind,
+        category,
+        categoryCount,
+        title: `Испытание недели: ${categoryCount}× ${CATEGORY_META[category].label}`,
+        description: `Заверши ${categoryCount} квестов категории «${CATEGORY_META[category].label}» за неделю.`,
+        goldReward: rewardGold(categoryCount * (category === "daily" ? 1 : 4)),
+        xpReward: rewardXp(categoryCount * (category === "daily" ? 1 : 4)),
+      };
+    }
+    case "perfect_week":
+      return {
+        ...base,
+        kind,
+        title: "Испытание недели: идеальная неделя",
+        description: "Заверши ВСЕ ежедневные квесты каждый день этой недели без единого пропуска.",
+        goldReward: rewardGold(25),
+        xpReward: rewardXp(25),
+      };
+  }
+}
+
+/** Generates a fresh boss quest for the current week if none exists yet, the
+ * stored one belongs to a past week, or it predates this kind-based redesign
+ * (missing `kind` — old-shape saves just get a one-time silent regeneration,
+ * forfeiting that week's old-style progress). The old one just disappears
+ * with no penalty for not finishing it, per spec. Cheap no-op otherwise, safe
+ * to call on every tick of the periodic effect in index.tsx. */
+export function ensureBossQuest(state: GameState): GameState {
+  const weekKey = currentBossWeekKey();
+  if (state.bossQuest && state.bossQuest.weekKey === weekKey && state.bossQuest.kind) return state;
+  const weekStartMs = mondayOf(new Date()).getTime();
+  return { ...state, bossQuest: generateBossQuest(weekKey, weekStartMs) };
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Every date key (YYYY-MM-DD) from this boss quest's Monday up to and
+ * including today — used by the perfect_week template, which can only ever
+ * become "complete" once the full week (7 entries) has been evaluated. */
+function daysThisWeekSoFar(weekStartMs: number): string[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days: string[] = [];
+  for (let d = new Date(weekStartMs); d <= today; d = new Date(d.getTime() + MS_PER_DAY)) {
+    days.push(todayKey(d));
+  }
+  return days;
+}
+
+/** Live-computed progress bars + completion status for the current boss
+ * quest — computed fresh from durable state each time rather than requiring
+ * incremental tracking for every dimension. stat_pair/quest_count/
+ * category_focus read the incremental `progress` bucket (kept in sync by
+ * registerBossActivity, since a quest's stat/category can't always be
+ * recovered after the fact); streak_hold/combo/perfect_week read
+ * computeStreak()/isDayFullyDone() directly, since "current streak" is
+ * already a live concept. */
+export function computeBossQuestStatus(state: GameState, bq: BossQuest): BossQuestStatus {
+  switch (bq.kind) {
+    case "stat_pair": {
+      const bars = (bq.targets ?? []).map((t) => ({
+        label: STAT_META[t.stat].label,
+        current: Math.min(bq.progress.byStat[t.stat] ?? 0, t.count),
+        target: t.count,
+      }));
+      return { complete: bars.length > 0 && bars.every((b) => b.current >= b.target), bars };
+    }
+    case "quest_count": {
+      const target = bq.questCount ?? 0;
+      const current = Math.min(bq.progress.total, target);
+      return {
+        complete: current >= target,
+        bars: [{ label: "Квестов выполнено", current, target }],
+      };
+    }
+    case "streak_hold": {
+      const target = bq.streakDays ?? 0;
+      const current = Math.min(computeStreak(state), target);
+      return {
+        complete: current >= target,
+        bars: [{ label: "Серия дней подряд", current, target }],
+      };
+    }
+    case "combo": {
+      const qTarget = bq.questCount ?? 0;
+      const sTarget = bq.streakDays ?? 0;
+      const qCurrent = Math.min(bq.progress.total, qTarget);
+      const sCurrent = Math.min(computeStreak(state), sTarget);
+      return {
+        complete: qCurrent >= qTarget && sCurrent >= sTarget,
+        bars: [
+          { label: "Квестов выполнено", current: qCurrent, target: qTarget },
+          { label: "Серия дней подряд", current: sCurrent, target: sTarget },
+        ],
+      };
+    }
+    case "category_focus": {
+      const target = bq.categoryCount ?? 0;
+      const current = Math.min(
+        bq.category ? (bq.progress.byCategory[bq.category] ?? 0) : 0,
+        target,
+      );
+      return {
+        complete: current >= target,
+        bars: [
+          {
+            label: bq.category ? `${CATEGORY_META[bq.category].label}: завершено` : "Завершено",
+            current,
+            target,
+          },
+        ],
+      };
+    }
+    case "perfect_week": {
+      const days = daysThisWeekSoFar(bq.weekStartMs);
+      const doneDays = days.filter((k) => isDayFullyDone(state, k)).length;
+      return {
+        complete: days.length >= 7 && doneDays === 7,
+        bars: [{ label: "Идеальных дней", current: doneDays, target: 7 }],
+      };
+    }
+  }
 }
 
 /**
- * Keeps the weekly boss quest's progress in sync with quest completions
- * (delta +1) and undos (delta -1) — counts ANY completed quest matching a
- * target stat, daily or otherwise. Auto-grants the gold/XP reward the
- * instant all targets are met (no manual "claim" button) and marks it
- * claimed so a completions/undo cycle afterward can't grant it twice.
+ * Keeps the current boss quest's incremental progress bucket in sync with
+ * quest completions (delta +1) and undos (delta -1) — see
+ * BossQuestProgress. Doesn't grant anything itself; completion is checked
+ * separately by checkBossQuestCompletion (called from the periodic effect in
+ * index.tsx), since streak-based kinds can become complete without any
+ * quest-completion event at all (a day just ticking over).
  */
-export function registerBossProgress(state: GameState, stat: StatKey, delta: number): GameState {
-  if (!state.bossQuest) return state;
+export function registerBossActivity(
+  state: GameState,
+  stat: StatKey,
+  category: QuestCategory,
+  delta: number,
+): GameState {
+  if (!state.bossQuest || state.bossQuest.claimed) return state;
   const bq = state.bossQuest;
-  if (!bq.targets.some((t) => t.stat === stat)) return state;
-  const nextProgress = { ...bq.progress, [stat]: Math.max(0, (bq.progress[stat] ?? 0) + delta) };
-  const nextBossQuest = { ...bq, progress: nextProgress };
-  const next: GameState = { ...state, bossQuest: nextBossQuest };
-  if (!bq.claimed && delta > 0 && bossQuestComplete(nextBossQuest)) {
-    next.totalXp += bq.xpReward;
-    while (next.totalXp >= xpForNextLevel(next.level)) next.level += 1;
-    next.gold += bq.goldReward;
-    next.bossQuest = { ...nextBossQuest, claimed: true };
+  const progress: BossQuestProgress = {
+    byStat: { ...bq.progress.byStat, [stat]: Math.max(0, (bq.progress.byStat[stat] ?? 0) + delta) },
+    byCategory: {
+      ...bq.progress.byCategory,
+      [category]: Math.max(0, (bq.progress.byCategory[category] ?? 0) + delta),
+    },
+    total: Math.max(0, bq.progress.total + delta),
+  };
+  return { ...state, bossQuest: { ...bq, progress } };
+}
+
+/**
+ * Checks the current boss quest against its live-computed status and, the
+ * instant it's complete, grants the XP/gold reward, unlocks the exclusive
+ * frame + title (only the very first time ANY boss quest is ever won — see
+ * BOSS_EXCLUSIVE_FRAME_ID/BOSS_EXCLUSIVE_TITLE_ID), and logs a permanent
+ * Hall of Fame entry (every win, not just the first). Marks `claimed` so it
+ * can never grant twice. Safe to call on every tick of the periodic effect
+ * in index.tsx, same as ensureBossQuest.
+ */
+export function checkBossQuestCompletion(state: GameState): GameState {
+  const bq = state.bossQuest;
+  if (!bq || bq.claimed) return state;
+  const status = computeBossQuestStatus(state, bq);
+  if (!status.complete) return state;
+
+  const next: GameState = { ...state, bossQuest: { ...bq, claimed: true } };
+  next.totalXp += bq.xpReward;
+  while (next.totalXp >= xpForNextLevel(next.level)) next.level += 1;
+  next.gold += bq.goldReward;
+
+  const weekNumber = isoWeekNumber(new Date(bq.weekStartMs));
+  next.bossWins = [
+    { weekKey: bq.weekKey, weekNumber, title: bq.title, wonAt: Date.now() },
+    ...next.bossWins,
+  ];
+
+  if (!next.unlockedFrames.includes(BOSS_EXCLUSIVE_FRAME_ID)) {
+    next.unlockedFrames = [...next.unlockedFrames, BOSS_EXCLUSIVE_FRAME_ID];
+  }
+  if (!next.unlockedTitles.includes(BOSS_EXCLUSIVE_TITLE_ID)) {
+    next.unlockedTitles = [...next.unlockedTitles, BOSS_EXCLUSIVE_TITLE_ID];
   }
   return next;
 }

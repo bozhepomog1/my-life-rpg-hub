@@ -43,6 +43,16 @@ function Achievements() {
   // they get a dedicated trophy shelf. Daily quests reset every day so they
   // don't belong here.
   const hallOfFame = completed.filter((q) => q.category !== "daily");
+  // Won boss quests share the same trophy shelf as big one-off quests —
+  // merged into a single timeline sorted newest-first (see bossWins in
+  // game.ts, logged by checkBossQuestCompletion on every win).
+  type HallEntry =
+    | { type: "quest"; at: number; quest: (typeof hallOfFame)[number] }
+    | { type: "boss"; at: number; win: (typeof state.bossWins)[number] };
+  const hallEntries: HallEntry[] = [
+    ...hallOfFame.map((quest): HallEntry => ({ type: "quest", at: quest.completedAt ?? 0, quest })),
+    ...state.bossWins.map((win): HallEntry => ({ type: "boss", at: win.wonAt, win })),
+  ].sort((a, b) => b.at - a.at);
   const disc = computeDiscipline(state);
 
   function resetAll() {
@@ -161,18 +171,43 @@ function Achievements() {
         <section className="panel p-6">
           <h2 className="mb-1 text-sm font-semibold">🏆 Зал славы</h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            Крупные разовые квесты, которые ты завершил — остаются здесь навсегда.
+            Крупные разовые квесты и побеждённые босс-квесты недели — остаются здесь навсегда.
           </p>
-          {hallOfFame.length === 0 ? (
+          {hallEntries.length === 0 ? (
             <div className="py-6 text-center">
               <div className="text-3xl">🏆</div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Пока пусто — заверши сюжетный или закупочный квест, и он попадёт в зал славы.
+                Пока пусто — заверши сюжетный или закупочный квест, или пройди испытание недели, и
+                это попадёт в зал славы.
               </p>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {hallOfFame.map((q) => {
+              {hallEntries.map((entry) => {
+                if (entry.type === "boss") {
+                  const date = new Date(entry.win.wonAt);
+                  return (
+                    <div
+                      key={`boss-${entry.win.wonAt}`}
+                      className="relative overflow-hidden rounded-xl border border-primary/30 bg-secondary/60 p-4"
+                    >
+                      <div className="absolute inset-y-0 left-0 w-1 bg-primary" />
+                      <div className="flex items-start gap-2 pl-2">
+                        <span className="text-2xl leading-none">🐉</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium leading-snug">
+                            Босс недели №{entry.win.weekNumber} побеждён
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                            <span>{entry.win.title}</span>
+                            <span>· {date.toLocaleDateString("ru-RU")}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                const q = entry.quest;
                 const meta = STAT_META[q.stat];
                 const date = q.completedAt ? new Date(q.completedAt) : null;
                 return (

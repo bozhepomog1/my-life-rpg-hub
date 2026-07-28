@@ -1,16 +1,19 @@
-import { STAT_META, type BossQuest } from "@/lib/game";
+import { computeBossQuestStatus, type BossQuest, type GameState } from "@/lib/game";
 import { ProgressBar } from "@/components/ProgressBar";
 
 interface Props {
+  state: GameState;
   bossQuest: BossQuest | null;
 }
 
 /** Weekly composite challenge — see BossQuest/generateBossQuest in game.ts.
  * Null only very briefly before the periodic ensureBossQuest() effect first
  * runs, so this just renders nothing in that split second rather than a
- * loading state. */
-export function BossQuestCard({ bossQuest }: Props) {
+ * loading state. Progress bars are generic (computeBossQuestStatus) so this
+ * renders any of the 6 challenge templates without needing to know which. */
+export function BossQuestCard({ state, bossQuest }: Props) {
   if (!bossQuest) return null;
+  const status = computeBossQuestStatus(state, bossQuest);
 
   return (
     <div className="panel p-5 sm:p-6">
@@ -20,24 +23,20 @@ export function BossQuestCard({ bossQuest }: Props) {
           Награда: +{bossQuest.xpReward} XP · +{bossQuest.goldReward}💰
         </span>
       </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">{bossQuest.description}</p>
       <p className="mt-1 text-[11px] text-muted-foreground">
-        Испытание недели — не успеешь до конца недели, просто сгорит без штрафа, в понедельник
-        появится новое.
+        Не успеешь до конца недели — просто сгорит без штрафа, в понедельник появится новое.
       </p>
 
       <div className="mt-3 space-y-2.5">
-        {bossQuest.targets.map((t) => {
-          const done = Math.min(bossQuest.progress[t.stat] ?? 0, t.count);
-          const pct = t.count > 0 ? (done / t.count) * 100 : 0;
-          const meta = STAT_META[t.stat];
+        {status.bars.map((bar) => {
+          const pct = bar.target > 0 ? (bar.current / bar.target) * 100 : 0;
           return (
-            <div key={t.stat}>
+            <div key={bar.label}>
               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                <span style={{ color: meta.color }}>
-                  {meta.icon} {meta.label}
-                </span>
+                <span>{bar.label}</span>
                 <span>
-                  {done}/{t.count}
+                  {bar.current}/{bar.target}
                 </span>
               </div>
               <ProgressBar value={pct} />

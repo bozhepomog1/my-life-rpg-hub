@@ -1,4 +1,4 @@
-import type { GameState } from "@/lib/game";
+import { BOSS_EXCLUSIVE_FRAME_ID, BOSS_EXCLUSIVE_TITLE_ID, type GameState } from "@/lib/game";
 import { monthKey } from "@/lib/nutrition";
 
 export type Rarity = "common" | "rare" | "epic";
@@ -22,6 +22,10 @@ export interface AvatarFrame {
   rarity: Rarity;
   // Purely CSS — a ring/border style applied around the avatar circle.
   style: { borderColor: string; borderWidth: number; boxShadow?: string };
+  // True only for the weekly-boss-quest reward items — never purchasable
+  // with gold, only unlocked via checkBossQuestCompletion() in game.ts. See
+  // ShopPanel's separate "Эксклюзив за испытания" section.
+  exclusive?: boolean;
 }
 
 // Prices rebalanced around GOLD_PER_XP in game.ts (~15 gold for a typical
@@ -68,6 +72,18 @@ export const AVATAR_FRAMES: AvatarFrame[] = [
       boxShadow: "0 0 0 2px #ff5f6d55, 0 0 14px 2px #a05fff66",
     },
   },
+  {
+    id: BOSS_EXCLUSIVE_FRAME_ID,
+    label: "Рамка победителя боссов",
+    price: 0,
+    rarity: "epic",
+    exclusive: true,
+    style: {
+      borderColor: "#ff3b3b",
+      borderWidth: 4,
+      boxShadow: "0 0 0 2px #ff3b3b33, 0 0 16px 3px #ff3b3b55",
+    },
+  },
 ];
 
 export interface CardTheme {
@@ -89,6 +105,8 @@ export interface Title {
   label: string;
   price: number;
   rarity: Rarity;
+  // See AvatarFrame.exclusive — same rule, same reason.
+  exclusive?: boolean;
 }
 
 export const TITLES: Title[] = [
@@ -102,6 +120,13 @@ export const TITLES: Title[] = [
   { id: "gains_goblin", label: "Гоблин прогресса", price: 160, rarity: "rare" },
   { id: "legend_in_progress", label: "Легенда в процессе", price: 450, rarity: "epic" },
   { id: "unstoppable", label: "Неудержимый", price: 450, rarity: "epic" },
+  {
+    id: BOSS_EXCLUSIVE_TITLE_ID,
+    label: "Победитель боссов",
+    price: 0,
+    rarity: "epic",
+    exclusive: true,
+  },
 ];
 
 export function ownsFrame(state: GameState, id: string): boolean {
@@ -116,7 +141,10 @@ export function ownsTitle(state: GameState, id: string): boolean {
 
 export function buyFrame(state: GameState, id: string): GameState {
   const item = AVATAR_FRAMES.find((f) => f.id === id);
-  if (!item || ownsFrame(state, id) || state.gold < item.price) return state;
+  // Exclusive items (see AvatarFrame.exclusive) can only ever be unlocked by
+  // checkBossQuestCompletion() in game.ts — never through this purchase
+  // path, even at price 0, no matter what the UI does.
+  if (!item || item.exclusive || ownsFrame(state, id) || state.gold < item.price) return state;
   return {
     ...state,
     gold: state.gold - item.price,
@@ -138,7 +166,8 @@ export function buyCardTheme(state: GameState, id: string): GameState {
 
 export function buyTitle(state: GameState, id: string): GameState {
   const item = TITLES.find((t) => t.id === id);
-  if (!item || ownsTitle(state, id) || state.gold < item.price) return state;
+  // See buyFrame's comment — same exclusive-item guard.
+  if (!item || item.exclusive || ownsTitle(state, id) || state.gold < item.price) return state;
   return {
     ...state,
     gold: state.gold - item.price,

@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthGate } from "../components/AuthGate";
 import { AuthProvider } from "../lib/auth-context";
 import { GameStateProvider } from "../lib/game-state-context";
+import { StatQuizGate } from "../components/StatQuizGate";
 import { AchievementWatcher } from "../components/AchievementWatcher";
 import { DailyReminderService } from "../components/DailyReminderService";
 import { AccentApplier } from "../components/AccentApplier";
@@ -166,12 +167,14 @@ function RootComponent() {
       <AuthProvider>
         <AuthGate>
           <GameStateProvider>
-            <AccentApplier />
-            <BackgroundPhotoLayer />
-            <AchievementWatcher />
-            <DailyReminderService />
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
+            <StatQuizGate>
+              <AccentApplier />
+              <BackgroundPhotoLayer />
+              <AchievementWatcher />
+              <DailyReminderService />
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+            </StatQuizGate>
           </GameStateProvider>
         </AuthGate>
       </AuthProvider>

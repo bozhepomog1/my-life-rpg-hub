@@ -359,6 +359,12 @@ export interface GameState {
   // Weekly boss quest (see generateBossQuest/ensureBossQuest below). Null
   // only very briefly before the periodic effect first runs.
   bossQuest: BossQuest | null;
+  // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
+  // skipped. Only ever false for a genuinely brand-new account: see the
+  // explicit `?? true` patches in loadState() and use-game-state.ts, which
+  // stop this from retroactively popping up for existing users whose saved
+  // data simply predates the field.
+  statQuizDone: boolean;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -408,6 +414,263 @@ const ARCHETYPE_UNIVERSAL: Archetype = { label: "Универсал", icon: "�
  * possible right at the very start, all at 0) falls back to a neutral
  * "Универсал" rather than arbitrarily picking one.
  */
+// ── Starter stat quiz (StatQuiz.tsx) ──
+
+export interface QuizOption {
+  text: string;
+  points: number;
+}
+
+export interface QuizQuestion {
+  stat: StatKey;
+  text: string;
+  options: QuizOption[];
+}
+
+/** 5 questions per stat (20 total), each option worth 0-3 points reflecting
+ * real habits/preferences rather than an abstract "pick a number" — see the
+ * task description in the commit this landed in. */
+export const QUIZ_QUESTIONS: QuizQuestion[] = [
+  // Сила
+  {
+    stat: "strength",
+    text: "Как часто ты занимаешься физической активностью (спорт, тренировки, активные прогулки)?",
+    options: [
+      { text: "Почти каждый день", points: 3 },
+      { text: "Несколько раз в неделю", points: 2 },
+      { text: "Иногда, редко", points: 1 },
+      { text: "Почти никогда", points: 0 },
+    ],
+  },
+  {
+    stat: "strength",
+    text: "Сколько времени в день ты обычно проводишь сидя, почти без движения?",
+    options: [
+      { text: "Меньше 4 часов", points: 3 },
+      { text: "4-8 часов", points: 2 },
+      { text: "8-12 часов", points: 1 },
+      { text: "Больше 12 часов", points: 0 },
+    ],
+  },
+  {
+    stat: "strength",
+    text: "Сможешь ли ты пробежать 3 км без остановки прямо сейчас?",
+    options: [
+      { text: "Легко", points: 3 },
+      { text: "С трудом, но смогу", points: 2 },
+      { text: "Вряд ли", points: 1 },
+      { text: "Точно нет", points: 0 },
+    ],
+  },
+  {
+    stat: "strength",
+    text: "Как ты обычно добираешься на короткие расстояния (до 2 км)?",
+    options: [
+      { text: "Пешком или на велосипеде", points: 3 },
+      { text: "Иногда пешком", points: 2 },
+      { text: "Почти всегда на транспорте", points: 1 },
+      { text: "Только на транспорте", points: 0 },
+    ],
+  },
+  {
+    stat: "strength",
+    text: "Делаешь ли ты зарядку, растяжку или разминку по утрам?",
+    options: [
+      { text: "Каждый день", points: 3 },
+      { text: "Несколько раз в неделю", points: 2 },
+      { text: "Редко", points: 1 },
+      { text: "Никогда", points: 0 },
+    ],
+  },
+  // Интеллект
+  {
+    stat: "intellect",
+    text: "Сколько книг ты прочитал(а) за последний год?",
+    options: [
+      { text: "Больше 10", points: 3 },
+      { text: "3-10", points: 2 },
+      { text: "1-2", points: 1 },
+      { text: "Ни одной", points: 0 },
+    ],
+  },
+  {
+    stat: "intellect",
+    text: "Как часто ты изучаешь что-то новое (курсы, статьи, языки, навыки)?",
+    options: [
+      { text: "Постоянно", points: 3 },
+      { text: "Периодически", points: 2 },
+      { text: "Изредка", points: 1 },
+      { text: "Практически никогда", points: 0 },
+    ],
+  },
+  {
+    stat: "intellect",
+    text: "Любишь ли решать логические задачи, головоломки, кроссворды?",
+    options: [
+      { text: "Регулярно", points: 3 },
+      { text: "Иногда", points: 2 },
+      { text: "Редко", points: 1 },
+      { text: "Не люблю", points: 0 },
+    ],
+  },
+  {
+    stat: "intellect",
+    text: "Что ты выбираешь чаще — обучающий контент (лекции, документалки, подкасты) или чисто развлекательный?",
+    options: [
+      { text: "В основном обучающий", points: 3 },
+      { text: "Примерно поровну", points: 2 },
+      { text: "В основном развлекательный", points: 1 },
+      { text: "Только развлекательный", points: 0 },
+    ],
+  },
+  {
+    stat: "intellect",
+    text: "Ведёшь ли записи или заметки, чтобы структурировать мысли и знания?",
+    options: [
+      { text: "Постоянно", points: 3 },
+      { text: "Иногда", points: 2 },
+      { text: "Редко", points: 1 },
+      { text: "Никогда", points: 0 },
+    ],
+  },
+  // Воля
+  {
+    stat: "will",
+    text: "Доводишь ли ты начатые дела до конца?",
+    options: [
+      { text: "Почти всегда", points: 3 },
+      { text: "Чаще да", points: 2 },
+      { text: "Через раз", points: 1 },
+      { text: "Редко", points: 0 },
+    ],
+  },
+  {
+    stat: "will",
+    text: "Как ты справляешься с искушением отложить важное дело на потом?",
+    options: [
+      { text: "Обычно не откладываю", points: 3 },
+      { text: "Иногда откладываю", points: 2 },
+      { text: "Часто откладываю", points: 1 },
+      { text: "Почти всегда откладываю", points: 0 },
+    ],
+  },
+  {
+    stat: "will",
+    text: "Придерживаешься ли ты стабильного режима сна?",
+    options: [
+      { text: "Да, стабильный режим", points: 3 },
+      { text: "Примерно стабильный", points: 2 },
+      { text: "Сильно скачет", points: 1 },
+      { text: "Никакой системы", points: 0 },
+    ],
+  },
+  {
+    stat: "will",
+    text: "Как часто ты выполняешь то, что запланировал(а) на день?",
+    options: [
+      { text: "Почти всегда", points: 3 },
+      { text: "Обычно да", points: 2 },
+      { text: "Иногда", points: 1 },
+      { text: "Редко", points: 0 },
+    ],
+  },
+  {
+    stat: "will",
+    text: "Как ты реагируешь на неудачу в достижении цели?",
+    options: [
+      { text: "Пробую снова почти сразу", points: 3 },
+      { text: "Пробую через время", points: 2 },
+      { text: "Долго не возвращаюсь к этому", points: 1 },
+      { text: "Обычно бросаю совсем", points: 0 },
+    ],
+  },
+  // Харизма
+  {
+    stat: "appearance",
+    text: "Насколько комфортно тебе заговорить первым(ой) с незнакомым человеком?",
+    options: [
+      { text: "Легко и естественно", points: 3 },
+      { text: "Могу, если нужно", points: 2 },
+      { text: "Немного напрягает", points: 1 },
+      { text: "Стараюсь избегать", points: 0 },
+    ],
+  },
+  {
+    stat: "appearance",
+    text: "Как часто ты сам(а) инициируешь общение с друзьями или знакомыми?",
+    options: [
+      { text: "Часто пишу первым(ой)", points: 3 },
+      { text: "Примерно поровну", points: 2 },
+      { text: "Чаще жду, когда напишут", points: 1 },
+      { text: "Почти никогда не пишу первым(ой)", points: 0 },
+    ],
+  },
+  {
+    stat: "appearance",
+    text: "Уделяешь ли внимание тому, как выглядишь перед выходом из дома?",
+    options: [
+      { text: "Всегда", points: 3 },
+      { text: "Обычно да", points: 2 },
+      { text: "Иногда", points: 1 },
+      { text: "Редко задумываюсь", points: 0 },
+    ],
+  },
+  {
+    stat: "appearance",
+    text: "Как ты себя чувствуешь, выступая перед группой людей?",
+    options: [
+      { text: "Уверенно", points: 3 },
+      { text: "Немного волнуюсь, но справляюсь", points: 2 },
+      { text: "Сильно волнуюсь", points: 1 },
+      { text: "Стараюсь избегать", points: 0 },
+    ],
+  },
+  {
+    stat: "appearance",
+    text: "Легко ли тебе заводить новые знакомства?",
+    options: [
+      { text: "Очень легко", points: 3 },
+      { text: "Легко", points: 2 },
+      { text: "Скорее сложно", points: 1 },
+      { text: "Очень сложно", points: 0 },
+    ],
+  },
+];
+
+/** Each raw point (0-3 per question, up to 15 per stat across 5 questions)
+ * converts to this much starting XP — up to 300 XP (~3 levels) for maxing
+ * every question on a stat. Proportional to actual answers, not a flat
+ * amount for everyone. */
+export const QUIZ_XP_PER_POINT = 20;
+
+/** Applies the quiz's per-stat point totals as genuine starting XP/levels —
+ * these count as the character's first real progress, not a separate bonus,
+ * so they feed totalXp/level exactly like applyReward() would. */
+export function applyQuizResults(
+  state: GameState,
+  pointsByStat: Record<StatKey, number>,
+): GameState {
+  const next = structuredClone(state);
+  for (const k of STAT_ORDER) {
+    const xpGain = (pointsByStat[k] ?? 0) * QUIZ_XP_PER_POINT;
+    if (xpGain <= 0) continue;
+    const s = next.stats[k];
+    const combined = s.level * 100 + s.xp + xpGain;
+    s.level = Math.floor(combined / 100);
+    s.xp = combined % 100;
+    next.totalXp += xpGain;
+  }
+  while (next.totalXp >= xpForNextLevel(next.level)) {
+    next.level += 1;
+  }
+  next.statQuizDone = true;
+  return next;
+}
+
+export function skipQuiz(state: GameState): GameState {
+  return { ...state, statQuizDone: true };
+}
+
 export function computeArchetype(state: GameState): Archetype {
   const totals = STAT_ORDER.map((k) => state.stats[k].level * 100 + state.stats[k].xp);
   const max = Math.max(...totals);
@@ -649,6 +912,7 @@ export function defaultState(): GameState {
     postponesUsed: {},
     cheatMealBonus: {},
     bossQuest: null,
+    statQuizDone: false,
   };
   return base;
 }
@@ -692,6 +956,11 @@ export function loadState(userId?: string): GameState | null {
       cardColor: parsed.cardColor || { ...DEFAULT_CARD_COLOR },
       manualDayOverrides: parsed.manualDayOverrides || {},
       dailyOnboardingDismissed: parsed.dailyOnboardingDismissed ?? false,
+      // Any save that already exists locally predates or postdates the quiz
+      // feature either way — if the field's simply missing, this is an
+      // established local cache, not a fresh account, so treat it as done
+      // rather than showing the onboarding quiz retroactively.
+      statQuizDone: parsed.statQuizDone ?? true,
     };
   } catch {
     return null;

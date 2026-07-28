@@ -66,10 +66,18 @@ export function useGameState() {
           if (!cached) setState(defaultState());
           setSyncError(true);
         } else if (data?.state) {
+          const remoteState = data.state as Partial<GameState>;
           const remote: GameState = {
             ...defaultState(),
-            ...(data.state as Partial<GameState>),
+            ...remoteState,
             stats: { ...defaultState().stats, ...(data.state as GameState).stats },
+            // A row that predates the starter quiz feature simply won't have
+            // this field — that's an established account, not a fresh one,
+            // so never retroactively show the onboarding quiz for it. A
+            // genuinely new row always has it set explicitly (see the
+            // upsert in the "no row yet" branch below), so this only ever
+            // kicks in for legacy data.
+            statQuizDone: remoteState.statQuizDone ?? true,
           };
           setState(remote);
           saveState(remote, userId);

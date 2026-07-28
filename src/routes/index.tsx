@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Settings } from "lucide-react";
+import { Activity, Home as HomeIcon, Plus, Settings, Trophy, Users, Utensils } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
@@ -353,7 +353,7 @@ function Home() {
   const bonusDone = sortByStatOrder(state.bonusQuests.filter((q) => q.done));
 
   return (
-    <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
+    <div className="mx-auto max-w-4xl px-3 pb-28 pt-4 sm:px-4 sm:pt-8 md:pb-24">
       <TabNav pathname={pathname} />
 
       <div className="space-y-5 sm:space-y-7">
@@ -602,51 +602,109 @@ function Home() {
   );
 }
 
+// Shared between the desktop pill row and the mobile bottom nav — icon
+// only matters below md, label only matters above it, but keeping one list
+// means the two navs can never drift out of sync with each other.
+const NAV_TABS = [
+  { to: "/", label: "Профиль", icon: HomeIcon },
+  { to: "/nutrition", label: "Питание", icon: Utensils },
+  { to: "/body", label: "Тело", icon: Activity },
+  { to: "/friends", label: "Друзья", icon: Users },
+  { to: "/achievements", label: "Достижения", icon: Trophy },
+] as const;
+
 export function TabNav({ pathname }: { pathname: string }) {
-  const tabs = [
-    { to: "/", label: "Профиль" },
-    { to: "/nutrition", label: "Питание" },
-    { to: "/body", label: "Тело" },
-    { to: "/friends", label: "Друзья" },
-    { to: "/achievements", label: "Достижения" },
-  ] as const;
   return (
-    <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6">
-      <div className="min-w-0 flex-1 overflow-x-auto">
-        <div className="inline-flex w-max rounded-full border border-border bg-secondary p-1">
-          {tabs.map((t) => {
-            const active = pathname === t.to;
-            return (
-              <Link
-                key={t.to}
-                to={t.to}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
+    <>
+      <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6">
+        {/* Desktop/tablet: horizontal pill tabs, unchanged. Hidden below md
+            — the fixed BottomNav takes over navigation on narrow screens
+            instead (see below). */}
+        <div className="hidden min-w-0 flex-1 overflow-x-auto md:block">
+          <div className="inline-flex w-max rounded-full border border-border bg-secondary p-1">
+            {NAV_TABS.map((t) => {
+              const active = pathname === t.to;
+              return (
+                <Link
+                  key={t.to}
+                  to={t.to}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        {/* Mobile: the pill row above is hidden, so this label fills its
+            place — otherwise the header would be just Settings/theme
+            icons floating on the right with nothing on the left. */}
+        <div className="min-w-0 flex-1 text-sm font-medium text-primary md:hidden">Life RPG</div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/settings"
+            aria-label="Настройки"
+            title="Настройки"
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition-all hover:scale-110 ${
+              pathname === "/settings"
+                ? "border-primary text-primary"
+                : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+            }`}
+          >
+            <Settings size={15} />
+          </Link>
+          <ThemeToggle />
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Link
-          to="/settings"
-          aria-label="Настройки"
-          title="Настройки"
-          className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition-all hover:scale-110 ${
-            pathname === "/settings"
-              ? "border-primary text-primary"
-              : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-          }`}
-        >
-          <Settings size={15} />
-        </Link>
-        <ThemeToggle />
+
+      <BottomNav pathname={pathname} />
+    </>
+  );
+}
+
+/**
+ * Fixed bottom tab bar, mobile-only (hidden at md and above — the pill row
+ * in TabNav takes over there instead). Standard mobile-app pattern: icon +
+ * label per section, active section highlighted.
+ *
+ * Doesn't fight with other bottom-anchored UI:
+ * - Every page wrapper's `pb-28 md:pb-24` (see routes/*.tsx) already
+ *   reserves room below the content so this bar never overlaps it.
+ * - Full-screen modals (AddQuestModal, FriendProfileModal, etc.) use
+ *   z-[200], well above this bar's z-40, so they cover it completely
+ *   while open rather than clipping behind it.
+ * - UndoToast sits higher on mobile specifically (bottom-20 md:bottom-4)
+ *   so its "Отменить" toast floats above this bar instead of behind it.
+ */
+function BottomNav({ pathname }: { pathname: string }) {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-sm md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="mx-auto flex max-w-4xl items-stretch justify-around">
+        {NAV_TABS.map((t) => {
+          const active = pathname === t.to;
+          const Icon = t.icon;
+          return (
+            <Link
+              key={t.to}
+              to={t.to}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+              <span>{t.label}</span>
+            </Link>
+          );
+        })}
       </div>
-    </div>
+    </nav>
   );
 }

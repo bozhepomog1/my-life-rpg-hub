@@ -82,6 +82,13 @@ export function ShareCardModal({ state, onClose }: Props) {
 
     const font = (size: number, weight = "600") =>
       `${weight} ${size}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
+    // Avatar glyph specifically needs an emoji-first stack — Inter's font
+    // file contains blank placeholder glyphs for some emoji codepoints, so
+    // per-character canvas font fallback never reaches the real color-emoji
+    // font if Inter is listed first (same root cause as the CSS ".emoji"
+    // class in styles.css, just for canvas text instead of DOM text).
+    const emojiFont = (size: number) =>
+      `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif`;
 
     // Background
     const grad = ctx.createLinearGradient(0, 0, 0, SIZE);
@@ -109,7 +116,7 @@ export function ShareCardModal({ state, onClose }: Props) {
     ctx.beginPath();
     ctx.arc(SIZE / 2, 265, 90, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = font(104, "400");
+    ctx.font = emojiFont(104);
     ctx.textBaseline = "middle";
     ctx.fillText(state.avatar, SIZE / 2, 272);
     ctx.textBaseline = "alphabetic";

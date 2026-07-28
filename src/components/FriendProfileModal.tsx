@@ -75,7 +75,7 @@ export function FriendProfileModal({ profile, onClose }: Props) {
         aria-label={`Профиль: ${profile.username ?? "Без имени"}`}
       >
         <div className="flex items-center gap-3">
-          <span className="text-4xl">{profile.avatar ?? "🙂"}</span>
+          <span className="emoji text-4xl">{profile.avatar ?? "🙂"}</span>
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-lg font-semibold">{profile.username ?? "Без имени"}</h3>
             <p className="text-xs text-muted-foreground">

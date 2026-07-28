@@ -124,7 +124,7 @@ export function ProfileHeader({
           <div className="relative shrink-0">
             <button
               onClick={() => setPickerOpen((v) => !v)}
-              className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
+              className="emoji grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-secondary text-4xl transition-transform hover:scale-105 sm:h-20 sm:w-20 sm:text-5xl"
               title={avatarPhotoUrl ? "Сменить эмодзи-аватар" : "Сменить аватар"}
             >
               {avatarPhotoUrl ? (
@@ -252,7 +252,7 @@ export function ProfileHeader({
                 onChangeAvatar(a);
                 setPickerOpen(false);
               }}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-secondary text-2xl transition-transform hover:scale-110 hover:border-primary"
+              className="emoji grid h-11 w-11 place-items-center rounded-xl border border-border bg-secondary text-2xl transition-transform hover:scale-110 hover:border-primary"
             >
               {a}
             </button>

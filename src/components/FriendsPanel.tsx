@@ -164,7 +164,7 @@ export function FriendsPanel({ state, update }: Props) {
         )}
         {search.kind === "found" && (
           <div className="mt-3 flex items-center gap-3 rounded-lg bg-secondary px-3 py-2">
-            <span className="text-2xl">{search.profile.avatar ?? "🙂"}</span>
+            <span className="emoji text-2xl">{search.profile.avatar ?? "🙂"}</span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">
                 {search.profile.username ?? "Без имени"}
@@ -193,7 +193,7 @@ export function FriendsPanel({ state, update }: Props) {
               const p = profiles[r.from_user];
               return (
                 <li key={r.id} className="flex items-center gap-3">
-                  <span className="text-2xl">{p?.avatar ?? "🙂"}</span>
+                  <span className="emoji text-2xl">{p?.avatar ?? "🙂"}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
                       {p?.username ?? "Пользователь"}
@@ -232,7 +232,7 @@ export function FriendsPanel({ state, update }: Props) {
               const p = profiles[r.to_user];
               return (
                 <li key={r.id} className="flex items-center gap-3">
-                  <span className="text-2xl">{p?.avatar ?? "🙂"}</span>
+                  <span className="emoji text-2xl">{p?.avatar ?? "🙂"}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
                       {p?.username ?? "Пользователь"}
@@ -308,7 +308,7 @@ function LeaderboardRow({
       <span className="w-7 shrink-0 text-center text-sm font-semibold text-muted-foreground">
         {rank <= 3 ? MEDAL[rank - 1] : rank}
       </span>
-      <span className="text-2xl">{profile.avatar ?? "🙂"}</span>
+      <span className="emoji text-2xl">{profile.avatar ?? "🙂"}</span>
       <div className="min-w-0 flex-1">
         {onOpen ? (
           <button

@@ -20,7 +20,7 @@ function BodyPage() {
   if (!hydrated) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-3 pb-24 pt-4 sm:px-4 sm:pt-8">
+    <div className="mx-auto max-w-4xl px-3 pb-28 pt-4 sm:px-4 sm:pt-8 md:pb-24">
       <TabNav pathname={pathname} />
       <BodyPanel state={state} update={update} />
     </div>

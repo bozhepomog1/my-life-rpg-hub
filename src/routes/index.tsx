@@ -20,6 +20,7 @@ import { BossQuestCard } from "@/components/BossQuestCard";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
+import { WeeklyReportModal } from "@/components/WeeklyReportModal";
 import { StreakBanner } from "@/components/StreakBanner";
 import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
@@ -34,10 +35,10 @@ import {
   createQuestFromIdea,
   effectiveQuest,
   ensureBonusQuests,
-  ensureBossQuest,
   ensureDailyMandatoryCount,
   ensureDailyQuestsReset,
   ensureSeason,
+  ensureWeekRollover,
   isQuestPostponedOn,
   isWorkDay,
   canPostponeQuest,
@@ -45,7 +46,7 @@ import {
   postponeQuest,
   POSTPONE_PRICE_GOLD,
   QUEST_IDEA_POOL,
-  registerBossActivity,
+  registerQuestActivity,
   sortByStatOrder,
   sortQuestsForDisplay,
   STARTER_QUEST_IDEAS,
@@ -153,7 +154,7 @@ function Home() {
     if (!pendingUndo) return;
     const { questId, source, stat, category, reward, dailyKey } = pendingUndo;
     update((s) => {
-      let next = registerBossActivity(undoReward(s, stat, reward), stat, category, -1);
+      let next = registerQuestActivity(undoReward(s, stat, reward), stat, category, reward, -1);
       if (source === "quests") {
         next = {
           ...next,
@@ -189,7 +190,7 @@ function Home() {
     const run = () =>
       update((s) =>
         checkBossQuestCompletion(
-          ensureBossQuest(
+          ensureWeekRollover(
             ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
           ),
         ),
@@ -255,10 +256,11 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = registerBossActivity(
+      const rewarded = registerQuestActivity(
         applyReward(s, quest.stat, quest.reward),
         quest.stat,
         quest.category,
+        quest.reward,
         1,
       );
       if (rewarded.level > prev) {
@@ -334,10 +336,11 @@ function Home() {
 
     update((s) => {
       const prev = s.level;
-      const rewarded = registerBossActivity(
+      const rewarded = registerQuestActivity(
         applyReward(s, quest.stat, quest.reward),
         quest.stat,
         quest.category,
+        quest.reward,
         1,
       );
       if (rewarded.level > prev) {
@@ -710,6 +713,14 @@ function Home() {
         <SeasonSummaryModal
           summary={state.lastSeasonSummary}
           onContinue={() => update((s) => ({ ...s, seasonSummarySeen: true }))}
+        />
+      )}
+
+      {!state.weeklyReportSeen && state.weeklyReports[0] && (
+        <WeeklyReportModal
+          report={state.weeklyReports[0]}
+          previous={state.weeklyReports[1] ?? null}
+          onContinue={() => update((s) => ({ ...s, weeklyReportSeen: true }))}
         />
       )}
 

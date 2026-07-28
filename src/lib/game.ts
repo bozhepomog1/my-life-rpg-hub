@@ -27,7 +27,7 @@ export type BossQuestKind =
   | "perfect_week"; // every day this week fully completed, no gaps
 
 /** Incremental counters for the current boss quest, kept in sync via
- * registerBossActivity() on every quest completion/undo (see index.tsx).
+ * registerQuestActivity() on every quest completion/undo (see index.tsx).
  * Reset to all-zero whenever a fresh BossQuest is generated. Streak-based
  * kinds (streak_hold/combo/perfect_week) don't use this — they read
  * computeStreak()/isDayFullyDone() live instead, since "current streak" is
@@ -41,7 +41,7 @@ export interface BossQuestProgress {
 /** Weekly composite challenge — one of 6 templates (BossQuestKind), chosen
  * randomly each Monday for variety. Counts ANY completed quest
  * (daily/story/purchase/bonus) matching the relevant dimension. Expires
- * without penalty at the next Monday reset — see ensureBossQuest. */
+ * without penalty at the next Monday reset — see ensureWeekRollover. */
 export interface BossQuest {
   weekKey: string; // Monday's date key — identifies which week this belongs to
   weekStartMs: number; // that Monday at local midnight, as a timestamp
@@ -86,6 +86,39 @@ export interface BossWinRecord {
 // can never be bought with gold, only earned here.
 export const BOSS_EXCLUSIVE_FRAME_ID = "boss_victor";
 export const BOSS_EXCLUSIVE_TITLE_ID = "boss_slayer";
+
+// ── Weekly report ("Итоги недели") ──
+
+/** Live accumulator for the CURRENT week, reset on rollover — see
+ * ensureWeekRollover/registerQuestActivity below. Tracked independently of
+ * the boss quest (which may not even cover all categories) so "Итоги
+ * недели" always has real numbers regardless of which boss template is
+ * active. `perDay` powers the "best day of the week" stat. */
+export interface WeekStats {
+  weekKey: string;
+  byCategory: Record<QuestCategory, number>;
+  totalQuests: number;
+  goldEarned: number;
+  xpEarned: number;
+  perDay: Record<string, number>;
+}
+
+/** One permanent snapshot of a completed week, shown by the "Итоги недели"
+ * screen and browsable from Достижения. Generated once, at the moment the
+ * NEXT week's rollover is detected (see ensureWeekRollover) — from that
+ * point on it never changes. */
+export interface WeeklyReport {
+  weekKey: string;
+  weekNumber: number;
+  generatedAt: number;
+  byCategory: Record<QuestCategory, number>;
+  totalQuests: number;
+  goldEarned: number;
+  xpEarned: number;
+  bossQuestWon: boolean;
+  bossQuestTitle: string | null;
+  bestDay: { dateKey: string; count: number } | null;
+}
 
 export interface ChecklistItem {
   id: string;
@@ -413,12 +446,21 @@ export interface GameState {
   // Shop "extra cheat meal" purchases, keyed by month (YYYY-MM) — adds to
   // the free monthly limit in nutrition.ts.
   cheatMealBonus: Record<string, number>;
-  // Weekly boss quest (see generateBossQuest/ensureBossQuest below). Null
+  // Weekly boss quest (see generateBossQuest/ensureWeekRollover below). Null
   // only very briefly before the periodic effect first runs.
   bossQuest: BossQuest | null;
   // Permanent history of won boss quests, newest first — see
   // checkBossQuestCompletion(). Surfaced in achievements.tsx's Hall of Fame.
   bossWins: BossWinRecord[];
+  // Live accumulator for the current week — see WeekStats/ensureWeekRollover.
+  weekStats: WeekStats;
+  // Permanent history of past weeks' reports, newest first — see
+  // WeeklyReport/ensureWeekRollover. Browsable from Достижения.
+  weeklyReports: WeeklyReport[];
+  // False right after a new WeeklyReport is generated (triggers the
+  // full-screen "Итоги недели" summary, same pattern as
+  // lastSeasonSummary/seasonSummarySeen), true once dismissed.
+  weeklyReportSeen: boolean;
   // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
   // skipped. Only ever false for a genuinely brand-new account: see the
   // explicit `?? true` patches in loadState() and use-game-state.ts, which
@@ -973,6 +1015,9 @@ export function defaultState(): GameState {
     cheatMealBonus: {},
     bossQuest: null,
     bossWins: [],
+    weekStats: emptyWeekStats(currentBossWeekKey()),
+    weeklyReports: [],
+    weeklyReportSeen: true,
     statQuizDone: false,
   };
   return base;
@@ -1018,6 +1063,17 @@ export function loadState(userId?: string): GameState | null {
       manualDayOverrides: parsed.manualDayOverrides || {},
       dailyOnboardingDismissed: parsed.dailyOnboardingDismissed ?? false,
       bossWins: parsed.bossWins || [],
+      // A weekStats missing its own weekKey (or missing entirely, on a save
+      // that predates this feature) just starts fresh on the current week —
+      // there's no way to retroactively reconstruct a week already in
+      // progress, and starting fresh loses at most the numbers for however
+      // much of the current week already happened, not any past report.
+      weekStats:
+        parsed.weekStats && parsed.weekStats.weekKey
+          ? parsed.weekStats
+          : emptyWeekStats(currentBossWeekKey()),
+      weeklyReports: parsed.weeklyReports || [],
+      weeklyReportSeen: parsed.weeklyReportSeen ?? true,
       // Any save that already exists locally predates or postdates the quiz
       // feature either way — if the field's simply missing, this is an
       // established local cache, not a fresh account, so treat it as done
@@ -2030,17 +2086,88 @@ export function generateBossQuest(weekKey: string, weekStartMs: number): BossQue
   }
 }
 
-/** Generates a fresh boss quest for the current week if none exists yet, the
- * stored one belongs to a past week, or it predates this kind-based redesign
- * (missing `kind` — old-shape saves just get a one-time silent regeneration,
- * forfeiting that week's old-style progress). The old one just disappears
- * with no penalty for not finishing it, per spec. Cheap no-op otherwise, safe
- * to call on every tick of the periodic effect in index.tsx. */
-export function ensureBossQuest(state: GameState): GameState {
+function dateKeyToLocalMs(dateKey: string): number {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+
+export function emptyWeekStats(weekKey: string): WeekStats {
+  return {
+    weekKey,
+    byCategory: { daily: 0, story: 0, purchase: 0 },
+    totalQuests: 0,
+    goldEarned: 0,
+    xpEarned: 0,
+    perDay: {},
+  };
+}
+
+function snapshotWeeklyReport(
+  stats: WeekStats,
+  weekStartMs: number,
+  bossQuest: BossQuest | null,
+): WeeklyReport {
+  let bestDay: { dateKey: string; count: number } | null = null;
+  for (const [dateKey, count] of Object.entries(stats.perDay)) {
+    if (count > 0 && (!bestDay || count > bestDay.count)) bestDay = { dateKey, count };
+  }
+  // Only credit the boss quest to this report if it actually belonged to the
+  // week being snapshotted — ensureWeekRollover always calls this BEFORE
+  // replacing bossQuest, so this is the outgoing week's boss quest.
+  const bossForWeek = bossQuest && bossQuest.weekKey === stats.weekKey ? bossQuest : null;
+  return {
+    weekKey: stats.weekKey,
+    weekNumber: isoWeekNumber(new Date(weekStartMs)),
+    generatedAt: Date.now(),
+    byCategory: stats.byCategory,
+    totalQuests: stats.totalQuests,
+    goldEarned: stats.goldEarned,
+    xpEarned: stats.xpEarned,
+    bossQuestWon: !!bossForWeek?.claimed,
+    bossQuestTitle: bossForWeek?.title ?? null,
+    bestDay,
+  };
+}
+
+/** Cap on stored WeeklyReports — plenty for browsing history without the
+ * save growing unbounded forever. */
+const MAX_WEEKLY_REPORTS = 52;
+
+/**
+ * Advances both the weekly boss quest AND the weekly report system together
+ * — they roll over on the exact same boundary, so one function keeps that in
+ * sync in one place. On a genuine week change: snapshots the just-ended
+ * week's WeekStats (+ its boss quest's outcome) into a permanent
+ * WeeklyReport, flips weeklyReportSeen so the "Итоги недели" screen shows
+ * once, resets WeekStats for the new week, and generates a fresh boss quest
+ * (also regenerating if the stored one predates the kind-based redesign —
+ * see generateBossQuest). No penalty either way, per spec. Cheap no-op
+ * otherwise — safe to call on every tick of the periodic effect in
+ * index.tsx.
+ */
+export function ensureWeekRollover(state: GameState): GameState {
   const weekKey = currentBossWeekKey();
-  if (state.bossQuest && state.bossQuest.weekKey === weekKey && state.bossQuest.kind) return state;
+  const bossOk = !!(state.bossQuest && state.bossQuest.weekKey === weekKey && state.bossQuest.kind);
+  const statsOk = state.weekStats.weekKey === weekKey;
+  if (bossOk && statsOk) return state;
+
   const weekStartMs = mondayOf(new Date()).getTime();
-  return { ...state, bossQuest: generateBossQuest(weekKey, weekStartMs) };
+  let next = state;
+
+  if (!statsOk) {
+    const prevWeekStartMs = dateKeyToLocalMs(state.weekStats.weekKey);
+    const report = snapshotWeeklyReport(state.weekStats, prevWeekStartMs, state.bossQuest);
+    next = {
+      ...next,
+      weeklyReports: [report, ...next.weeklyReports].slice(0, MAX_WEEKLY_REPORTS),
+      weeklyReportSeen: false,
+      weekStats: emptyWeekStats(weekKey),
+    };
+  }
+  if (!bossOk) {
+    next = { ...next, bossQuest: generateBossQuest(weekKey, weekStartMs) };
+  }
+  return next;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -2062,7 +2189,7 @@ function daysThisWeekSoFar(weekStartMs: number): string[] {
  * quest — computed fresh from durable state each time rather than requiring
  * incremental tracking for every dimension. stat_pair/quest_count/
  * category_focus read the incremental `progress` bucket (kept in sync by
- * registerBossActivity, since a quest's stat/category can't always be
+ * registerQuestActivity, since a quest's stat/category can't always be
  * recovered after the fact); streak_hold/combo/perfect_week read
  * computeStreak()/isDayFullyDone() directly, since "current streak" is
  * already a live concept. */
@@ -2134,30 +2261,54 @@ export function computeBossQuestStatus(state: GameState, bq: BossQuest): BossQue
 }
 
 /**
- * Keeps the current boss quest's incremental progress bucket in sync with
- * quest completions (delta +1) and undos (delta -1) — see
- * BossQuestProgress. Doesn't grant anything itself; completion is checked
- * separately by checkBossQuestCompletion (called from the periodic effect in
- * index.tsx), since streak-based kinds can become complete without any
- * quest-completion event at all (a day just ticking over).
+ * Keeps BOTH the current boss quest's incremental progress bucket AND the
+ * current week's WeekStats accumulator in sync with quest completions
+ * (delta +1) and undos (delta -1). The two are tracked independently since
+ * WeekStats needs real numbers even in weeks whose boss template doesn't
+ * touch every category (e.g. a streak_hold week shouldn't leave "Итоги
+ * недели" showing 0 quests completed). Doesn't grant the boss reward itself
+ * — completion is checked separately by checkBossQuestCompletion, since
+ * streak-based kinds can become complete without any quest-completion event
+ * at all (a day just ticking over).
  */
-export function registerBossActivity(
+export function registerQuestActivity(
   state: GameState,
   stat: StatKey,
   category: QuestCategory,
+  reward: number,
   delta: number,
 ): GameState {
-  if (!state.bossQuest || state.bossQuest.claimed) return state;
-  const bq = state.bossQuest;
-  const progress: BossQuestProgress = {
-    byStat: { ...bq.progress.byStat, [stat]: Math.max(0, (bq.progress.byStat[stat] ?? 0) + delta) },
+  let next = state;
+  if (next.bossQuest && !next.bossQuest.claimed) {
+    const bq = next.bossQuest;
+    const progress: BossQuestProgress = {
+      byStat: {
+        ...bq.progress.byStat,
+        [stat]: Math.max(0, (bq.progress.byStat[stat] ?? 0) + delta),
+      },
+      byCategory: {
+        ...bq.progress.byCategory,
+        [category]: Math.max(0, (bq.progress.byCategory[category] ?? 0) + delta),
+      },
+      total: Math.max(0, bq.progress.total + delta),
+    };
+    next = { ...next, bossQuest: { ...bq, progress } };
+  }
+
+  const ws = next.weekStats;
+  const today = todayKey();
+  const weekStats: WeekStats = {
+    ...ws,
     byCategory: {
-      ...bq.progress.byCategory,
-      [category]: Math.max(0, (bq.progress.byCategory[category] ?? 0) + delta),
+      ...ws.byCategory,
+      [category]: Math.max(0, (ws.byCategory[category] ?? 0) + delta),
     },
-    total: Math.max(0, bq.progress.total + delta),
+    totalQuests: Math.max(0, ws.totalQuests + delta),
+    goldEarned: Math.max(0, ws.goldEarned + delta * goldForReward(reward)),
+    xpEarned: Math.max(0, ws.xpEarned + delta * reward),
+    perDay: { ...ws.perDay, [today]: Math.max(0, (ws.perDay[today] ?? 0) + delta) },
   };
-  return { ...state, bossQuest: { ...bq, progress } };
+  return { ...next, weekStats };
 }
 
 /**
@@ -2167,7 +2318,7 @@ export function registerBossActivity(
  * BOSS_EXCLUSIVE_FRAME_ID/BOSS_EXCLUSIVE_TITLE_ID), and logs a permanent
  * Hall of Fame entry (every win, not just the first). Marks `claimed` so it
  * can never grant twice. Safe to call on every tick of the periodic effect
- * in index.tsx, same as ensureBossQuest.
+ * in index.tsx, same as ensureWeekRollover.
  */
 export function checkBossQuestCompletion(state: GameState): GameState {
   const bq = state.bossQuest;

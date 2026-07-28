@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
@@ -15,6 +16,7 @@ import {
 import { TabNav } from "./index";
 import { ProgressBar } from "@/components/ProgressBar";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { WeeklyReportModal } from "@/components/WeeklyReportModal";
 
 export const Route = createFileRoute("/achievements")({
   head: () => ({
@@ -29,6 +31,7 @@ export const Route = createFileRoute("/achievements")({
 function Achievements() {
   const { state, setState, hydrated } = useGameStateContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [selectedReportIndex, setSelectedReportIndex] = useState<number | null>(null);
 
   if (!hydrated) return <LoadingScreen />;
 
@@ -239,6 +242,40 @@ function Achievements() {
         </section>
 
         <section className="panel p-6">
+          <h2 className="mb-1 text-sm font-semibold">📊 История недель</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Прошлые отчёты "Итоги недели" — нажми, чтобы открыть подробности.
+          </p>
+          {state.weeklyReports.length === 0 ? (
+            <div className="py-6 text-center">
+              <div className="text-3xl">📊</div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Пока пусто — первый отчёт появится в конце текущей недели.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {state.weeklyReports.map((r, i) => (
+                <button
+                  key={r.weekKey}
+                  type="button"
+                  onClick={() => setSelectedReportIndex(i)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-secondary"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">Неделя №{r.weekNumber}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {r.totalQuests} квестов · +{r.xpEarned} XP · 💰{r.goldEarned}
+                      {r.bossQuestTitle && (r.bossQuestWon ? " · 🐉 пройден" : " · 🐉 не пройден")}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel p-6">
           <h2 className="mb-4 text-sm font-semibold">История квестов</h2>
           {completed.length === 0 ? (
             <div className="py-6 text-center">
@@ -284,6 +321,14 @@ function Achievements() {
           </button>
         </div>
       </div>
+
+      {selectedReportIndex != null && state.weeklyReports[selectedReportIndex] && (
+        <WeeklyReportModal
+          report={state.weeklyReports[selectedReportIndex]}
+          previous={state.weeklyReports[selectedReportIndex + 1] ?? null}
+          onContinue={() => setSelectedReportIndex(null)}
+        />
+      )}
     </div>
   );
 }

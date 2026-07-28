@@ -7,7 +7,7 @@ interface Props {
 }
 
 /** Weekly composite challenge — see BossQuest/generateBossQuest in game.ts.
- * Null only very briefly before the periodic ensureBossQuest() effect first
+ * Null only very briefly before the periodic ensureWeekRollover() effect first
  * runs, so this just renders nothing in that split second rather than a
  * loading state. Progress bars are generic (computeBossQuestStatus) so this
  * renders any of the 6 challenge templates without needing to know which. */

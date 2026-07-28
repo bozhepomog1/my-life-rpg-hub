@@ -20,13 +20,16 @@ import {
   computeDiscipline,
   computeStreak,
   createQuest,
+  createQuestFromIdea,
   effectiveQuest,
   ensureBonusQuests,
-  ensureDailyRotation,
+  ensureDailyMandatoryCount,
+  ensureDailyQuestsReset,
   ensureSeason,
   isWorkDay,
   sortByStatOrder,
   sortQuestsForDisplay,
+  STARTER_QUEST_IDEAS,
   STAT_META,
   STAT_ORDER,
   STREAK_MILESTONES,
@@ -34,10 +37,30 @@ import {
   undoReward,
   type Quest,
   type QuestCategory,
+  type QuestIdeaTemplate,
   type StatKey,
 } from "@/lib/game";
+import { DailyOnboardingPrompt } from "@/components/DailyOnboardingPrompt";
 
 const UNDO_WINDOW_MS = 10_000;
+
+/** "+ Добавить ..." button label, per quest category — all three tabs are
+ * user-populated now (see game.ts), so each needs its own copy. */
+const ADD_QUEST_LABEL: Record<QuestCategory, string> = {
+  daily: "Добавить ежедневный квест",
+  story: "Добавить цель",
+  purchase: "Добавить крупную цель",
+};
+
+/** Empty-state prompt copy, per quest category. Daily's empty state is
+ * normally pre-empted by DailyOnboardingPrompt (see showDailyOnboarding) for
+ * a brand-new account — this copy only shows once that's been dismissed and
+ * the user has since deleted every daily quest. */
+const EMPTY_STATE_COPY: Record<QuestCategory, string> = {
+  daily: "У тебя пока нет ежедневных квестов — добавь свой первый!",
+  story: "У тебя пока нет сюжетных целей — добавь первую!",
+  purchase: "У тебя пока нет крупных целей — добавь первую!",
+};
 
 interface PendingUndo {
   id: number;
@@ -130,11 +153,16 @@ function Home() {
     setPendingUndo(null);
   }
 
-  // Draw today's daily-quest rotation, keep today's bonus quest set current,
+  // Reset any daily quest completed on a previous day back to not-done,
+  // record today's mandatory daily-quest count (for the discipline
+  // calendar's historical accounting), keep today's bonus quest set current,
   // and roll the season over once its 30 days are up.
   useEffect(() => {
     if (!hydrated) return;
-    const run = () => update((s) => ensureSeason(ensureBonusQuests(ensureDailyRotation(s))));
+    const run = () =>
+      update((s) =>
+        ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+      );
     run();
     const t = setInterval(run, 60_000);
     return () => clearInterval(t);
@@ -327,6 +355,21 @@ function Home() {
     update((s) => ({ ...s, quests: [...s.quests, createQuest(input)] }));
   }
 
+  // Turns one or more QUEST_IDEA_POOL entries into real quests the user now
+  // owns — used by both the one-time daily-suggestion prompt (category
+  // "daily") and the "Сюжетные" idea catalog's per-item "Добавить" button
+  // (category "story").
+  function addQuestsFromIdeas(templates: QuestIdeaTemplate[], category: "daily" | "story") {
+    update((s) => ({
+      ...s,
+      quests: [...s.quests, ...templates.map((t) => createQuestFromIdea(t, category))],
+    }));
+  }
+
+  function dismissDailyOnboarding() {
+    update((s) => ({ ...s, dailyOnboardingDismissed: true }));
+  }
+
   if (!hydrated) return null;
 
   const isWork = isWorkDay(state.schedule);
@@ -337,15 +380,22 @@ function Home() {
   // Grouped by characteristic in the app-wide fixed order (Сила → Интеллект
   // → Воля → Харизма) rather than creation/rotation order, so quests of the
   // same stat sit together instead of appearing in a random jumble. Pinned
-  // quests (story/purchase only — see canAddQuest below) float to the top
+  // quests (story/purchase only — see canPinQuest below) float to the top
   // of each list first.
   const active = sortQuestsForDisplay(questsByCat.filter((q) => !q.done));
   const done = sortQuestsForDisplay(questsByCat.filter((q) => q.done));
   const lost = disc?.lost;
-  // Story/purchase are user-populated one-off goals (no seeded pool, see
-  // game.ts) — daily quests come from the auto-rotated pool instead, so
-  // there's no "add your own" affordance for that tab.
-  const canAddQuest = tab === "story" || tab === "purchase";
+  // All three categories are user-populated now (see game.ts — daily quests
+  // are no longer an auto-rotated pool), so every tab gets the "add your
+  // own" affordance. Pinning stays story/purchase-only (see canPinQuest) —
+  // daily is a flat personal checklist rather than a mixed list of one-off
+  // goals a user might want to single one out of.
+  const canAddQuest = true;
+  const canPinQuest = tab === "story" || tab === "purchase";
+  const showDailyOnboarding =
+    tab === "daily" &&
+    !state.dailyOnboardingDismissed &&
+    state.quests.every((q) => q.category !== "daily");
 
   const dailyQuests = state.quests.filter((q) => q.category === "daily");
   const noActiveDailies = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
@@ -413,39 +463,39 @@ function Home() {
             })}
           </div>
 
-          {canAddQuest && (
+          {canAddQuest && !showDailyOnboarding && (
             <button
               type="button"
               onClick={() => setAddQuestOpen(true)}
               className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
             >
               <Plus size={15} />
-              {tab === "story" ? "Добавить цель" : "Добавить крупную цель"}
+              {ADD_QUEST_LABEL[tab]}
             </button>
           )}
 
           <div className="space-y-3">
-            {active.length === 0 && done.length === 0 && canAddQuest && (
+            {showDailyOnboarding && (
+              <DailyOnboardingPrompt
+                ideas={STARTER_QUEST_IDEAS}
+                onAdd={(templates) => {
+                  addQuestsFromIdeas(templates, "daily");
+                  dismissDailyOnboarding();
+                }}
+                onSkip={dismissDailyOnboarding}
+              />
+            )}
+            {!showDailyOnboarding && active.length === 0 && done.length === 0 && (
               <div className="panel p-8 text-center">
                 <div className="text-3xl">{CATEGORY_META[tab].icon}</div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  У тебя пока нет крупных целей — добавь первую!
-                </p>
+                <p className="mt-2 text-sm text-muted-foreground">{EMPTY_STATE_COPY[tab]}</p>
                 <button
                   type="button"
                   onClick={() => setAddQuestOpen(true)}
                   className="btn-accent-hover mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
                 >
-                  + Добавить первую цель
+                  + Добавить
                 </button>
-              </div>
-            )}
-            {active.length === 0 && done.length === 0 && !canAddQuest && (
-              <div className="panel p-8 text-center">
-                <div className="text-3xl">{CATEGORY_META[tab].icon}</div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Пока нет квестов в этой категории — начни свой первый!
-                </p>
               </div>
             )}
             {active.length === 0 && done.length > 0 && (
@@ -462,7 +512,7 @@ function Home() {
                 onToggleChecklist={togglChecklist}
                 onDelete={deleteQuest}
                 onPhoto={setPhoto}
-                onTogglePin={canAddQuest ? togglePinQuest : undefined}
+                onTogglePin={canPinQuest ? togglePinQuest : undefined}
               />
             ))}
           </div>
@@ -482,7 +532,7 @@ function Home() {
                     onToggleChecklist={togglChecklist}
                     onDelete={deleteQuest}
                     onPhoto={setPhoto}
-                    onTogglePin={canAddQuest ? togglePinQuest : undefined}
+                    onTogglePin={canPinQuest ? togglePinQuest : undefined}
                   />
                 ))}
               </div>
@@ -593,7 +643,7 @@ function Home() {
 
       {addQuestOpen && canAddQuest && (
         <AddQuestModal
-          category={tab === "story" ? "story" : "purchase"}
+          category={tab}
           onClose={() => setAddQuestOpen(false)}
           onCreate={addCustomQuest}
         />

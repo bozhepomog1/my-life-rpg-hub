@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { STAT_META, STAT_ORDER, type StatKey } from "@/lib/game";
+import { STAT_META, STAT_ORDER, type QuestCategory, type StatKey } from "@/lib/game";
 
 type ProofType = "none" | "photo" | "text";
 
 interface Props {
-  category: "story" | "purchase";
+  category: QuestCategory;
   onClose: () => void;
   onCreate: (input: {
     title: string;
     stat: StatKey;
     reward: number;
-    category: "story" | "purchase";
+    category: QuestCategory;
     requiresPhoto?: boolean;
     requiresText?: boolean;
   }) => void;
@@ -21,6 +21,18 @@ const PROOF_OPTIONS: { key: ProofType; label: string }[] = [
   { key: "photo", label: "Фото" },
   { key: "text", label: "Текст" },
 ];
+
+const MODAL_TITLE: Record<QuestCategory, string> = {
+  daily: "Новый ежедневный квест",
+  story: "Новая крупная цель",
+  purchase: "Новая крупная личная цель",
+};
+
+const TITLE_PLACEHOLDER: Record<QuestCategory, string> = {
+  daily: "Например: Читать 20 страниц перед сном",
+  story: "Например: Пробежать 5 км без остановки",
+  purchase: "Например: Найти новый рюкзак",
+};
 
 export function AddQuestModal({ category, onClose, onCreate }: Props) {
   const [title, setTitle] = useState("");
@@ -53,11 +65,9 @@ export function AddQuestModal({ category, onClose, onCreate }: Props) {
         className="panel-glow w-full max-w-sm p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label={category === "story" ? "Новая сюжетная цель" : "Новая крупная цель"}
+        aria-label={MODAL_TITLE[category]}
       >
-        <h3 className="text-lg font-semibold">
-          {category === "story" ? "Новая крупная цель" : "Новая крупная личная цель"}
-        </h3>
+        <h3 className="text-lg font-semibold">{MODAL_TITLE[category]}</h3>
 
         <div className="mt-4">
           <label className="text-xs text-muted-foreground">Название</label>
@@ -66,11 +76,7 @@ export function AddQuestModal({ category, onClose, onCreate }: Props) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder={
-              category === "story"
-                ? "Например: Пробежать 5 км без остановки"
-                : "Например: Найти новый рюкзак"
-            }
+            placeholder={TITLE_PLACEHOLDER[category]}
             className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
           />
         </div>
@@ -100,6 +106,13 @@ export function AddQuestModal({ category, onClose, onCreate }: Props) {
             })}
           </div>
         </div>
+
+        {category === "daily" && (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Ежедневный квест сбрасывается каждую полночь и учитывается в календаре дисциплины —
+            выполняй его каждый день, чтобы не потерять залог.
+          </p>
+        )}
 
         <div className="mt-3">
           <label className="text-xs text-muted-foreground">Награда (XP)</label>

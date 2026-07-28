@@ -55,8 +55,9 @@ export interface Quest {
   // User-pinned "important" quest (story/purchase — the user's own
   // one-off goals). Pinned quests float to the top of their category's
   // list — see sortQuestsForDisplay() — and get a visual highlight in
-  // QuestCard. Not offered for daily quests, which already rotate fresh
-  // every day and aren't something a user curates by hand.
+  // QuestCard. Not offered for daily quests — those are a flat personal
+  // checklist rather than a mixed list of one-off goals, so there's less
+  // need to single one out above the rest.
   pinned?: boolean;
 }
 
@@ -251,16 +252,15 @@ export interface GameState {
   // Today's randomly-drawn bonus quests (shown once no daily quests remain).
   bonusQuests: Quest[];
   bonusQuestsDate?: string;
-  // Date the current daily-quest rotation (see DAILY_QUEST_POOL) was drawn
-  // for. When this isn't today, ensureDailyRotation() swaps in a fresh
-  // random subset from the pool.
-  dailyQuestsDate?: string;
-  // How many mandatory daily quests were assigned on a given date — needed
-  // because rotated daily quests get fresh ids every day, so past days'
-  // dailyCompletions can no longer be matched by id against "today's"
-  // mandatory quest ids the way the original fixed quest list allowed.
-  // Comparing counts instead of ids keeps the discipline calendar/streak
-  // correct across rotations. Dates from before this feature existed simply
+  // How many mandatory daily quests were assigned on a given PAST date —
+  // needed because a user can freely add/remove their own daily quests over
+  // time, so a past day's dailyCompletions can no longer be matched against
+  // "today's" current daily list. Comparing counts instead of ids keeps the
+  // discipline calendar/streak correct even after the user's list changes.
+  // Recorded once per day by ensureDailyMandatoryCount(); today itself always
+  // uses the live count instead (see mandatoryCountFor) so adding/removing a
+  // daily quest mid-day is reflected immediately rather than frozen at
+  // whatever it was that morning. Dates from before this existed simply
   // won't have an entry — callers fall back to the current mandatory count.
   dailyMandatoryCounts: Record<string, number>;
   // Unlocked achievement ids → the timestamp they were unlocked at. Once set,
@@ -294,6 +294,14 @@ export interface GameState {
   // resolveDayStatus()/isDayFullyDone() — so this can never touch today's
   // live automatic tracking or be used to get ahead of the real rules.
   manualDayOverrides: Record<string, "green" | "red">;
+  // Whether the one-time "here are some starter daily quests" suggestion
+  // (shown to a brand-new account with an empty "Ежедневные" list — see
+  // STARTER_QUEST_IDEAS and index.tsx) has already been shown and dismissed
+  // (either by adding some suggestions or explicitly skipping). Once true,
+  // it never shows again — even if the user later deletes every daily quest
+  // and the list is empty again, since daily quests are no longer an
+  // auto-rotated pool the app can "refill" behind the user's back.
+  dailyOnboardingDismissed: boolean;
 }
 
 const KEY = "rpg-life-state-v2";
@@ -386,9 +394,11 @@ function seedQuests(): Quest[] {
   });
 
   return [
-    // Daily quests are no longer seeded here — see DAILY_QUEST_POOL and
-    // ensureDailyRotation() below, which draw a fresh random subset every
-    // day. This function only seeds the one-off story/purchase quests.
+    // Daily quests are no longer seeded here — "Ежедневные" starts
+    // completely empty for a new account, same as story/purchase (see
+    // QUEST_IDEA_POOL/STARTER_QUEST_IDEAS and index.tsx's one-time
+    // suggestion prompt, and createQuest for how the user adds their own).
+    // This function only seeds the one-off story/purchase quests below.
     //
     // PRIVACY: everything in this function ships inside the public JS
     // bundle and is handed to EVERY new account. It must therefore stay
@@ -458,15 +468,21 @@ function seedQuests(): Quest[] {
 }
 
 /**
- * Builds a user-created one-off quest (story/purchase — AddQuestModal).
- * Fills in the same id/createdAt/done bookkeeping seedQuests()'s internal
- * `q()` helper does, so hand-created and seeded quests behave identically.
+ * Builds a user-created one-off quest (AddQuestModal, now used for all three
+ * categories — daily quests are no longer an auto-rotated pool, see
+ * ensureDailyMandatoryCount below, so "Ежедневные" is populated exactly the
+ * same hand-created way "Сюжетные"/"Крупные цели" always were). Fills in the
+ * same id/createdAt/done bookkeeping seedQuests()'s internal `q()` helper
+ * does, so hand-created and seeded quests behave identically. Daily quests
+ * are always marked mandatory — with no more pool to draw a separate
+ * "optional daily" from, every quest a user puts in their own daily
+ * checklist is meant to count toward the discipline calendar.
  */
 export function createQuest(input: {
   title: string;
   stat: StatKey;
   reward: number;
-  category: "story" | "purchase";
+  category: QuestCategory;
   requiresPhoto?: boolean;
   requiresText?: boolean;
 }): Quest {
@@ -478,6 +494,7 @@ export function createQuest(input: {
     stat: input.stat,
     reward: input.reward,
     category: input.category,
+    mandatory: input.category === "daily" ? true : undefined,
     requiresPhoto: input.requiresPhoto,
     requiresText: input.requiresText,
   };
@@ -520,10 +537,9 @@ export function defaultState(): GameState {
     background: { ...DEFAULT_BACKGROUND },
     cardColor: { ...DEFAULT_CARD_COLOR },
     manualDayOverrides: {},
+    dailyOnboardingDismissed: false,
   };
-  // Draw the first day's random daily-quest rotation immediately, so a
-  // brand-new account isn't left with an empty daily list.
-  return ensureDailyRotation(base);
+  return base;
 }
 
 /**
@@ -554,7 +570,6 @@ export function loadState(userId?: string): GameState | null {
       cheatMealsUsed: parsed.cheatMealsUsed || {},
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
-      dailyQuestsDate: parsed.dailyQuestsDate,
       dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
       unlockedAchievements: parsed.unlockedAchievements || {},
       remindersEnabled: parsed.remindersEnabled ?? false,
@@ -565,6 +580,7 @@ export function loadState(userId?: string): GameState | null {
       background: parsed.background || { ...DEFAULT_BACKGROUND },
       cardColor: parsed.cardColor || { ...DEFAULT_CARD_COLOR },
       manualDayOverrides: parsed.manualDayOverrides || {},
+      dailyOnboardingDismissed: parsed.dailyOnboardingDismissed ?? false,
     };
   } catch {
     return null;
@@ -682,12 +698,19 @@ export function effectiveQuest(quest: Quest, workMode: boolean): Quest {
 }
 
 /**
- * Large pool of daily-quest templates, spread across all 4 stats and 3
- * rough difficulty bands (light 5-10 XP, medium 15-20, hard 25-30).
- * ensureDailyRotation() below draws a fresh random subset every day instead
- * of showing the same fixed list forever.
+ * Large pool of ready-made quest ideas, spread across all 4 stats and 3
+ * rough difficulty bands (light 5-10 XP, medium 15-20, hard 25-30). This
+ * used to be auto-rotated into "Ежедневные" every day; that auto-rotation
+ * is gone (daily quests are now a purely user-curated list, same as
+ * story/purchase — see createQuest and the removal of ensureDailyRotation)
+ * so this pool now lives on as an OPTIONAL browsable catalog on the
+ * "Сюжетные" tab (see index.tsx) — the user looks through it and taps
+ * "Добавить в мои квесты" on whatever appeals, nothing is added on their
+ * behalf automatically. A handful of entries are also flagged `starter:
+ * true` — those double as the one-time new-account suggestion list for the
+ * now-empty "Ежедневные" tab (see STARTER_QUEST_IDEAS/dailyOnboardingDismissed).
  */
-export interface DailyQuestTemplate {
+export interface QuestIdeaTemplate {
   title: string;
   stat: StatKey;
   reward: number;
@@ -696,9 +719,12 @@ export interface DailyQuestTemplate {
   requiresText?: boolean;
   workModeTitle?: string;
   workModeReward?: number;
+  // Marks a friction-free (no photo/text proof required) entry as one of the
+  // ~8 suggestions offered to a brand-new account's empty "Ежедневные" tab.
+  starter?: boolean;
 }
 
-export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
+export const QUEST_IDEA_POOL: QuestIdeaTemplate[] = [
   // ── Сила ──
   // NOTE: only one generic "stretch" quest lives in this pool — see
   // "Растяжка, йога или пилатес 15 минут" below — so it doesn't get
@@ -716,7 +742,7 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     workModeTitle: "Короткая мини-тренировка 5 минут: пара подходов",
     workModeReward: 8,
   },
-  { title: "Сделать 30 приседаний", stat: "strength", reward: 8 },
+  { title: "Сделать 30 приседаний", stat: "strength", reward: 8, starter: true },
   { title: "Планка 2 минуты — можно в несколько подходов", stat: "strength", reward: 10 },
   {
     title: "Прогулка быстрым шагом 20 минут",
@@ -740,7 +766,12 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
   // heavily on gym/sport-style examples before this.
   { title: "Растяжка, йога или пилатес 15 минут", stat: "strength", reward: 10 },
   { title: "Потанцевать под любимую музыку 15 минут", stat: "strength", reward: 8 },
-  { title: "Подниматься по лестнице вместо лифта весь день", stat: "strength", reward: 6 },
+  {
+    title: "Подниматься по лестнице вместо лифта весь день",
+    stat: "strength",
+    reward: 6,
+    starter: true,
+  },
   { title: "Пройти 10000 шагов за день (по трекеру)", stat: "strength", reward: 20 },
 
   // ── Интеллект ──
@@ -760,14 +791,24 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     requiresPhoto: true,
     photoHint: "Скриншот статьи/видео/заметки",
   },
-  { title: "Пройти урок на образовательной платформе", stat: "intellect", reward: 18 },
+  {
+    title: "Пройти урок на образовательной платформе",
+    stat: "intellect",
+    reward: 18,
+    starter: true,
+  },
   { title: "Написать план на неделю по одной из своих целей", stat: "intellect", reward: 15 },
   {
     title: "Посмотреть обучающее видео 20 минут и законспектировать",
     stat: "intellect",
     reward: 15,
   },
-  { title: "Решить 5 логических задач или головоломок", stat: "intellect", reward: 10 },
+  {
+    title: "Решить 5 логических задач или головоломок",
+    stat: "intellect",
+    reward: 10,
+    starter: true,
+  },
   {
     title: "Выучить новое слово на иностранном языке и повторить 10 раз",
     stat: "intellect",
@@ -807,7 +848,12 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     requiresPhoto: true,
     photoHint: "Селфи-подтверждение",
   },
-  { title: "Встать без повторного будильника («ещё 5 минут»)", stat: "will", reward: 8 },
+  {
+    title: "Встать без повторного будильника («ещё 5 минут»)",
+    stat: "will",
+    reward: 8,
+    starter: true,
+  },
   { title: "Провести время после 21:00 без соцсетей", stat: "will", reward: 15 },
   {
     title: "Сделать то дело, которое откладываешь уже неделю",
@@ -815,7 +861,7 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     reward: 28,
     requiresText: true,
   },
-  { title: "Помедитировать 10 минут", stat: "will", reward: 10 },
+  { title: "Помедитировать 10 минут", stat: "will", reward: 10, starter: true },
   { title: "Заполнить дневник или трекер привычек", stat: "will", reward: 6 },
   {
     title: "Приготовить еду самостоятельно, а не заказать",
@@ -848,8 +894,18 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
     requiresPhoto: true,
     photoHint: "Селфи-подтверждение",
   },
-  { title: "Сделать причёску/укладку, даже если никуда не идёшь", stat: "appearance", reward: 8 },
-  { title: "Погладить или подготовить одежду на завтра", stat: "appearance", reward: 6 },
+  {
+    title: "Сделать причёску/укладку, даже если никуда не идёшь",
+    stat: "appearance",
+    reward: 8,
+    starter: true,
+  },
+  {
+    title: "Погладить или подготовить одежду на завтра",
+    stat: "appearance",
+    reward: 6,
+    starter: true,
+  },
   {
     title: "Подобрать образ, в котором чувствуешь себя уверенно",
     stat: "appearance",
@@ -867,48 +923,93 @@ export const DAILY_QUEST_POOL: DailyQuestTemplate[] = [
   { title: "Почистить обувь или привести в порядок гардероб", stat: "appearance", reward: 12 },
 ];
 
-/** How many quests are drawn from DAILY_QUEST_POOL for each day. */
-export const DAILY_QUEST_COUNT = 9;
+/**
+ * The ~8 friction-free QUEST_IDEA_POOL entries (no photo/text proof
+ * required) offered as one-click suggestions to a brand-new account's empty
+ * "Ежедневные" tab — see index.tsx's DailyOnboardingPrompt and
+ * dailyOnboardingDismissed. Two per stat, so the suggestion list isn't
+ * lopsided toward any one characteristic.
+ */
+export const STARTER_QUEST_IDEAS: QuestIdeaTemplate[] = QUEST_IDEA_POOL.filter((t) => t.starter);
 
 /**
- * Draws a fresh random subset of DAILY_QUEST_POOL for today if it hasn't
- * been drawn yet, replacing whatever daily quests were active before.
- * Non-daily (story/purchase) quests are left untouched. Also records how
- * many mandatory quests were assigned today in dailyMandatoryCounts, so the
- * discipline calendar/streak can later check completeness by count instead
- * of by id (today's rotated ids won't exist tomorrow).
+ * Turns a QUEST_IDEA_POOL entry into a real quest the user now owns —
+ * used both by the one-time daily-suggestion prompt (category "daily") and
+ * the "Сюжетные" idea catalog's "Добавить в мои квесты" button (category
+ * "story"). Daily quests are always mandatory (see createQuest); work-mode
+ * lightening only carries over for daily quests — a one-off story goal
+ * shouldn't change based on today's work schedule.
  */
-export function ensureDailyRotation(state: GameState): GameState {
-  const today = todayKey();
-  if (state.dailyQuestsDate === today) return state;
-
-  const now = Date.now();
-  const pool = [...DAILY_QUEST_POOL].sort(() => Math.random() - 0.5);
-  const picked = pool.slice(0, Math.min(DAILY_QUEST_COUNT, pool.length));
-  const newDailies: Quest[] = picked.map((t) => ({
+export function createQuestFromIdea(
+  template: QuestIdeaTemplate,
+  category: "daily" | "story",
+): Quest {
+  return {
     id: uid(),
-    title: t.title,
-    stat: t.stat,
-    reward: t.reward,
-    category: "daily",
-    mandatory: true,
-    requiresPhoto: t.requiresPhoto,
-    photoHint: t.photoHint,
-    requiresText: t.requiresText,
-    workModeTitle: t.workModeTitle,
-    workModeReward: t.workModeReward,
+    createdAt: Date.now(),
     done: false,
-    createdAt: now,
-    lastResetDate: today,
-  }));
+    title: template.title,
+    stat: template.stat,
+    reward: template.reward,
+    category,
+    mandatory: category === "daily" ? true : undefined,
+    requiresPhoto: template.requiresPhoto,
+    photoHint: template.photoHint,
+    requiresText: template.requiresText,
+    ...(category === "daily"
+      ? { workModeTitle: template.workModeTitle, workModeReward: template.workModeReward }
+      : {}),
+  };
+}
 
-  const nonDaily = state.quests.filter((q) => q.category !== "daily");
+/**
+ * Resets any daily quest completed on a PREVIOUS day back to not-done, for
+ * today. Daily quests are a static, user-curated list now (see createQuest)
+ * rather than getting fresh ids drawn every day the old auto-rotation used
+ * to hand out — that rotation was actually what made a completed daily
+ * quest "disappear" at midnight, so removing it without this function would
+ * leave every daily quest permanently stuck at "done" forever after its
+ * first completion. Uses Quest.lastResetDate (set by completeQuest in
+ * index.tsx) to tell "done today" apart from "done on some earlier day".
+ * A no-op (returns the same state) when nothing needs resetting, so this is
+ * cheap to call on every tick of the periodic effect in index.tsx.
+ */
+export function ensureDailyQuestsReset(state: GameState): GameState {
+  const today = todayKey();
+  const needsReset = state.quests.some(
+    (q) => q.category === "daily" && q.done && q.lastResetDate !== today,
+  );
+  if (!needsReset) return state;
   return {
     ...state,
-    quests: [...nonDaily, ...newDailies],
-    dailyQuestsDate: today,
-    dailyMandatoryCounts: { ...state.dailyMandatoryCounts, [today]: newDailies.length },
+    quests: state.quests.map((q) =>
+      q.category === "daily" && q.done && q.lastResetDate !== today
+        ? {
+            ...q,
+            done: false,
+            completedAt: undefined,
+            proofNote: undefined,
+            photoPath: undefined,
+            lastResetDate: today,
+          }
+        : q,
+    ),
   };
+}
+
+/**
+ * Records today's mandatory daily-quest count once per day (if not already
+ * recorded), purely so FUTURE days can look back at what "today" required
+ * even after the user goes on to add/remove daily quests. Today's own
+ * requirement is always read live instead (see mandatoryCountFor) — this
+ * function never touches state.quests itself, unlike the old auto-rotation
+ * it replaces.
+ */
+export function ensureDailyMandatoryCount(state: GameState): GameState {
+  const today = todayKey();
+  if (state.dailyMandatoryCounts[today] != null) return state;
+  const count = state.quests.filter((q) => q.category === "daily" && q.mandatory).length;
+  return { ...state, dailyMandatoryCounts: { ...state.dailyMandatoryCounts, [today]: count } };
 }
 
 /**
@@ -1099,13 +1200,22 @@ export function todayKey(d = new Date()) {
 }
 
 /**
- * Number of mandatory daily quests assigned on a given date. Reads the
- * recorded count for that date if we have one (dailyMandatoryCounts, filled
- * in by ensureDailyRotation); dates from before daily-quest rotation existed
- * won't have an entry, so those fall back to today's current mandatory
- * count, matching the old fixed-list behavior for historical data.
+ * Number of mandatory daily quests "assigned" on a given date. For today,
+ * always reads the LIVE current count — daily quests are the user's own
+ * static, hand-curated list now (see createQuest/QUEST_IDEA_POOL), so if
+ * they add or remove one partway through the day, today's discipline
+ * requirement should reflect that immediately rather than staying frozen at
+ * whatever it was that morning. For any earlier date, reads the recorded
+ * snapshot instead (dailyMandatoryCounts, filled in once per day by
+ * ensureDailyMandatoryCount) since the user's current list may no longer
+ * resemble what it was back then; dates from before this existed simply
+ * won't have an entry, so those fall back to today's current count too,
+ * matching the old fixed-list behavior for historical data.
  */
 function mandatoryCountFor(state: GameState, dateKey: string): number {
+  if (dateKey === todayKey()) {
+    return state.quests.filter((q) => q.category === "daily" && q.mandatory).length;
+  }
   const recorded = state.dailyMandatoryCounts[dateKey];
   if (recorded != null) return recorded;
   return state.quests.filter((q) => q.category === "daily" && q.mandatory).length;

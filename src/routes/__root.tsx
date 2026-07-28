@@ -96,10 +96,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // PWA install-to-home-screen support (Android + iOS). theme-color
+      // matches the light-theme --primary terracotta from styles.css — the
+      // manifest's own theme_color/background_color mirror the same
+      // values for when the OS reads manifest.json directly instead.
+      { name: "theme-color", content: "#af5f3c" },
+      // iOS doesn't read manifest.json's `display: standalone` on its own —
+      // these three Apple-specific tags are what actually make "Add to Home
+      // Screen" launch fullscreen there instead of opening Safari.
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "Life RPG" },
+      // Standard (non-Apple-prefixed) equivalent, for browsers that support
+      // it — harmless to include alongside the Apple-specific tag above.
+      { name: "mobile-web-app-capable", content: "yes" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.json" },
+      // iOS ignores manifest.json icons entirely — apple-touch-icon is the
+      // only way it picks up an icon for the home-screen shortcut.
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

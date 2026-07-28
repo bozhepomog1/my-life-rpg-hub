@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, X } from "lucide-react";
-import { STAT_META, xpForNextLevel, type GameState, type StatKey } from "@/lib/game";
+import {
+  computeArchetype,
+  STAT_META,
+  xpForNextLevel,
+  type GameState,
+  type StatKey,
+} from "@/lib/game";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { signOut } from "@/lib/auth";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -106,6 +112,8 @@ export function ProfileHeader({
       : b,
   );
 
+  const archetype = computeArchetype(state);
+
   const equippedFrame = state.equippedFrame
     ? AVATAR_FRAMES.find((f) => f.id === state.equippedFrame)
     : undefined;
@@ -203,6 +211,12 @@ export function ProfileHeader({
                 >
                   {state.name}
                 </h1>
+                <span
+                  className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                  title="Класс определяется автоматически по ведущей характеристике"
+                >
+                  {archetype.icon} {archetype.label}
+                </span>
                 {equippedTitle && (
                   <span className="rounded-full border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary">
                     «{equippedTitle.label}»

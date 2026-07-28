@@ -386,6 +386,36 @@ export const STAT_META: Record<StatKey, { label: string; color: string; icon: st
  */
 export const STAT_ORDER: StatKey[] = ["strength", "intellect", "will", "appearance"];
 
+export interface Archetype {
+  label: string;
+  icon: string;
+}
+
+const ARCHETYPE_BY_STAT: Record<StatKey, Archetype> = {
+  strength: { label: "Воин", icon: "⚔️" },
+  intellect: { label: "Мудрец", icon: "📖" },
+  will: { label: "Стратег", icon: "🧭" },
+  appearance: { label: "Дипломат", icon: "🎭" },
+};
+
+const ARCHETYPE_UNIVERSAL: Archetype = { label: "Универсал", icon: "🌀" };
+
+/**
+ * Class/archetype badge shown next to the name in ProfileHeader — purely
+ * derived from whichever stat currently has the most total XP (level*100 +
+ * xp), so it updates automatically as the leading stat changes; nothing is
+ * stored in GameState for this. A tie across ALL FOUR stats (only really
+ * possible right at the very start, all at 0) falls back to a neutral
+ * "Универсал" rather than arbitrarily picking one.
+ */
+export function computeArchetype(state: GameState): Archetype {
+  const totals = STAT_ORDER.map((k) => state.stats[k].level * 100 + state.stats[k].xp);
+  const max = Math.max(...totals);
+  const leaders = STAT_ORDER.filter((_, i) => totals[i] === max);
+  if (leaders.length > 1) return ARCHETYPE_UNIVERSAL;
+  return ARCHETYPE_BY_STAT[leaders[0]];
+}
+
 /**
  * Sorts any list of stat-tagged items (quests, etc.) into STAT_ORDER groups,
  * preserving each item's relative order within its own stat group (stable

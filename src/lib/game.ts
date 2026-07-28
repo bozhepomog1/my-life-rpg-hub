@@ -1147,6 +1147,92 @@ export function ensureBonusQuests(state: GameState): GameState {
   return { ...state, bonusQuests, bonusQuestsDate: today };
 }
 
+/** One suggested idea for the "🎲 Случайная цель" roller on "Крупные цели". */
+export interface BigGoalIdea {
+  title: string;
+  stat: StatKey;
+  reward: number;
+}
+
+/**
+ * Diverse pool of big-goal suggestions for the "🎲 Случайная цель" button
+ * on "Крупные цели" (see RandomGoalRoller/index.tsx and randomBigGoalIdea
+ * below). Deliberately spans several kinds of goal — purchases, financial
+ * targets, personal projects, learning — not just shopping, since the tab
+ * itself covers any big one-off personal goal (see CATEGORY_META.purchase).
+ * Same privacy rule as seedQuests(): generic only, nothing personal/specific
+ * to any one account, since this ships in the public bundle for every user.
+ */
+export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
+  // ── Финансы ──
+  { title: "Накопить $500 на отдельный сберегательный счёт", stat: "will", reward: 40 },
+  {
+    title: "Составить подробный бюджет на месяц и придерживаться его",
+    stat: "intellect",
+    reward: 25,
+  },
+  { title: "Полностью погасить один мелкий долг или рассрочку", stat: "will", reward: 40 },
+  {
+    title: "Настроить автоматический перевод 10% дохода в сбережения",
+    stat: "intellect",
+    reward: 20,
+  },
+  { title: "Разобрать и оптимизировать все текущие подписки", stat: "intellect", reward: 15 },
+
+  // ── Покупки ──
+  { title: "Купить качественную куртку взамен старой", stat: "appearance", reward: 20 },
+  { title: "Обновить рабочее кресло на более эргономичное", stat: "will", reward: 25 },
+  { title: "Купить надёжный рюкзак для путешествий", stat: "appearance", reward: 15 },
+  { title: "Заменить старый матрас на новый", stat: "will", reward: 30 },
+  { title: "Собрать капсульный гардероб на сезон", stat: "appearance", reward: 25 },
+
+  // ── Обучение ──
+  { title: "Пройти полный онлайн-курс по новой для себя теме", stat: "intellect", reward: 35 },
+  { title: "Сдать экзамен на сертификат в своей области", stat: "intellect", reward: 40 },
+  { title: "Освоить базовый уровень нового языка программирования", stat: "intellect", reward: 35 },
+  { title: "Прочитать 5 книг по выбранной теме за квартал", stat: "intellect", reward: 30 },
+  { title: "Начать изучать новый иностранный язык", stat: "intellect", reward: 25 },
+
+  // ── Личные проекты ──
+  { title: "Вести личный блог или канал 3 месяца подряд", stat: "will", reward: 35 },
+  {
+    title: "Написать и опубликовать одну статью на важную тебе тему",
+    stat: "intellect",
+    reward: 25,
+  },
+  {
+    title: "Сделать генеральную уборку и разобрать вещи во всей квартире",
+    stat: "will",
+    reward: 30,
+  },
+  { title: "Организовать домашний архив документов", stat: "intellect", reward: 15 },
+  { title: "Собрать личный сайт-портфолио", stat: "intellect", reward: 40 },
+
+  // ── Здоровье и активность ──
+  { title: "Пробежать первые 5 км без остановки", stat: "strength", reward: 35 },
+  { title: "Пройти полный медицинский чек-ап", stat: "will", reward: 25 },
+  { title: "Записаться и начать заниматься в секции или зале", stat: "strength", reward: 20 },
+
+  // ── Разное ──
+  { title: "Провести неделю цифрового детокса по вечерам", stat: "will", reward: 30 },
+  { title: "Довести до конца давно отложенное дело или проект", stat: "will", reward: 40 },
+  { title: "Спланировать и забронировать поездку мечты", stat: "appearance", reward: 30 },
+  { title: "Съездить в город или страну, где ещё не был", stat: "appearance", reward: 35 },
+];
+
+/**
+ * Picks a random BIG_GOAL_IDEAS entry, optionally excluding one by title —
+ * used for the roller's "Ещё вариант" so an immediate reroll can't just
+ * hand back the exact same idea again.
+ */
+export function randomBigGoalIdea(excludeTitle?: string): BigGoalIdea {
+  const pool = excludeTitle
+    ? BIG_GOAL_IDEAS.filter((i) => i.title !== excludeTitle)
+    : BIG_GOAL_IDEAS;
+  const source = pool.length > 0 ? pool : BIG_GOAL_IDEAS;
+  return source[Math.floor(Math.random() * source.length)];
+}
+
 export function applyReward(state: GameState, stat: StatKey, reward: number): GameState {
   const next = structuredClone(state);
   const s = next.stats[stat];

@@ -14,6 +14,13 @@ interface Props {
     requiresPhoto?: boolean;
     requiresText?: boolean;
   }) => void;
+  // Pre-fills the form — used by RandomGoalRoller's "Добавить как есть" on
+  // "Крупные цели" so the suggested idea's wording lands in the title field
+  // as ordinary editable text rather than being saved verbatim, per the
+  // request that a rolled idea can still be tweaked before saving.
+  initialTitle?: string;
+  initialStat?: StatKey;
+  initialReward?: number;
 }
 
 const PROOF_OPTIONS: { key: ProofType; label: string }[] = [
@@ -34,10 +41,17 @@ const TITLE_PLACEHOLDER: Record<QuestCategory, string> = {
   purchase: "Например: Найти новый рюкзак",
 };
 
-export function AddQuestModal({ category, onClose, onCreate }: Props) {
-  const [title, setTitle] = useState("");
-  const [stat, setStat] = useState<StatKey>("strength");
-  const [reward, setReward] = useState(15);
+export function AddQuestModal({
+  category,
+  onClose,
+  onCreate,
+  initialTitle,
+  initialStat,
+  initialReward,
+}: Props) {
+  const [title, setTitle] = useState(initialTitle ?? "");
+  const [stat, setStat] = useState<StatKey>(initialStat ?? "strength");
+  const [reward, setReward] = useState(initialReward ?? 15);
   const [proof, setProof] = useState<ProofType>("none");
 
   const trimmed = title.trim();

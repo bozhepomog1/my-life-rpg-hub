@@ -16,6 +16,7 @@ import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import {
   applyReward,
+  type BigGoalIdea,
   CATEGORY_META,
   computeDiscipline,
   computeStreak,
@@ -43,6 +44,7 @@ import {
 } from "@/lib/game";
 import { DailyOnboardingPrompt } from "@/components/DailyOnboardingPrompt";
 import { QuestIdeaCatalog } from "@/components/QuestIdeaCatalog";
+import { RandomGoalRoller } from "@/components/RandomGoalRoller";
 
 const UNDO_WINDOW_MS = 10_000;
 
@@ -103,6 +105,10 @@ function Home() {
   const [levelPulse, setLevelPulse] = useState(false);
   const [tab, setTab] = useState<QuestCategory>("daily");
   const [addQuestOpen, setAddQuestOpen] = useState(false);
+  // Set by RandomGoalRoller's "Добавить как есть" — opens AddQuestModal
+  // pre-filled with the rolled idea instead of saving it straight away, so
+  // the wording stays editable. Cleared whenever the modal closes.
+  const [goalPrefill, setGoalPrefill] = useState<BigGoalIdea | null>(null);
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
@@ -476,6 +482,15 @@ function Home() {
             </button>
           )}
 
+          {tab === "purchase" && (
+            <RandomGoalRoller
+              onAddAsIs={(idea) => {
+                setGoalPrefill(idea);
+                setAddQuestOpen(true);
+              }}
+            />
+          )}
+
           {tab === "story" && (
             <QuestIdeaCatalog
               ideas={QUEST_IDEA_POOL}
@@ -653,8 +668,14 @@ function Home() {
       {addQuestOpen && canAddQuest && (
         <AddQuestModal
           category={tab}
-          onClose={() => setAddQuestOpen(false)}
+          onClose={() => {
+            setAddQuestOpen(false);
+            setGoalPrefill(null);
+          }}
           onCreate={addCustomQuest}
+          initialTitle={goalPrefill?.title}
+          initialStat={goalPrefill?.stat}
+          initialReward={goalPrefill?.reward}
         />
       )}
     </div>

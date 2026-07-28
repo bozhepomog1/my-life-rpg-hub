@@ -173,12 +173,26 @@ const FOOD_DB: FoodItem[] = [
 
   // --- generic single items ---
   { label: "Яйцо варёное", keywords: ["яйц", "яиц"], kcal: 78, protein: 6.3, fat: 5.3, carbs: 0.6 },
+  // Distinct from "Яичница" (fried) — a different everyday egg dish with
+  // its own keyword, previously only findable via "яичниц"/"яйц".
+  { label: "Омлет", keywords: ["омлет"], kcal: 154, protein: 11, fat: 11, carbs: 2 },
   // Per 100g cooked/boiled — see file-level note above.
   { label: "Рис варёный", keywords: ["рис"], kcal: 130, protein: 2.7, fat: 0.3, carbs: 28 },
   { label: "Гречка", keywords: ["гречк"], kcal: 92, protein: 3.4, fat: 1, carbs: 20 },
   // Cooked with water (porridge), not dry oats — dry oats have ~60g
   // carbs/100g, but water roughly triples the weight once cooked.
   { label: "Овсянка", keywords: ["овсян"], kcal: 71, protein: 2.5, fat: 1.5, carbs: 12 },
+  // Generic grain porridge, for when someone just says "каша" without
+  // specifying which grain — "овсян"/"гречк" above only match if the
+  // person names the specific grain.
+  {
+    label: "Каша (крупяная)",
+    keywords: ["каша", "кашу", "каши", "кашей", "кашка"],
+    kcal: 90,
+    protein: 3,
+    fat: 2,
+    carbs: 16,
+  },
   { label: "Творог", keywords: ["творог"], kcal: 178, protein: 25.5, fat: 7.5, carbs: 4.5 },
   { label: "Банан", keywords: ["банан"], kcal: 105, protein: 1.3, fat: 0.3, carbs: 27 },
   { label: "Хлеб / тост", keywords: ["хлеб", "тост"], kcal: 75, protein: 2.5, fat: 1, carbs: 14 },
@@ -213,13 +227,36 @@ const FOOD_DB: FoodItem[] = [
     carbs: 25,
   },
   // Per 100g boiled; "пюре" with milk/butter runs a bit higher in practice.
+  // "пюре" itself is listed as its own keyword (not just "картофел"/
+  // "картошк") — a bare "пюре" search is one of the most common everyday
+  // dishes that used to fall through to Open Food Facts (which barely
+  // covers home-cooked dishes) with nothing found locally to fall back on.
   {
-    label: "Картофель варёный / пюре",
-    keywords: ["картофел", "картошк"],
+    label: "Картофельное пюре",
+    keywords: ["пюре", "картофел", "картошк"],
     kcal: 87,
     protein: 1.9,
     fat: 0.1,
     carbs: 20,
+  },
+  // Distinct from "Картофель фри" (deep-fried) — pan-fried potato slices/
+  // wedges, a very common separate home dish with its own denser calorie
+  // profile (more oil absorbed, less water than boiled/mashed).
+  {
+    label: "Жареная картошка",
+    keywords: [
+      "жареная картошка",
+      "жареную картошку",
+      "жареной картошки",
+      "жареный картофель",
+      "жареного картофеля",
+      "картошка жареная",
+      "картофель жареный",
+    ],
+    kcal: 190,
+    protein: 2.7,
+    fat: 10,
+    carbs: 22,
   },
   // Meat/fish below were already on a per-100g-cooked basis and check out
   // against standard references — left unchanged.
@@ -246,6 +283,13 @@ const FOOD_DB: FoodItem[] = [
   { label: "Яблоко", keywords: ["яблок"], kcal: 78, protein: 0.4, fat: 0.2, carbs: 20 },
   { label: "Апельсин", keywords: ["апельсин"], kcal: 70, protein: 1.4, fat: 0.2, carbs: 17 },
   { label: "Салат овощной", keywords: ["салат"], kcal: 90, protein: 2, fat: 6, carbs: 8 },
+  // Two of the most common everyday Russian-cuisine salads — specific
+  // enough names that they don't need "specific before generic" ordering
+  // relative to the plain "Салат" entry above (see searchLocalFoodDb: every
+  // matching entry is returned as its own candidate, not a first-match-wins
+  // lookup, so there's no risk of "Салат овощной" shadowing these).
+  { label: "Оливье", keywords: ["оливье"], kcal: 190, protein: 4, fat: 14, carbs: 12 },
+  { label: "Винегрет", keywords: ["винегрет"], kcal: 95, protein: 1.5, fat: 6, carbs: 9 },
   { label: "Пицца (кусок)", keywords: ["пицц"], kcal: 285, protein: 12, fat: 10, carbs: 36 },
   {
     label: "Бургер",
@@ -297,6 +341,9 @@ const FOOD_DB: FoodItem[] = [
   { label: "Рассольник", keywords: ["рассольник"], kcal: 100, protein: 4, fat: 5, carbs: 10 },
   { label: "Гаспачо", keywords: ["гаспачо"], kcal: 50, protein: 1.5, fat: 2, carbs: 7 },
   { label: "Уха", keywords: ["уха", "ухи"], kcal: 80, protein: 8, fat: 3, carbs: 4 },
+  // Clear broth on its own — separate from the generic "Суп" entry, whose
+  // "суп" keyword doesn't appear in a bare "бульон" query.
+  { label: "Бульон", keywords: ["бульон"], kcal: 20, protein: 2.5, fat: 0.6, carbs: 0.5 },
   {
     label: "Крем-суп / суп-пюре",
     keywords: ["крем-суп", "суп-пюре"],
@@ -321,6 +368,17 @@ const FOOD_DB: FoodItem[] = [
   { label: "Бешбармак", keywords: ["бешбармак"], kcal: 280, protein: 18, fat: 15, carbs: 20 },
   { label: "Азу", keywords: ["азу"], kcal: 180, protein: 12, fat: 10, carbs: 10 },
   { label: "Гуляш", keywords: ["гуляш"], kcal: 200, protein: 15, fat: 12, carbs: 8 },
+  // Generic everyday "meat + vegetables, stewed for a while" home dish —
+  // distinct from the specific named stews above (гуляш/азу/бефстроганов),
+  // for when someone just says "жаркое" or "тушёное мясо".
+  {
+    label: "Жаркое / тушёное мясо",
+    keywords: ["жаркое", "тушёное мясо", "тушеное мясо"],
+    kcal: 180,
+    protein: 14,
+    fat: 11,
+    carbs: 6,
+  },
   {
     label: "Бефстроганов",
     keywords: ["бефстроганов", "строганов"],

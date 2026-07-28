@@ -8,6 +8,7 @@ import {
   defaultAmountFor,
   effectiveGoals,
   getTodayNutrition,
+  looksLikeMultipleProducts,
   MONTHLY_CHEAT_LIMIT,
   PORTION_UNIT_LABELS,
   PORTION_UNITS,
@@ -136,7 +137,8 @@ export function NutritionCalculator({ state, update }: Props) {
         {phase === "search" && (
           <>
             <p className="mt-1 text-xs text-muted-foreground">
-              Название продукта или блюда, без веса — количество уточним на следующем шаге. Ищем в
+              Ищи по одному продукту за раз — без веса, вес уточним на следующем шаге. Нашёл один,
+              добавил в приём пищи — и ищешь следующий кнопкой «Добавить ещё продукт». Смотрим в
               Open Food Facts, при отсутствии сети или совпадений — в локальной базе.
             </p>
             <div className="mt-3 flex gap-2">
@@ -156,6 +158,12 @@ export function NutritionCalculator({ state, update }: Props) {
                 {searching ? "Ищем…" : "Найти"}
               </button>
             </div>
+
+            {looksLikeMultipleProducts(query) && (
+              <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                💡 Похоже, тут два продукта — попробуй найти их по одному.
+              </p>
+            )}
 
             {candidates && candidates.length === 0 && (
               <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">

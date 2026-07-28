@@ -639,6 +639,21 @@ export async function searchProducts(query: string): Promise<ProductCandidate[]>
   return [...onlineCandidates, ...localCandidates];
 }
 
+/**
+ * Heuristic-only check for "this query probably describes two products at
+ * once" (e.g. "гречка с колбасой") rather than the single product name the
+ * stepped flow expects — a comma, or the conjunction "с" as its own word
+ * (checked with surrounding spaces rather than a \b regex, since JS's \b is
+ * defined in terms of [A-Za-z0-9_] and doesn't recognize Cyrillic letters
+ * as word characters). Used only to show a soft, non-blocking hint under
+ * the search field — never prevents searching, and a false positive just
+ * means an unnecessary (harmless) suggestion.
+ */
+export function looksLikeMultipleProducts(query: string): boolean {
+  const q = ` ${query.trim().toLowerCase()} `;
+  return q.includes(",") || q.includes(" с ");
+}
+
 /** Units offered on the quantity step, in the app's canonical display order. */
 export const PORTION_UNITS = ["g", "ml", "portion", "pcs", "tbsp", "tsp", "cup"] as const;
 export type PortionUnit = (typeof PORTION_UNITS)[number];

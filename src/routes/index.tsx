@@ -27,6 +27,7 @@ import {
   ensureDailyQuestsReset,
   ensureSeason,
   isWorkDay,
+  QUEST_IDEA_POOL,
   sortByStatOrder,
   sortQuestsForDisplay,
   STARTER_QUEST_IDEAS,
@@ -41,6 +42,7 @@ import {
   type StatKey,
 } from "@/lib/game";
 import { DailyOnboardingPrompt } from "@/components/DailyOnboardingPrompt";
+import { QuestIdeaCatalog } from "@/components/QuestIdeaCatalog";
 
 const UNDO_WINDOW_MS = 10_000;
 
@@ -58,7 +60,7 @@ const ADD_QUEST_LABEL: Record<QuestCategory, string> = {
  * the user has since deleted every daily quest. */
 const EMPTY_STATE_COPY: Record<QuestCategory, string> = {
   daily: "У тебя пока нет ежедневных квестов — добавь свой первый!",
-  story: "У тебя пока нет сюжетных целей — добавь первую!",
+  story: "У тебя пока нет сюжетных целей — добавь первую или загляни в каталог идей выше!",
   purchase: "У тебя пока нет крупных целей — добавь первую!",
 };
 
@@ -472,6 +474,13 @@ function Home() {
               <Plus size={15} />
               {ADD_QUEST_LABEL[tab]}
             </button>
+          )}
+
+          {tab === "story" && (
+            <QuestIdeaCatalog
+              ideas={QUEST_IDEA_POOL}
+              onAdd={(t) => addQuestsFromIdeas([t], "story")}
+            />
           )}
 
           <div className="space-y-3">

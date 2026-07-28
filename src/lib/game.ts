@@ -362,7 +362,11 @@ export const CATEGORY_META: Record<
     icon: "🌅",
     description: "Сброс в полночь. Требуют подтверждения.",
   },
-  story: { label: "Сюжетные квесты", icon: "📜", description: "Крупные разовые цели с дедлайном." },
+  story: {
+    label: "Сюжетные квесты",
+    icon: "📜",
+    description: "Выбери дополнительные задачи по желанию.",
+  },
   // Renamed from "Квесты-закупки" — that name only fit shopping-related
   // goals, but this tab is really any big one-off personal goal a user
   // adds via AddQuestModal (the QuestCategory value itself stays "purchase"

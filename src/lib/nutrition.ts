@@ -108,17 +108,16 @@ interface FoodItem extends Macro {
  *   buckwheat, oatmeal, pasta, potato) and meats/fish are given PER 100G OF
  *   THE READY-TO-EAT/COOKED PRODUCT — never raw or dry weight, since dry
  *   grain and cooked grain have very different calorie density (cooking
- *   adds water, not calories). "рис"/"гречка" with no quantity assumes
- *   100g cooked; write "200г риса" for a bigger portion.
+ *   adds water, not calories).
  * - Discrete items people count rather than weigh (eggs, a banana, a slice
  *   of bread, a cup of coffee, a cookie) are given per natural unit/serving
  *   instead — nobody says "100g of egg", they say "2 eggs".
  *
- * Order matters: more specific/compound phrases are listed before the
- * generic single-word items they overlap with (e.g. "кофе с молоком"
- * before the bare "кофе"), because the parser blanks out matched text as
- * it goes so a generic entry won't double-count a phrase already claimed
- * by a more specific one.
+ * The stepped search UI (searchLocalFoodDb/searchProducts below) doesn't
+ * need to know which convention a given entry follows — the user picks the
+ * unit (грамм/мл/порция/шт/ст.л./ч.л./стакан) themselves on the quantity
+ * step, and suggestedUnitsFor() just makes a best-effort guess at a sensible
+ * DEFAULT unit from the label text, always leaving every unit selectable.
  */
 const FOOD_DB: FoodItem[] = [
   // --- specific / compound phrases first ---
@@ -140,10 +139,6 @@ const FOOD_DB: FoodItem[] = [
     carbs: 0,
   },
   {
-    // "фри" alone is enough — it's an unambiguous marker in Russian food
-    // text; the parseMeal special-case below also blanks a preceding
-    // "картофель"/"картошка" so the generic potato entry doesn't also
-    // double-count the same words. Per 100g fried, ready to eat.
     label: "Картофель фри",
     keywords: ["фри"],
     kcal: 312,
@@ -478,92 +473,6 @@ const FOOD_DB: FoodItem[] = [
   { label: "Изюм", keywords: ["изюм"], kcal: 299, protein: 3, fat: 0.5, carbs: 79 },
 ];
 
-/**
- * Weight/volume units this app recognizes, each mapped to its equivalent in
- * grams (liquids are treated as ~1g/ml — close enough for a rough calorie
- * estimator). matchWeightUnit() below multiplies a matched amount by this
- * and divides by 100, giving the same "qty" multiplier this file has always
- * used for per-100g entries (FOOD_DB rows, and Open Food Facts' own
- * per-100g nutriment fields) — so "холодник 200г" already meant qty=2, and
- * "холодник 2 стакана" now means qty=4 (2 × 200g ÷ 100) the same way.
- *
- * Order matters: each entry is tried in turn against the SAME text, so a
- * unit that's a literal prefix of another (bare "ложка" starts with the
- * same "л" as "литр") must have its own dedicated, more specific pattern
- * checked — which it does here, since every entry gets an independent
- * match attempt rather than one shared alternation. "ложка" alone defaults
- * to a tablespoon (15g), matching how it's used conversationally.
- */
-interface WeightUnit {
-  grams: number;
-  /** Regex fragment (no capturing groups) matching just the unit word(s). */
-  pattern: string;
-}
-
-const WEIGHT_UNITS: WeightUnit[] = [
-  { grams: 1000, pattern: "кг\\.?|килограмм[а-я]*" },
-  { grams: 1, pattern: "г\\.?|гр\\.?|грамм[а-я]*" },
-  { grams: 1, pattern: "мл\\.?|миллилитр[а-я]*" },
-  { grams: 15, pattern: "ст\\.?\\s?л\\.?|столов[а-я]*\\s+ложк[а-я]*" },
-  { grams: 5, pattern: "ч\\.?\\s?л\\.?|чайн[а-я]*\\s+ложк[а-я]*" },
-  { grams: 15, pattern: "ложк[а-я]*" },
-  { grams: 200, pattern: "стакан[а-я]*" },
-  { grams: 200, pattern: "чашк[а-я]*" },
-  { grams: 250, pattern: "кружк[а-я]*" },
-  { grams: 1000, pattern: "л\\.?|литр[а-я]*" },
-];
-
-/**
- * Finds a NUMBER + weight/volume-unit match and returns the equivalent
- * per-100g multiplier (e.g. "200г" → 2, "1 ст.л." → 0.15, "2 стакана" → 4).
- * Returns null when no such unit is present, so the caller can fall back to
- * a bare count or the default portion.
- *
- * @param anchored when true, only matches right at the END of `text` (used
- *   to find the quantity immediately before a matched FOOD_DB keyword);
- *   when false, matches anywhere (used for a whole comma-separated
- *   segment, which is assumed to describe one dish).
- */
-function matchWeightUnit(text: string, anchored: boolean): number | null {
-  for (const unit of WEIGHT_UNITS) {
-    const re = new RegExp(
-      anchored
-        ? `(\\d+(?:[.,]\\d+)?)\\s*(?:${unit.pattern})\\s*$`
-        : `(\\d+(?:[.,]\\d+)?)\\s*(?:${unit.pattern})`,
-      "i",
-    );
-    const m = text.match(re);
-    if (!m) continue;
-    const amount = parseFloat(m[1].replace(",", "."));
-    if (Number.isFinite(amount) && amount > 0) {
-      return Math.min((amount * unit.grams) / 100, 20);
-    }
-  }
-  return null;
-}
-
-/**
- * Looks for a quantity right before a matched keyword; defaults to 1 (≈100g
- * for weight-based entries, one item for per-unit entries) when nothing is
- * specified. Supports:
- * - weight/volume units (see matchWeightUnit/WEIGHT_UNITS above) — grams,
- *   kilograms, milliliters, liters, tablespoons/teaspoons, cups/mugs/glasses;
- * - a plain count ("2", "3 шт", "4 штуки") — a whole-item multiplier for
- *   per-unit entries (eggs, bananas, ...).
- */
-function quantityBefore(text: string, idx: number): number {
-  const before = text.slice(0, idx);
-
-  const weightQty = matchWeightUnit(before, true);
-  if (weightQty != null) return weightQty;
-
-  const countMatch = before.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?\s*$/);
-  if (!countMatch) return 1;
-  const n = parseInt(countMatch[1], 10);
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return Math.min(n, 20);
-}
-
 function isLetter(ch: string | undefined): boolean {
   return !!ch && /[a-zа-яё]/i.test(ch);
 }
@@ -579,102 +488,186 @@ function findWordAligned(haystack: string, needle: string, from = 0): number {
   }
 }
 
-/** True if the match is directly preceded by "без"/"не" (e.g. "кофе без сахара"). */
-function precededByNegation(text: string, idx: number): boolean {
-  const before = text.slice(0, idx).trimEnd();
-  const lastWord = before.split(/\s+/).pop() ?? "";
-  return lastWord === "без" || lastWord === "не";
+/**
+ * Step 1 of the stepped nutrition flow: looks up a plain product NAME (no
+ * quantity — see the file-level comment on the stepped API below) against
+ * the local FOOD_DB. A FOOD_DB entry matches if any of its keywords appears
+ * word-aligned inside the query, so "курица" finds "Куриная грудка" and
+ * "кофе с молоком" finds the compound "Кофе с молоком" entry specifically
+ * (rather than just the generic "Кофе"). Returns every match — like Open
+ * Food Facts results, these are shown to the user to choose from, never
+ * auto-picked.
+ */
+function searchLocalFoodDb(query: string): (Macro & { label: string })[] {
+  const q = ` ${query.toLowerCase().trim()} `;
+  if (!q.trim()) return [];
+  const out: (Macro & { label: string })[] = [];
+  for (const food of FOOD_DB) {
+    const hit = food.keywords.some((kw) => findWordAligned(q, kw) !== -1);
+    if (hit) {
+      out.push({
+        label: food.label,
+        kcal: food.kcal,
+        protein: food.protein,
+        fat: food.fat,
+        carbs: food.carbs,
+      });
+    }
+  }
+  return out;
 }
 
-export interface ParsedMealItem extends Macro {
+// ─────────────────────────────────────────────────────────────────────────
+// Stepped nutrition-entry flow
+//
+// Replaces the old "type everything with quantities in one textarea" UX.
+// Now: (1) search a product NAME only (searchProducts), (2) the user picks
+// one candidate, (3) a separate quantity step asks "how much" as a number +
+// unit dropdown and computes the scaled macros live (portionMultiplier),
+// (4) "Добавить в приём пищи" appends it to an in-progress draft list
+// (MealDraftItem[], held in NutritionCalculator's component state — nothing
+// here persists a draft), letting the user repeat for more products before
+// (5) "Сохранить в дневник" (addNutritionEntry) commits the whole list as
+// one NutritionDay entry.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** One product the user can choose from at the search step — either an Open Food Facts product or a local FOOD_DB entry. */
+export interface ProductCandidate {
   label: string;
-  qty: number;
-}
-
-export interface ParsedMeal {
-  items: ParsedMealItem[];
-  totals: Macro;
+  source: "online" | "local";
+  /** OFF barcode, for a stable React key; local matches use their label instead. */
+  code?: string;
+  // Macros for this product's natural base unit — per 100g/100ml for every
+  // Open Food Facts product (OFF's own convention) and for most FOOD_DB
+  // staples, but per single item/serving for FOOD_DB's discrete entries
+  // (eggs, a banana, a cup of coffee, ...). Deliberately not distinguished
+  // here — the quantity step lets the user pick whichever unit actually
+  // matches how they're measuring it (see suggestedUnitsFor), rather than
+  // this file guessing and locking them into one unit.
+  base: Macro;
 }
 
 /**
- * Simple keyword lookup against the local FOOD_DB — no external calls, no
- * "AI analysis". Matches are consumed (blanked out) as they're found so a
- * generic keyword can't double-count text already claimed by a more
- * specific phrase.
- *
- * Handles a comma-separated (or otherwise free-form) list of several dishes
- * in one message by design: the outer loop below checks EVERY entry in
- * FOOD_DB against the remaining text, so "борщ, блины, кофе" recognizes and
- * sums all three, not just the first. The inner loop additionally keeps
- * matching the same dish's keyword as many times as it actually appears
- * ("2 яйца, ещё яйцо" → two separate entries), instead of stopping after
- * the first occurrence. Matching itself is root-based, not exact-word: a
- * keyword like "борщ" matches "борща"/"борщом"/etc via plain substring
- * search anchored at a word start (see findWordAligned) — no need for the
- * message to use the dictionary form of a word.
+ * Step 1: searches Open Food Facts first, then the local FOOD_DB, and
+ * returns every match from both as one combined list for the user to choose
+ * from — always a list (even a single hit), never auto-resolved, since the
+ * stepped flow's whole point is an explicit pick-then-quantify sequence.
+ * Never throws — searchOpenFoodFacts already resolves to [] on any network
+ * failure, and this file doesn't add any new failure modes on top.
  */
-export function parseMeal(rawText: string): ParsedMeal | null {
-  let working = ` ${rawText.toLowerCase()} `;
-  const items: ParsedMealItem[] = [];
+export async function searchProducts(query: string): Promise<ProductCandidate[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
 
-  for (const food of FOOD_DB) {
-    for (const kw of food.keywords) {
-      let matchedThisKeyword = false;
-
-      // Keep matching this SAME keyword for as long as it keeps appearing,
-      // so every mention of a repeated dish gets its own summed entry.
-      for (;;) {
-        let from = 0;
-        let idx = -1;
-        // Skip past negated occurrences ("без сахара") to look for a real one.
-        for (;;) {
-          const found = findWordAligned(working, kw, from);
-          if (found === -1) break;
-          if (precededByNegation(working, found)) {
-            working =
-              working.slice(0, found) + " ".repeat(kw.length) + working.slice(found + kw.length);
-            from = found;
-            continue;
-          }
-          idx = found;
-          break;
-        }
-        if (idx === -1) break;
-        matchedThisKeyword = true;
-
-        // "картофель/картошка фри": avoid the generic potato entry also
-        // double-counting the same words once "фри" claims them here.
-        if (kw === "фри") {
-          const potatoBefore = working.slice(0, idx).match(/(картофел[а-яё]*|картошк[а-яё]*)\s+$/);
-          if (potatoBefore) {
-            const start = idx - potatoBefore[0].length;
-            working =
-              working.slice(0, start) + " ".repeat(potatoBefore[0].length) + working.slice(start);
-          }
-        }
-
-        const qty = quantityBefore(working, idx);
-        items.push({
-          label: food.label,
-          qty,
-          kcal: food.kcal * qty,
-          protein: food.protein * qty,
-          fat: food.fat * qty,
-          carbs: food.carbs * qty,
-        });
-        working = working.slice(0, idx) + " ".repeat(kw.length) + working.slice(idx + kw.length);
-      }
-
-      // Only one keyword "wins" per food (the first in its list with any
-      // match) — same as before — but now every occurrence of that keyword
-      // has already been captured above.
-      if (matchedThisKeyword) break;
-    }
+  let online: OffProduct[] = [];
+  try {
+    online = await searchOpenFoodFacts(trimmed);
+  } catch {
+    online = [];
   }
 
-  if (items.length === 0) return null;
+  const onlineCandidates: ProductCandidate[] = online.map((p) => ({
+    label: p.label,
+    source: "online",
+    code: p.code,
+    base: { kcal: p.kcal, protein: p.protein, fat: p.fat, carbs: p.carbs },
+  }));
+  const localCandidates: ProductCandidate[] = searchLocalFoodDb(trimmed).map((f) => ({
+    label: f.label,
+    source: "local",
+    base: { kcal: f.kcal, protein: f.protein, fat: f.fat, carbs: f.carbs },
+  }));
 
-  const totals = items.reduce<Macro>(
+  return [...onlineCandidates, ...localCandidates];
+}
+
+/** Units offered on the quantity step, in the app's canonical display order. */
+export const PORTION_UNITS = ["g", "ml", "portion", "pcs", "tbsp", "tsp", "cup"] as const;
+export type PortionUnit = (typeof PORTION_UNITS)[number];
+
+export const PORTION_UNIT_LABELS: Record<PortionUnit, string> = {
+  g: "грамм",
+  ml: "мл",
+  portion: "порция",
+  pcs: "шт",
+  tbsp: "ст.л.",
+  tsp: "ч.л.",
+  cup: "стакан",
+};
+
+/**
+ * Grams-equivalent for one unit of a WEIGHT/VOLUME-style unit — matches
+ * this app's long-standing convention (see game.ts's quest-quantity units):
+ * multiplying the entered amount by this and dividing by 100 gives the
+ * "per-100g" multiplier. "порция"/"шт" aren't weight-based — those use the
+ * entered amount directly as the multiplier (1 порция = ×1, 2 шт = ×2),
+ * matching FOOD_DB's per-natural-unit entries (eggs, a banana, ...).
+ */
+const PORTION_UNIT_GRAMS: Partial<Record<PortionUnit, number>> = {
+  g: 1,
+  ml: 1,
+  tbsp: 15,
+  tsp: 5,
+  cup: 200,
+};
+
+/** Converts an entered amount + unit into the multiplier applied to a product's base macros. */
+export function portionMultiplier(amount: number, unit: PortionUnit): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const grams = PORTION_UNIT_GRAMS[unit];
+  if (grams == null) return Math.min(amount, 20); // "portion"/"pcs": direct multiplier
+  return Math.min((amount * grams) / 100, 20);
+}
+
+/**
+ * A reasonable DEFAULT unit for a product, guessed from its label text —
+ * purely a starting point on the quantity step, every unit stays selectable
+ * regardless. Eggs default to "шт" (nobody weighs an egg), drinks default
+ * to "мл", soups default to "порция", everything else defaults to "г".
+ */
+export function suggestedUnitFor(label: string): PortionUnit {
+  const l = label.toLowerCase();
+  if (/яйц|яиц/.test(l)) return "pcs";
+  if (/молок|кофе|латте|капучино|чай|сок|квас|морс|компот|кисель|лимонад|газировк|смузи/.test(l)) {
+    return "ml";
+  }
+  if (
+    /суп|борщ|щи|солянк|харчо|окрошк|холодник|свекольник|рассольник|гаспачо|уха|рамен|минестроне|шурпа|лагман/.test(
+      l,
+    )
+  ) {
+    return "portion";
+  }
+  return "g";
+}
+
+/** Sensible default amount for a given unit — 100 for weight/volume units, 1 for everything counted. */
+export function defaultAmountFor(unit: PortionUnit): number {
+  return unit === "g" || unit === "ml" ? 100 : 1;
+}
+
+/** A product added to the in-progress meal draft (see NutritionCalculator), not yet saved to the diary. */
+export interface MealDraftItem {
+  label: string;
+  source: "online" | "local";
+  base: Macro;
+  amount: number;
+  unit: PortionUnit;
+}
+
+/** Scales a draft item's base macros by its current amount/unit — recomputed live as the user edits either. */
+export function scaledMacro(item: Pick<MealDraftItem, "base" | "amount" | "unit">): Macro {
+  const qty = portionMultiplier(item.amount, item.unit);
+  return {
+    kcal: item.base.kcal * qty,
+    protein: item.base.protein * qty,
+    fat: item.base.fat * qty,
+    carbs: item.base.carbs * qty,
+  };
+}
+
+export function sumMacros(items: Macro[]): Macro {
+  return items.reduce<Macro>(
     (acc, it) => ({
       kcal: acc.kcal + it.kcal,
       protein: acc.protein + it.protein,
@@ -683,114 +676,6 @@ export function parseMeal(rawText: string): ParsedMeal | null {
     }),
     { kcal: 0, protein: 0, fat: 0, carbs: 0 },
   );
-
-  return { items, totals };
-}
-
-/** A single quantity-extraction pass, reused across whole comma-separated segments (see extractSegmentQuantity below). */
-function extractSegmentQuantity(segment: string): number {
-  const gramMatch = segment.match(/(\d+)\s*(?:г\.?|гр\.?|грамм[а-я]*)\b/i);
-  if (gramMatch) {
-    const grams = parseInt(gramMatch[1], 10);
-    if (Number.isFinite(grams) && grams > 0) return Math.min(grams / 100, 20);
-  }
-  const countMatch = segment.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?/);
-  if (countMatch) {
-    const n = parseInt(countMatch[1], 10);
-    if (Number.isFinite(n) && n > 0) return Math.min(n, 20);
-  }
-  return 1;
-}
-
-export interface OnlineMealItem extends Macro {
-  label: string;
-  qty: number;
-  source: "online" | "local";
-}
-
-export type SegmentResolution =
-  | { segment: string; kind: "resolved"; item: OnlineMealItem }
-  | { segment: string; kind: "choose"; qty: number; candidates: OffProduct[] }
-  | { segment: string; kind: "not-found" };
-
-/** Turns one Open Food Facts product + a quantity multiplier into a loggable item. */
-function offProductToItem(product: OffProduct, qty: number): OnlineMealItem {
-  return {
-    label: product.label,
-    qty,
-    kcal: product.kcal * qty,
-    protein: product.protein * qty,
-    fat: product.fat * qty,
-    carbs: product.carbs * qty,
-    source: "online",
-  };
-}
-
-/**
- * Resolves a free-text meal description against Open Food Facts, one
- * comma-separated dish per segment, WITH a fallback to the local FOOD_DB
- * (see parseMeal above) whenever OFF has no match for a segment — whether
- * because the product genuinely isn't in OFF, or the API/network is
- * unavailable (searchOpenFoodFacts never throws; an unreachable API just
- * looks like "zero results" here, same code path as a real miss).
- *
- * Each segment resolves to one of:
- * - "resolved": exactly one OFF product matched (or none did, and the
- *   local database found something) — used directly, no user input needed.
- * - "choose": OFF returned more than one plausible product — the caller
- *   (NutritionCalculator) shows these as options and the user picks one.
- * - "not-found": neither OFF nor the local database recognized the segment.
- */
-export async function resolveMealOnline(rawText: string): Promise<SegmentResolution[]> {
-  const segments = rawText
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const results: SegmentResolution[] = [];
-  for (const segment of segments) {
-    const qty = extractSegmentQuantity(segment);
-    let candidates: OffProduct[] = [];
-    try {
-      candidates = await searchOpenFoodFacts(segment);
-    } catch {
-      // searchOpenFoodFacts already catches internally and resolves to
-      // [], but guard here too in case that contract ever changes.
-      candidates = [];
-    }
-
-    if (candidates.length === 1) {
-      results.push({ segment, kind: "resolved", item: offProductToItem(candidates[0], qty) });
-      continue;
-    }
-    if (candidates.length > 1) {
-      results.push({ segment, kind: "choose", qty, candidates });
-      continue;
-    }
-
-    // No OFF match (including "API unreachable") — fall back to the local
-    // keyword database for just this segment.
-    const local = parseMeal(segment);
-    if (local && local.items.length > 0) {
-      // A segment is meant to be one dish; if the local matcher still finds
-      // several local keywords inside it, combine them into a single
-      // fallback entry so this segment always yields exactly one list row.
-      const label = local.items.map((i) => i.label).join(" + ");
-      results.push({
-        segment,
-        kind: "resolved",
-        item: { label, qty: 1, ...local.totals, source: "local" },
-      });
-    } else {
-      results.push({ segment, kind: "not-found" });
-    }
-  }
-  return results;
-}
-
-/** Turns a user's picked OFF candidate for a "choose" segment into a resolved item. */
-export function resolveChoice(product: OffProduct, qty: number): OnlineMealItem {
-  return offProductToItem(product, qty);
 }
 
 export function getTodayNutrition(state: GameState): NutritionDay {
@@ -805,16 +690,24 @@ export function getTodayNutrition(state: GameState): NutritionDay {
   );
 }
 
-/** Adds a parsed meal's totals to today's log, returning a new GameState. */
-export function addNutritionEntry(state: GameState, rawText: string, totals: Macro): GameState {
+/**
+ * Step 5: saves the whole in-progress draft list as ONE meal entry — total
+ * macros summed across every item, plus the individual items themselves
+ * (frozen at their scaled values as of save time, not a live formula) so a
+ * future "Записи сегодня" view could list them out if needed.
+ */
+export function addNutritionEntry(state: GameState, items: MealDraftItem[]): GameState {
   const key = todayKey();
   const day = state.nutrition[key] ?? { kcal: 0, protein: 0, fat: 0, carbs: 0, entries: [] };
+  const scaledItems = items.map((it) => ({ label: it.label, ...scaledMacro(it) }));
+  const totals = sumMacros(scaledItems);
+  const text = scaledItems.map((it) => it.label).join(" + ");
   const nextDay: NutritionDay = {
     kcal: day.kcal + totals.kcal,
     protein: day.protein + totals.protein,
     fat: day.fat + totals.fat,
     carbs: day.carbs + totals.carbs,
-    entries: [...day.entries, { text: rawText, ...totals, at: Date.now() }],
+    entries: [...day.entries, { text, ...totals, at: Date.now(), items: scaledItems }],
   };
   return { ...state, nutrition: { ...state.nutrition, [key]: nextDay } };
 }

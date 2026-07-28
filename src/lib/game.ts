@@ -76,6 +76,11 @@ export interface Macro {
 export interface NutritionEntry extends Macro {
   text: string;
   at: number;
+  // Individual products that made up this entry, frozen at their scaled
+  // macros as of save time (see addNutritionEntry in nutrition.ts) — added
+  // for the stepped search→quantify flow's multi-product meals. Optional
+  // since entries saved before that flow existed only ever have `text`.
+  items?: (Macro & { label: string })[];
 }
 
 export interface NutritionDay extends Macro {

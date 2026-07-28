@@ -1,19 +1,25 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ProgressBar } from "@/components/ProgressBar";
 import { STAT_META, type GameState, type Macro } from "@/lib/game";
 import {
   addNutritionEntry,
   cheatMealsRemaining,
+  consumeCheatMeal,
+  defaultAmountFor,
   effectiveGoals,
   getTodayNutrition,
-  consumeCheatMeal,
   MONTHLY_CHEAT_LIMIT,
-  resolveChoice,
-  resolveMealOnline,
-  type OnlineMealItem,
-  type SegmentResolution,
+  PORTION_UNIT_LABELS,
+  PORTION_UNITS,
+  portionMultiplier,
+  scaledMacro,
+  searchProducts,
+  suggestedUnitFor,
+  sumMacros,
+  type MealDraftItem,
+  type PortionUnit,
+  type ProductCandidate,
 } from "@/lib/nutrition";
-import type { OffProduct } from "@/lib/openfoodfacts";
 
 interface Props {
   state: GameState;
@@ -27,14 +33,20 @@ const METRICS = [
   { key: "carbs", label: "Углеводы", unit: "г", color: STAT_META.appearance.color },
 ] as const;
 
+/** Which sub-screen of the "add a product" flow is showing right now. */
+type Phase = "search" | "quantity" | "added";
+
 export function NutritionCalculator({ state, update }: Props) {
-  const [text, setText] = useState("");
+  const [phase, setPhase] = useState<Phase>("search");
+  const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [resolutions, setResolutions] = useState<SegmentResolution[] | null>(null);
-  const [savedText, setSavedText] = useState("");
-  // User's pick for a "choose" segment (several Open Food Facts matches —
-  // see resolveMealOnline), keyed by that segment's index in `resolutions`.
-  const [choices, setChoices] = useState<Record<number, OffProduct>>({});
+  const [candidates, setCandidates] = useState<ProductCandidate[] | null>(null);
+  const [selected, setSelected] = useState<ProductCandidate | null>(null);
+  const [amount, setAmount] = useState(100);
+  const [unit, setUnit] = useState<PortionUnit>("g");
+
+  const [draftItems, setDraftItems] = useState<MealDraftItem[]>([]);
+  const [lastAdded, setLastAdded] = useState<string>("");
   const [saved, setSaved] = useState(false);
 
   const today = getTodayNutrition(state);
@@ -42,182 +54,272 @@ export function NutritionCalculator({ state, update }: Props) {
   const remaining = cheatMealsRemaining(state);
 
   async function handleSearch() {
-    const trimmed = text.trim();
+    const trimmed = query.trim();
     if (!trimmed) return;
     setSearching(true);
-    setResolutions(null);
-    setChoices({});
+    setCandidates(null);
     setSaved(false);
-    setSavedText(trimmed);
     try {
-      // Looks each comma-separated dish up on Open Food Facts first (a
-      // free, key-less public product search — supports Russian), and
-      // only falls back to the local keyword database (nutrition.ts'
-      // FOOD_DB) per-dish if OFF has no match or is unreachable.
-      const result = await resolveMealOnline(trimmed);
-      setResolutions(result);
+      // Product-name-only search — Open Food Facts first, local FOOD_DB
+      // fallback per product, same sources as before, just no quantity
+      // parsing anymore (that's the separate step below).
+      const result = await searchProducts(trimmed);
+      setCandidates(result);
     } finally {
       setSearching(false);
     }
   }
 
-  const pendingChoiceCount = useMemo(
-    () => (resolutions ?? []).filter((r, i) => r.kind === "choose" && !choices[i]).length,
-    [resolutions, choices],
-  );
-
-  // Every segment's final item: "resolved" as-is, "choose" once the user
-  // has picked one of the candidates, "not-found" segments are simply left
-  // out of the total (shown separately below instead).
-  const finalItems: OnlineMealItem[] = useMemo(() => {
-    if (!resolutions) return [];
-    const out: OnlineMealItem[] = [];
-    resolutions.forEach((r, i) => {
-      if (r.kind === "resolved") out.push(r.item);
-      else if (r.kind === "choose" && choices[i]) out.push(resolveChoice(choices[i], r.qty));
-    });
-    return out;
-  }, [resolutions, choices]);
-
-  const finalTotals: Macro = useMemo(
-    () =>
-      finalItems.reduce<Macro>(
-        (acc, it) => ({
-          kcal: acc.kcal + it.kcal,
-          protein: acc.protein + it.protein,
-          fat: acc.fat + it.fat,
-          carbs: acc.carbs + it.carbs,
-        }),
-        { kcal: 0, protein: 0, fat: 0, carbs: 0 },
-      ),
-    [finalItems],
-  );
-
-  const notFoundSegments = (resolutions ?? [])
-    .filter((r) => r.kind === "not-found")
-    .map((r) => r.segment);
-
-  function handleSave() {
-    if (finalItems.length === 0) return;
-    update((s) => addNutritionEntry(s, savedText, finalTotals));
-    setSaved(true);
-    setText("");
-    setResolutions(null);
-    setChoices({});
+  function pickCandidate(candidate: ProductCandidate) {
+    const initialUnit = suggestedUnitFor(candidate.label);
+    setSelected(candidate);
+    setUnit(initialUnit);
+    setAmount(defaultAmountFor(initialUnit));
+    setPhase("quantity");
   }
+
+  function backToSearch() {
+    setSelected(null);
+    setPhase("search");
+  }
+
+  function addToDraft() {
+    if (!selected) return;
+    const item: MealDraftItem = {
+      label: selected.label,
+      source: selected.source,
+      base: selected.base,
+      amount,
+      unit,
+    };
+    setDraftItems((prev) => [...prev, item]);
+    setLastAdded(selected.label);
+    setSelected(null);
+    setQuery("");
+    setCandidates(null);
+    setPhase("added");
+  }
+
+  function startAnotherProduct() {
+    setPhase("search");
+  }
+
+  function updateDraftItem(index: number, patch: Partial<Pick<MealDraftItem, "amount" | "unit">>) {
+    setDraftItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  }
+
+  function removeDraftItem(index: number) {
+    setDraftItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const scaledDraftItems = draftItems.map((it) => ({ label: it.label, ...scaledMacro(it) }));
+  const draftTotals: Macro = sumMacros(scaledDraftItems);
+
+  function handleSaveMeal() {
+    if (draftItems.length === 0) return;
+    update((s) => addNutritionEntry(s, draftItems));
+    setDraftItems([]);
+    setSaved(true);
+    setPhase("search");
+    setQuery("");
+    setCandidates(null);
+    setSelected(null);
+  }
+
+  const previewMacro = selected ? scaledMacro({ base: selected.base, amount, unit }) : null;
 
   return (
     <div className="space-y-5">
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Что ты съел?</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Опиши простыми словами, например: 2 яйца, тост, кофе с молоком — сначала ищем в базе Open
-          Food Facts, при отсутствии сети или совпадений подключается локальная база.
-        </p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-          placeholder="2 яйца, тост, кофе с молоком…"
-          className="mt-3 w-full resize-none rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-        />
-        <button
-          type="button"
-          onClick={handleSearch}
-          disabled={!text.trim() || searching}
-          className="mt-3 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {searching ? "Ищем…" : "Найти"}
-        </button>
 
-        {resolutions && resolutions.length === 0 && (
-          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-            Ничего не введено для поиска.
-          </p>
+        {phase === "search" && (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Название продукта или блюда, без веса — количество уточним на следующем шаге. Ищем в
+              Open Food Facts, при отсутствии сети или совпадений — в локальной базе.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                placeholder="Например: куриная грудка"
+                className="w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={!query.trim() || searching}
+                className="shrink-0 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {searching ? "Ищем…" : "Найти"}
+              </button>
+            </div>
+
+            {candidates && candidates.length === 0 && (
+              <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                Ничего не найдено ни в Open Food Facts, ни в локальной базе — попробуй другое
+                название.
+              </p>
+            )}
+
+            {candidates && candidates.length > 0 && (
+              <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
+                {candidates.map((c, i) => (
+                  <li key={c.code ?? `${c.source}-${c.label}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => pickCandidate(c)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-foreground">{c.label}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {Math.round(c.base.kcal)} ккал
+                      </span>
+                      <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">
+                        {c.source === "online" ? "OFF" : "локальная"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
 
-        {resolutions && resolutions.length > 0 && (
-          <div className="mt-3 space-y-3">
-            {resolutions.map((r, i) => {
-              if (r.kind === "resolved") {
+        {phase === "quantity" && selected && previewMacro && (
+          <div className="mt-3">
+            <p className="text-xs text-muted-foreground">
+              <span className="text-foreground">{selected.label}</span> — сколько ты съел?
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                className="w-28 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value as PortionUnit)}
+                className="rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+              >
+                {PORTION_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {PORTION_UNIT_LABELS[u]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs">
+              <span className="font-medium text-foreground">
+                Итого: {Math.round(previewMacro.kcal)} ккал
+              </span>
+              {" · "}Белки {Math.round(previewMacro.protein * 10) / 10} · Жиры{" "}
+              {Math.round(previewMacro.fat * 10) / 10} · Углеводы{" "}
+              {Math.round(previewMacro.carbs * 10) / 10}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={backToSearch}
+                className="flex-1 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary"
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                onClick={addToDraft}
+                disabled={portionMultiplier(amount, unit) <= 0}
+                className="flex-1 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Добавить в приём пищи
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === "added" && (
+          <div className="mt-3">
+            <p className="rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              ✅ Добавлено: <span className="text-foreground">{lastAdded}</span>
+            </p>
+            <button
+              type="button"
+              onClick={startAnotherProduct}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+            >
+              + Добавить ещё продукт
+            </button>
+          </div>
+        )}
+
+        {draftItems.length > 0 && (
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="text-xs font-medium tracking-wide text-muted-foreground">
+              Текущий приём пищи
+            </h3>
+            <ul className="mt-2 space-y-2">
+              {draftItems.map((it, i) => {
+                const macro = scaledMacro(it);
                 return (
-                  <div
+                  <li
                     key={i}
-                    className="rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground"
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"
                   >
-                    <span className="text-foreground">{r.item.label}</span>
-                    {r.item.qty !== 1 ? ` × ${Math.round(r.item.qty * 10) / 10}` : ""} —{" "}
-                    {Math.round(r.item.kcal)} ккал
-                    <span className="ml-1.5 text-[10px] uppercase text-muted-foreground/70">
-                      {r.item.source === "online" ? "Open Food Facts" : "локальная база"}
-                    </span>
-                  </div>
-                );
-              }
-              if (r.kind === "choose") {
-                const picked = choices[i];
-                return (
-                  <div key={i} className="rounded-lg border border-border px-3 py-2">
-                    <div className="text-xs font-medium text-foreground">
-                      «{r.segment}» — несколько совпадений, выбери нужное:
-                    </div>
-                    <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
-                      {r.candidates.map((c) => (
-                        <li key={c.code}>
-                          <label className="flex cursor-pointer items-center gap-2 text-xs">
-                            <input
-                              type="radio"
-                              name={`choice-${i}`}
-                              checked={picked?.code === c.code}
-                              onChange={() => setChoices((prev) => ({ ...prev, [i]: c }))}
-                              className="accent-primary"
-                            />
-                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                            <span className="shrink-0 text-muted-foreground">
-                              {Math.round(c.kcal)} ккал/100г
-                            </span>
-                          </label>
-                        </li>
+                    <span className="min-w-0 flex-1 truncate text-foreground">{it.label}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={it.amount}
+                      onChange={(e) => updateDraftItem(i, { amount: Number(e.target.value) || 0 })}
+                      className="w-16 rounded-lg border border-border bg-input px-2 py-1 text-xs outline-none focus:border-primary"
+                    />
+                    <select
+                      value={it.unit}
+                      onChange={(e) => updateDraftItem(i, { unit: e.target.value as PortionUnit })}
+                      className="rounded-lg border border-border bg-input px-2 py-1 text-xs outline-none focus:border-primary"
+                    >
+                      {PORTION_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {PORTION_UNIT_LABELS[u]}
+                        </option>
                       ))}
-                    </ul>
-                  </div>
+                    </select>
+                    <span className="shrink-0 text-muted-foreground">
+                      {Math.round(macro.kcal)} ккал
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeDraftItem(i)}
+                      aria-label="Удалить позицию"
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      Удалить
+                    </button>
+                  </li>
                 );
-              }
-              return (
-                <p key={i} className="text-xs text-muted-foreground">
-                  «{r.segment}» — не распознано ни в Open Food Facts, ни в локальной базе.
-                </p>
-              );
-            })}
+              })}
+            </ul>
 
-            {pendingChoiceCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Выбери вариант для {pendingChoiceCount === 1 ? "позиции" : "позиций"} выше, чтобы
-                посчитать итог.
-              </p>
-            )}
-
-            {finalItems.length > 0 && (
-              <div className="rounded-lg bg-secondary px-3 py-2 text-xs">
-                <div className="font-medium text-foreground">
-                  Итого: {Math.round(finalTotals.kcal)} ккал · Белки{" "}
-                  {Math.round(finalTotals.protein)} · Жиры {Math.round(finalTotals.fat)} · Углеводы{" "}
-                  {Math.round(finalTotals.carbs)}
-                </div>
-              </div>
-            )}
-
-            {notFoundSegments.length > 0 && finalItems.length > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                Не учтено в итоге: {notFoundSegments.join(", ")}
-              </p>
-            )}
+            <div className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs">
+              <span className="font-medium text-foreground">
+                Итого приёма пищи: {Math.round(draftTotals.kcal)} ккал
+              </span>
+              {" · "}Белки {Math.round(draftTotals.protein)} · Жиры {Math.round(draftTotals.fat)} ·
+              Углеводы {Math.round(draftTotals.carbs)}
+            </div>
 
             <button
               type="button"
-              onClick={handleSave}
-              disabled={finalItems.length === 0 || pendingChoiceCount > 0}
-              className="w-full rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleSaveMeal}
+              className="mt-3 w-full rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5"
             >
               Сохранить в дневник
             </button>

@@ -5,6 +5,7 @@ import {
   type Macro,
   type NutritionDay,
 } from "@/lib/game";
+import { searchOpenFoodFacts, type OffProduct } from "@/lib/openfoodfacts";
 
 export type { Macro, NutritionDay } from "@/lib/game";
 
@@ -622,6 +623,112 @@ export function parseMeal(rawText: string): ParsedMeal | null {
   );
 
   return { items, totals };
+}
+
+/** A single quantity-extraction pass, reused across whole comma-separated segments (see extractSegmentQuantity below). */
+function extractSegmentQuantity(segment: string): number {
+  const gramMatch = segment.match(/(\d+)\s*(?:г\.?|гр\.?|грамм[а-я]*)\b/i);
+  if (gramMatch) {
+    const grams = parseInt(gramMatch[1], 10);
+    if (Number.isFinite(grams) && grams > 0) return Math.min(grams / 100, 20);
+  }
+  const countMatch = segment.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?/);
+  if (countMatch) {
+    const n = parseInt(countMatch[1], 10);
+    if (Number.isFinite(n) && n > 0) return Math.min(n, 20);
+  }
+  return 1;
+}
+
+export interface OnlineMealItem extends Macro {
+  label: string;
+  qty: number;
+  source: "online" | "local";
+}
+
+export type SegmentResolution =
+  | { segment: string; kind: "resolved"; item: OnlineMealItem }
+  | { segment: string; kind: "choose"; qty: number; candidates: OffProduct[] }
+  | { segment: string; kind: "not-found" };
+
+/** Turns one Open Food Facts product + a quantity multiplier into a loggable item. */
+function offProductToItem(product: OffProduct, qty: number): OnlineMealItem {
+  return {
+    label: product.label,
+    qty,
+    kcal: product.kcal * qty,
+    protein: product.protein * qty,
+    fat: product.fat * qty,
+    carbs: product.carbs * qty,
+    source: "online",
+  };
+}
+
+/**
+ * Resolves a free-text meal description against Open Food Facts, one
+ * comma-separated dish per segment, WITH a fallback to the local FOOD_DB
+ * (see parseMeal above) whenever OFF has no match for a segment — whether
+ * because the product genuinely isn't in OFF, or the API/network is
+ * unavailable (searchOpenFoodFacts never throws; an unreachable API just
+ * looks like "zero results" here, same code path as a real miss).
+ *
+ * Each segment resolves to one of:
+ * - "resolved": exactly one OFF product matched (or none did, and the
+ *   local database found something) — used directly, no user input needed.
+ * - "choose": OFF returned more than one plausible product — the caller
+ *   (NutritionCalculator) shows these as options and the user picks one.
+ * - "not-found": neither OFF nor the local database recognized the segment.
+ */
+export async function resolveMealOnline(rawText: string): Promise<SegmentResolution[]> {
+  const segments = rawText
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const results: SegmentResolution[] = [];
+  for (const segment of segments) {
+    const qty = extractSegmentQuantity(segment);
+    let candidates: OffProduct[] = [];
+    try {
+      candidates = await searchOpenFoodFacts(segment);
+    } catch {
+      // searchOpenFoodFacts already catches internally and resolves to
+      // [], but guard here too in case that contract ever changes.
+      candidates = [];
+    }
+
+    if (candidates.length === 1) {
+      results.push({ segment, kind: "resolved", item: offProductToItem(candidates[0], qty) });
+      continue;
+    }
+    if (candidates.length > 1) {
+      results.push({ segment, kind: "choose", qty, candidates });
+      continue;
+    }
+
+    // No OFF match (including "API unreachable") — fall back to the local
+    // keyword database for just this segment.
+    const local = parseMeal(segment);
+    if (local && local.items.length > 0) {
+      // A segment is meant to be one dish; if the local matcher still finds
+      // several local keywords inside it, combine them into a single
+      // fallback entry so this segment always yields exactly one list row.
+      const label = local.items.map((i) => i.label).join(" + ");
+      results.push({
+        segment,
+        kind: "resolved",
+        item: { label, qty: 1, ...local.totals, source: "local" },
+      });
+    } else {
+      results.push({ segment, kind: "not-found" });
+    }
+  }
+  return results;
+}
+
+/** Turns a user's picked OFF candidate for a "choose" segment into a resolved item. */
+export function resolveChoice(product: OffProduct, qty: number): OnlineMealItem {
+  return offProductToItem(product, qty);
 }
 
 export function getTodayNutrition(state: GameState): NutritionDay {

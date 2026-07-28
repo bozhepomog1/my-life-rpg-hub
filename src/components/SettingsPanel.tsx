@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "@tanstack/react-router";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
@@ -721,6 +722,15 @@ export function SettingsPanel({ state, update, setState }: Props) {
           Сбросить весь прогресс
         </button>
       </section>
+
+      <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
+        <Link to="/privacy" className="underline-offset-2 hover:text-foreground hover:underline">
+          Политика конфиденциальности
+        </Link>
+        <Link to="/terms" className="underline-offset-2 hover:text-foreground hover:underline">
+          Условия использования
+        </Link>
+      </div>
 
       {confirmOpen &&
         createPortal(

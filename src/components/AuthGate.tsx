@@ -1,11 +1,18 @@
 import { useState, type ReactNode } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuthContext } from "@/lib/use-auth-context";
 import { sendMagicLink, signInWithGoogle } from "@/lib/auth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
+// Static legal pages must stay reachable without a session — e.g. a visitor
+// reading them from the login screen link before ever signing in.
+const PUBLIC_PATHS = ["/privacy", "/terms"];
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const { session, loading } = useAuthContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
   if (loading) return <LoadingScreen />;
   if (!session) return <LoginScreen />;
   return <>{children}</>;
@@ -129,6 +136,15 @@ function LoginScreen() {
             )}
           </div>
         )}
+
+        <div className="mt-6 flex justify-center gap-4 text-xs text-muted-foreground">
+          <Link to="/privacy" className="underline-offset-2 hover:text-foreground hover:underline">
+            Политика конфиденциальности
+          </Link>
+          <Link to="/terms" className="underline-offset-2 hover:text-foreground hover:underline">
+            Условия использования
+          </Link>
+        </div>
       </div>
     </div>
   );

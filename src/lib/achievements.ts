@@ -222,7 +222,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     category: "special",
     icon: "💰",
     title: "Залог отбит",
-    description: "Успешно выполни условия 30-дневного залога",
+    description: "Настрой залог в Настройках и успешно выполни его условия до конца срока",
     unlocked: (state) => {
       const d = computeDiscipline(state);
       return d.finished && !d.lost;

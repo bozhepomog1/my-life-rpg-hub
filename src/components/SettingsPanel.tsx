@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
+import { DepositSetupModal } from "@/components/DepositSetupModal";
 import { isValidHex } from "@/lib/color";
 import {
   ACCENT_PRESETS,
@@ -41,6 +42,7 @@ export function SettingsPanel({ state, update, setState }: Props) {
   const bgFileRef = useRef<HTMLInputElement>(null);
   const { code: myCode, loading: myCodeLoading } = useMyShortCode();
   const [codeCopied, setCodeCopied] = useState(false);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
 
   async function copyMyCode() {
     if (!myCode) return;
@@ -115,12 +117,25 @@ export function SettingsPanel({ state, update, setState }: Props) {
     return true;
   }
 
-  function commitDeposit(raw: string): boolean {
-    if (raw.trim() === "") return false;
-    const n = Math.max(0, Math.round(Number(raw) || 0));
-    if (n === state.depositAmount) return false;
-    update((s) => ({ ...s, depositAmount: n }));
-    return true;
+  function confirmDepositSetup(amount: number, durationDays: number) {
+    update((s) => ({
+      ...s,
+      depositEnabled: true,
+      depositAmount: amount,
+      depositDurationDays: durationDays,
+      depositStartAt: Date.now(),
+      depositLost: false,
+    }));
+    setDepositModalOpen(false);
+  }
+
+  function disableDeposit() {
+    if (
+      !confirm("Отключить залог? Текущий отсчёт остановится, деньги (если реальные) не сгорят.")
+    ) {
+      return;
+    }
+    update((s) => ({ ...s, depositEnabled: false }));
   }
 
   function exportBackup() {
@@ -265,24 +280,62 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Залог</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Ставка на самого себя: эта сумма «замораживается» на 30 дней. Закрывай все ежедневные
-          квесты каждый день — и получишь её обратно полностью. Пропускай слишком часто — и часть
-          сгорит.
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Текущая сумма: <span className="font-medium text-foreground">${state.depositAmount}</span>
-        </p>
-        <div className="mt-3">
-          <AutosaveField
-            type="number"
-            min={0}
-            value={String(state.depositAmount)}
-            ariaLabel="Сумма залога"
-            onCommit={commitDeposit}
-          />
-        </div>
+        {state.depositEnabled ? (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ставка на самого себя: эта сумма «замораживается» на {state.depositDurationDays} дней.
+              Закрывай все ежедневные квесты каждый день — и получишь её обратно полностью.
+              Пропускай слишком часто — и часть сгорит.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Текущая сумма:{" "}
+              <span className="font-medium text-foreground">${state.depositAmount}</span>
+              {" · "}
+              {state.depositDurationDays} дней
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDepositModalOpen(true)}
+                className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+              >
+                Изменить
+              </button>
+              <button
+                type="button"
+                onClick={disableDeposit}
+                className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
+              >
+                Отключить залог
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Необязательная функция. Если хочешь мотивацию посерьёзнее — настрой сумму (не
+              обязательно реальные деньги, можно и символическую цифру) и срок, на который она
+              «замораживается».
+            </p>
+            <button
+              type="button"
+              onClick={() => setDepositModalOpen(true)}
+              className="mt-3 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
+            >
+              Настроить залог
+            </button>
+          </>
+        )}
       </section>
+
+      {depositModalOpen && (
+        <DepositSetupModal
+          initialAmount={state.depositAmount}
+          initialDurationDays={state.depositDurationDays}
+          onConfirm={confirmDepositSetup}
+          onCancel={() => setDepositModalOpen(false)}
+        />
+      )}
 
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Напоминания</h2>

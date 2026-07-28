@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DEPOSIT_DURATION_MS, computeDiscipline, type GameState } from "@/lib/game";
+import { depositDurationMs, computeDiscipline, type GameState } from "@/lib/game";
 import { ProgressBar } from "@/components/ProgressBar";
 
 interface Props {
@@ -16,7 +16,7 @@ export function DepositWidget({ state }: Props) {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const end = state.depositStartAt + DEPOSIT_DURATION_MS;
+  const end = state.depositStartAt + depositDurationMs(state);
   const remain = Math.max(0, end - now);
   const days = Math.floor(remain / (24 * 3600 * 1000));
   const hours = Math.floor((remain / (3600 * 1000)) % 24);
@@ -37,7 +37,7 @@ export function DepositWidget({ state }: Props) {
         <div className="min-w-0">
           <div
             className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-            title="Ставка на себя: выполняй ежедневные квесты 30 дней подряд, чтобы вернуть эту сумму."
+            title={`Ставка на себя: выполняй ежедневные квесты ${state.depositDurationDays} дней подряд, чтобы вернуть эту сумму.`}
           >
             <span
               className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"

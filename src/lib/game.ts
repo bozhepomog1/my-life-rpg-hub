@@ -235,9 +235,16 @@ export interface GameState {
   stats: Record<StatKey, StatState>;
   quests: Quest[];
   completedCount: number;
-  // deposit
-  depositStartAt: number; // timestamp; 30 days countdown starts
-  depositAmount: number; // e.g. 1000
+  // deposit — an OPTIONAL "skin in the game" challenge, off by default.
+  // Only becomes active once the user explicitly configures an amount and
+  // duration and confirms via the setup modal (see DepositSetupModal).
+  // depositStartAt doubles as the anchor date for the always-on 30-day
+  // discipline calendar (see computeDiscipline) regardless of whether a
+  // deposit is actually enabled — that part isn't gated.
+  depositEnabled: boolean;
+  depositStartAt: number; // timestamp; countdown start (calendar anchor + deposit clock)
+  depositAmount: number; // user-chosen; not necessarily real money — can be symbolic
+  depositDurationDays: number; // user-chosen length of the deposit challenge
   depositLost: boolean;
   // discipline: dates → list of completed daily quest ids that day
   dailyCompletions: Record<string, string[]>;
@@ -384,7 +391,15 @@ export const CATEGORY_META: Record<
   },
 };
 
-export const DEPOSIT_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+export const DEFAULT_DEPOSIT_DURATION_DAYS = 30;
+
+/** Deposit challenge length in ms, based on the user's chosen duration
+ * (falls back to the default for any legacy/unset state). */
+export function depositDurationMs(state: Pick<GameState, "depositDurationDays">): number {
+  const days =
+    state.depositDurationDays > 0 ? state.depositDurationDays : DEFAULT_DEPOSIT_DURATION_DAYS;
+  return days * 24 * 60 * 60 * 1000;
+}
 
 /** Minimum length of the written proof note for requiresText quests. */
 export const MIN_NOTE_LENGTH = 25;
@@ -527,8 +542,10 @@ export function defaultState(): GameState {
     },
     quests: seedQuests(),
     completedCount: 0,
+    depositEnabled: false,
     depositStartAt: Date.now(),
     depositAmount: 1000,
+    depositDurationDays: DEFAULT_DEPOSIT_DURATION_DAYS,
     depositLost: false,
     dailyCompletions: {},
     nutrition: {},
@@ -1362,7 +1379,11 @@ export function computeDiscipline(state: GameState) {
   const redCount = days.filter((d) => d.status === "red").length;
   const greenCount = days.filter((d) => d.status === "green").length;
   const progress = Math.max(0, 100 - redCount * 5);
-  const finished = Date.now() >= state.depositStartAt + DEPOSIT_DURATION_MS;
+  // "finished"/"lost" only mean anything for an actually-active deposit —
+  // the 30-day calendar above still renders either way, it's just a general
+  // discipline tracker independent of whether money is on the line.
+  const finished =
+    state.depositEnabled && Date.now() >= state.depositStartAt + depositDurationMs(state);
   const lost = finished && progress < 100;
   return { days, redCount, greenCount, progress, finished, lost };
 }

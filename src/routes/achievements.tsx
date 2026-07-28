@@ -50,7 +50,11 @@ function Achievements() {
     setState(defaultState());
   }
   function restartDeposit() {
-    if (!confirm("Перезапустить залог? Отсчёт 30 дней начнётся заново.")) return;
+    if (
+      !confirm(`Перезапустить залог? Отсчёт ${state.depositDurationDays} дней начнётся заново.`)
+    ) {
+      return;
+    }
     setState({ ...state, depositStartAt: Date.now(), dailyCompletions: {}, depositLost: false });
   }
 
@@ -63,7 +67,7 @@ function Achievements() {
           <StatCard label="Уровень героя" value={state.level} />
           <StatCard label="Общий XP" value={state.totalXp} />
           <StatCard label="Квесты" value={state.completedCount} />
-          <StatCard label="Прогресс залога" value={`${disc.progress}%`} />
+          <StatCard label="Прогресс дисциплины" value={`${disc.progress}%`} />
         </div>
 
         <section className="panel p-6">
@@ -228,13 +232,15 @@ function Achievements() {
           )}
         </section>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            onClick={restartDeposit}
-            className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
-          >
-            Перезапустить залог
-          </button>
+        <div className={`grid gap-2 ${state.depositEnabled ? "sm:grid-cols-2" : ""}`}>
+          {state.depositEnabled && (
+            <button
+              onClick={restartDeposit}
+              className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
+            >
+              Перезапустить залог
+            </button>
+          )}
           <button
             onClick={resetAll}
             className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"

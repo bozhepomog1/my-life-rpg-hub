@@ -6,7 +6,7 @@ import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
 import { QuestCard } from "@/components/QuestCard";
 import { AddQuestModal } from "@/components/AddQuestModal";
-import { DepositWidget } from "@/components/DepositWidget";
+import { DepositSection } from "@/components/DepositSection";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
@@ -430,7 +430,7 @@ function Home() {
 
         <SeasonProgress season={state.season} />
 
-        <DepositWidget state={state} />
+        <DepositSection state={state} update={update} />
 
         <section>
           <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">

@@ -479,21 +479,83 @@ const FOOD_DB: FoodItem[] = [
 ];
 
 /**
- * Looks for a quantity right before a matched keyword; defaults to 1.
- * Supports two forms:
- * - grams ("200г", "150 г", "300 грамм") — for per-100g entries this is a
- *   fractional multiplier of 100g units (200г → 2, 150г → 1.5);
+ * Weight/volume units this app recognizes, each mapped to its equivalent in
+ * grams (liquids are treated as ~1g/ml — close enough for a rough calorie
+ * estimator). matchWeightUnit() below multiplies a matched amount by this
+ * and divides by 100, giving the same "qty" multiplier this file has always
+ * used for per-100g entries (FOOD_DB rows, and Open Food Facts' own
+ * per-100g nutriment fields) — so "холодник 200г" already meant qty=2, and
+ * "холодник 2 стакана" now means qty=4 (2 × 200g ÷ 100) the same way.
+ *
+ * Order matters: each entry is tried in turn against the SAME text, so a
+ * unit that's a literal prefix of another (bare "ложка" starts with the
+ * same "л" as "литр") must have its own dedicated, more specific pattern
+ * checked — which it does here, since every entry gets an independent
+ * match attempt rather than one shared alternation. "ложка" alone defaults
+ * to a tablespoon (15g), matching how it's used conversationally.
+ */
+interface WeightUnit {
+  grams: number;
+  /** Regex fragment (no capturing groups) matching just the unit word(s). */
+  pattern: string;
+}
+
+const WEIGHT_UNITS: WeightUnit[] = [
+  { grams: 1000, pattern: "кг\\.?|килограмм[а-я]*" },
+  { grams: 1, pattern: "г\\.?|гр\\.?|грамм[а-я]*" },
+  { grams: 1, pattern: "мл\\.?|миллилитр[а-я]*" },
+  { grams: 15, pattern: "ст\\.?\\s?л\\.?|столов[а-я]*\\s+ложк[а-я]*" },
+  { grams: 5, pattern: "ч\\.?\\s?л\\.?|чайн[а-я]*\\s+ложк[а-я]*" },
+  { grams: 15, pattern: "ложк[а-я]*" },
+  { grams: 200, pattern: "стакан[а-я]*" },
+  { grams: 200, pattern: "чашк[а-я]*" },
+  { grams: 250, pattern: "кружк[а-я]*" },
+  { grams: 1000, pattern: "л\\.?|литр[а-я]*" },
+];
+
+/**
+ * Finds a NUMBER + weight/volume-unit match and returns the equivalent
+ * per-100g multiplier (e.g. "200г" → 2, "1 ст.л." → 0.15, "2 стакана" → 4).
+ * Returns null when no such unit is present, so the caller can fall back to
+ * a bare count or the default portion.
+ *
+ * @param anchored when true, only matches right at the END of `text` (used
+ *   to find the quantity immediately before a matched FOOD_DB keyword);
+ *   when false, matches anywhere (used for a whole comma-separated
+ *   segment, which is assumed to describe one dish).
+ */
+function matchWeightUnit(text: string, anchored: boolean): number | null {
+  for (const unit of WEIGHT_UNITS) {
+    const re = new RegExp(
+      anchored
+        ? `(\\d+(?:[.,]\\d+)?)\\s*(?:${unit.pattern})\\s*$`
+        : `(\\d+(?:[.,]\\d+)?)\\s*(?:${unit.pattern})`,
+      "i",
+    );
+    const m = text.match(re);
+    if (!m) continue;
+    const amount = parseFloat(m[1].replace(",", "."));
+    if (Number.isFinite(amount) && amount > 0) {
+      return Math.min((amount * unit.grams) / 100, 20);
+    }
+  }
+  return null;
+}
+
+/**
+ * Looks for a quantity right before a matched keyword; defaults to 1 (≈100g
+ * for weight-based entries, one item for per-unit entries) when nothing is
+ * specified. Supports:
+ * - weight/volume units (see matchWeightUnit/WEIGHT_UNITS above) — grams,
+ *   kilograms, milliliters, liters, tablespoons/teaspoons, cups/mugs/glasses;
  * - a plain count ("2", "3 шт", "4 штуки") — a whole-item multiplier for
  *   per-unit entries (eggs, bananas, ...).
  */
 function quantityBefore(text: string, idx: number): number {
   const before = text.slice(0, idx);
 
-  const gramMatch = before.match(/(\d+)\s*(?:г\.?|гр\.?|грамм[а-я]*)\s*$/);
-  if (gramMatch) {
-    const grams = parseInt(gramMatch[1], 10);
-    if (Number.isFinite(grams) && grams > 0) return Math.min(grams / 100, 20);
-  }
+  const weightQty = matchWeightUnit(before, true);
+  if (weightQty != null) return weightQty;
 
   const countMatch = before.match(/(\d+)\s*(?:шт\.?|штук[аи]?)?\s*$/);
   if (!countMatch) return 1;

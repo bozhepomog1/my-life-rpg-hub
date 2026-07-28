@@ -26,7 +26,14 @@ export interface OffProduct {
 
 const SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const REQUEST_TIMEOUT_MS = 6000;
-const MAX_RESULTS = 5;
+// Raised from 5: an ambiguous query like "хлопья" (flakes) legitimately
+// matches several distinct product types (corn flakes, oat flakes, glazed
+// flakes, ...) — 5 slots meant the "choose" list often only showed one or
+// two of those types before running out of room. 10 gives the user enough
+// variety to actually find the one they meant, while the UI list itself
+// gets an internal scroll (see NutritionCalculator.tsx) so it doesn't
+// balloon the page.
+const MAX_RESULTS = 10;
 
 interface RawOffProduct {
   code?: string;
@@ -46,6 +53,9 @@ function isFiniteNumber(v: unknown): v is number {
  * preferring product_name_ru when present). Returns up to MAX_RESULTS
  * products that have complete kcal/protein/fat/carbs data — products
  * missing any of these are skipped rather than shown as misleading zeros.
+ * Sorted by OFF's own popularity signal (unique_scans_n, descending) so
+ * common/recognizable products surface ahead of niche ones for ambiguous
+ * queries like "хлопья".
  */
 export async function searchOpenFoodFacts(query: string): Promise<OffProduct[]> {
   const trimmed = query.trim();
@@ -61,6 +71,17 @@ export async function searchOpenFoodFacts(query: string): Promise<OffProduct[]> 
       action: "process",
       json: "1",
       page_size: String(MAX_RESULTS),
+      // search_terms/search_simple already searches by keyword rather than
+      // restricting to one category, so a broad query like "хлопья" was
+      // never narrowed to a single product type by the query itself — the
+      // low page_size above was the actual bottleneck (fixed by raising
+      // MAX_RESULTS). This sort_by is the other half of the ask: without
+      // it OFF's default order is close to arbitrary/insertion-order, which
+      // tends to surface obscure single-scan entries ahead of products
+      // people actually recognize. unique_scans_n is OFF's own popularity
+      // signal (how many people have scanned/looked up the product), so
+      // sorting by it descending puts recognizable, common products first.
+      sort_by: "unique_scans_n",
       fields: "code,product_name,product_name_ru,brands,nutriments",
     });
     const res = await fetch(`${SEARCH_URL}?${params.toString()}`, {

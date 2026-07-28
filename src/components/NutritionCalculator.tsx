@@ -161,7 +161,7 @@ export function NutritionCalculator({ state, update }: Props) {
                     <div className="text-xs font-medium text-foreground">
                       «{r.segment}» — несколько совпадений, выбери нужное:
                     </div>
-                    <ul className="mt-2 space-y-1">
+                    <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
                       {r.candidates.map((c) => (
                         <li key={c.code}>
                           <label className="flex cursor-pointer items-center gap-2 text-xs">

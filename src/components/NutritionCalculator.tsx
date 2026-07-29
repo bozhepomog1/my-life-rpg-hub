@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ProgressBar } from "@/components/ProgressBar";
-import { STAT_META, type GameState, type Macro } from "@/lib/game";
+import { FeedbackToast } from "@/components/FeedbackToast";
+import {
+  NUTRITION_FEEDBACK_MESSAGES,
+  pickFeedbackMessage,
+  STAT_META,
+  type GameState,
+  type Macro,
+} from "@/lib/game";
 import {
   addNutritionEntry,
   cheatMealsRemaining,
+  computeNutritionStreak,
   consumeCheatMeal,
   defaultAmountFor,
   effectiveGoals,
@@ -49,6 +57,10 @@ export function NutritionCalculator({ state, update }: Props) {
   const [draftItems, setDraftItems] = useState<MealDraftItem[]>([]);
   const [lastAdded, setLastAdded] = useState<string>("");
   const [saved, setSaved] = useState(false);
+  const [feedback, setFeedback] = useState<{ id: number; message: string; detail?: string } | null>(
+    null,
+  );
+  const feedbackId = useRef(0);
 
   const today = getTodayNutrition(state);
   const goals = effectiveGoals(state);
@@ -118,7 +130,38 @@ export function NutritionCalculator({ state, update }: Props) {
 
   function handleSaveMeal() {
     if (draftItems.length === 0) return;
-    update((s) => addNutritionEntry(s, draftItems));
+    // Captured via a mutable holder (not a reassigned `let`) inside the
+    // updater, since it must reflect the state AFTER this save (today's
+    // running total, and any streak day that just became "complete") — the
+    // updater runs synchronously the moment update() is called, so this is
+    // safe to read right after.
+    const captured: { feedback: { message: string; detail?: string } | null } = { feedback: null };
+    update((s) => {
+      const next = addNutritionEntry(s, draftItems);
+      const goalKcal = effectiveGoals(next).kcal;
+      const todayTotal = getTodayNutrition(next).kcal;
+      // Only celebrate staying WITHIN goal — going over isn't something to
+      // reinforce with a motivating message.
+      if (todayTotal > 0 && todayTotal <= goalKcal) {
+        const streak = computeNutritionStreak(next);
+        captured.feedback = {
+          message: pickFeedbackMessage(NUTRITION_FEEDBACK_MESSAGES),
+          // Real, not invented — an actual count of consecutive days within goal.
+          detail:
+            streak > 1
+              ? `Это уже ${streak}-й день подряд, когда ты в пределах своей цели по калориям.`
+              : undefined,
+        };
+      }
+      return next;
+    });
+    if (captured.feedback) {
+      setFeedback({
+        id: ++feedbackId.current,
+        message: captured.feedback.message,
+        detail: captured.feedback.detail,
+      });
+    }
     setDraftItems([]);
     setSaved(true);
     setPhase("search");
@@ -131,6 +174,16 @@ export function NutritionCalculator({ state, update }: Props) {
 
   return (
     <div className="space-y-5">
+      {feedback && (
+        <FeedbackToast
+          key={feedback.id}
+          message={feedback.message}
+          detail={feedback.detail}
+          icon="🥗"
+          onDismiss={() => setFeedback(null)}
+        />
+      )}
+
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Что ты съел?</h2>
 

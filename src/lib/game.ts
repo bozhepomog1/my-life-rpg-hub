@@ -1935,6 +1935,53 @@ export function computeDiscipline(state: GameState) {
 /** Streak milestones that trigger a celebration when first reached. */
 export const STREAK_MILESTONES = [7, 30, 100];
 
+// ── Instant feedback ──
+//
+// Shown right after completing a physical (strength) quest or logging a
+// nutrition entry that keeps the day within goal — deliberately QUALITATIVE
+// only. No invented weight/muscle numbers: those would just be fiction (a
+// single workout or meal doesn't measurably move body composition), and
+// presenting a made-up figure as if it were real feedback would be
+// misleading. Where a genuinely real number is available (an actual streak
+// of days within the calorie goal — see computeNutritionStreak in
+// nutrition.ts), that's shown as a plain factual detail line instead.
+
+/** Randomly picked after completing a strength-stat quest (see completeQuest
+ * in routes/index.tsx). Deliberately vague/qualitative — no specific
+ * kg/reps/muscle-growth numbers, since a single quest can't actually
+ * demonstrate a measurable physical change. */
+export const TRAINING_FEEDBACK_MESSAGES: string[] = [
+  "Отличная работа! Твои мышцы получили сигнал к росту 💪",
+  "Ты на шаг ближе к своей цели",
+  "Тело благодарит тебя за эту тренировку",
+  "Дисциплина сегодня — результат завтра",
+  "Каждое повторение считается",
+  "Ты инвестируешь в свою лучшую версию",
+  "Сила строится именно в такие моменты",
+  "Прогресс не всегда виден сразу, но он копится",
+  "Уверенно двигаешься к цели, так держать!",
+];
+
+/** Randomly picked after logging a nutrition entry that keeps today within
+ * the calorie goal (see NutritionCalculator.tsx). Same rule as
+ * TRAINING_FEEDBACK_MESSAGES — no predicted weight change, just qualitative
+ * encouragement. */
+export const NUTRITION_FEEDBACK_MESSAGES: string[] = [
+  "Ты держишь курс на свою цель!",
+  "Отличный выбор питания сегодня",
+  "Питание в рамках цели — это уже победа",
+  "Осознанный выбор — лучшая привычка",
+  "Ты заботишься о себе, и это видно",
+  "Ещё один день в правильном направлении",
+  "Питание под контролем — отличная работа",
+  "Стабильность — ключ к результату, и ты её держишь",
+  "Так и продолжай — курс верный",
+];
+
+export function pickFeedbackMessage(pool: string[]): string {
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // ── Weekly boss quest ──
 
 function mondayOf(d: Date): Date {

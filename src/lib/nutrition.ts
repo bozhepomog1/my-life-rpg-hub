@@ -768,6 +768,40 @@ export function getTodayNutrition(state: GameState): NutritionDay {
 }
 
 /**
+ * Real (not invented) streak of consecutive days logged within the calorie
+ * goal, counting backwards from today — same walk-backward pattern as
+ * computeStreak() in game.ts. Goals aren't stored historically (only
+ * derived from the user's CURRENT body params), so this compares every past
+ * day's logged kcal against today's goal rather than trying to reconstruct
+ * what the goal was on that day — a reasonable approximation since goals
+ * rarely change day to day. A day only counts if something was actually
+ * logged (an untouched day trivially "under goal" at 0 kcal shouldn't count
+ * as a real streak day).
+ */
+export function computeNutritionStreak(state: GameState): number {
+  const goalKcal = effectiveGoals(state).kcal;
+  const isWithinGoal = (dateKey: string) => {
+    const day = state.nutrition[dateKey];
+    return !!day && day.entries.length > 0 && day.kcal <= goalKcal;
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let current = 0;
+  let startOffset = 1;
+  if (isWithinGoal(todayKey(today))) {
+    current = 1;
+    startOffset = 1;
+  }
+  for (let i = startOffset; i <= 3660; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (isWithinGoal(todayKey(d))) current += 1;
+    else break;
+  }
+  return current;
+}
+
+/**
  * Step 5: saves the whole in-progress draft list as ONE meal entry — total
  * macros summed across every item, plus the individual items themselves
  * (frozen at their scaled values as of save time, not a live formula) so a

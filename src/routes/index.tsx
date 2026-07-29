@@ -21,6 +21,7 @@ import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
 import { WeeklyReportModal } from "@/components/WeeklyReportModal";
+import { FeedbackToast } from "@/components/FeedbackToast";
 import { StreakBanner } from "@/components/StreakBanner";
 import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
@@ -43,6 +44,7 @@ import {
   isWorkDay,
   canPostponeQuest,
   checkBossQuestCompletion,
+  pickFeedbackMessage,
   postponeQuest,
   POSTPONE_PRICE_GOLD,
   QUEST_IDEA_POOL,
@@ -54,6 +56,7 @@ import {
   STAT_ORDER,
   STREAK_MILESTONES,
   todayKey,
+  TRAINING_FEEDBACK_MESSAGES,
   undoReward,
   type Quest,
   type QuestCategory,
@@ -131,6 +134,12 @@ function Home() {
   const [goalPrefill, setGoalPrefill] = useState<BigGoalIdea | null>(null);
   const floatId = useRef(0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Instant qualitative feedback shown after completing a strength (training)
+  // quest — see TRAINING_FEEDBACK_MESSAGES in game.ts. Separate from the
+  // undo toast (different position) so the two can never visually collide.
+  const [feedback, setFeedback] = useState<{ id: number; message: string } | null>(null);
+  const feedbackId = useRef(0);
 
   // Undo window: only the single most recent completion can be undone —
   // completing another quest replaces it rather than stacking.
@@ -305,6 +314,16 @@ function Home() {
       dailyKey: quest.category === "daily" ? todayKey() : undefined,
       expiresAt: Date.now() + UNDO_WINDOW_MS,
     });
+
+    // A "physical" quest here means one that trains strength — see
+    // TRAINING_FEEDBACK_MESSAGES in game.ts for why this stays qualitative
+    // only (no invented kg/muscle numbers).
+    if (quest.stat === "strength") {
+      setFeedback({
+        id: ++feedbackId.current,
+        message: pickFeedbackMessage(TRAINING_FEEDBACK_MESSAGES),
+      });
+    }
   }
 
   function postponeQuestToTomorrow(id: string) {
@@ -367,6 +386,13 @@ function Home() {
       reward: quest.reward,
       expiresAt: Date.now() + UNDO_WINDOW_MS,
     });
+
+    if (quest.stat === "strength") {
+      setFeedback({
+        id: ++feedbackId.current,
+        message: pickFeedbackMessage(TRAINING_FEEDBACK_MESSAGES),
+      });
+    }
   }
 
   function togglChecklist(qid: string, itemId: string) {
@@ -677,6 +703,15 @@ function Home() {
           secondsLeft={undoSecondsLeft}
           onUndo={handleUndo}
           onDismiss={() => setPendingUndo(null)}
+        />
+      )}
+
+      {feedback && (
+        <FeedbackToast
+          key={feedback.id}
+          message={feedback.message}
+          icon="💪"
+          onDismiss={() => setFeedback(null)}
         />
       )}
 

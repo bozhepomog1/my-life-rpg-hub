@@ -17,6 +17,7 @@ import { QuestCard } from "@/components/QuestCard";
 import { AddQuestModal } from "@/components/AddQuestModal";
 import { DepositSection } from "@/components/DepositSection";
 import { BossQuestCard } from "@/components/BossQuestCard";
+import { MarathonCard } from "@/components/MarathonCard";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import { SeasonSummaryModal } from "@/components/SeasonSummaryModal";
@@ -26,6 +27,7 @@ import { StreakBanner } from "@/components/StreakBanner";
 import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
 import { useGameStateContext } from "@/lib/use-game-state-context";
+import { abandonMarathon, ensureMarathonRollover, startMarathon } from "@/lib/marathons";
 import {
   applyReward,
   type BigGoalIdea,
@@ -198,9 +200,11 @@ function Home() {
     if (!hydrated) return;
     const run = () =>
       update((s) =>
-        checkBossQuestCompletion(
-          ensureWeekRollover(
-            ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+        ensureMarathonRollover(
+          checkBossQuestCompletion(
+            ensureWeekRollover(
+              ensureSeason(ensureBonusQuests(ensureDailyMandatoryCount(ensureDailyQuestsReset(s)))),
+            ),
           ),
         ),
       );
@@ -502,6 +506,12 @@ function Home() {
         <SeasonProgress season={state.season} />
 
         <BossQuestCard state={state} bossQuest={state.bossQuest} />
+
+        <MarathonCard
+          state={state}
+          onStart={(templateId) => update((s) => startMarathon(s, templateId))}
+          onAbandon={() => update((s) => abandonMarathon(s))}
+        />
 
         <DepositSection state={state} update={update} />
 

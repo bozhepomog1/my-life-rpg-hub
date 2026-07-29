@@ -120,6 +120,41 @@ export interface WeeklyReport {
   bestDay: { dateKey: string; count: number } | null;
 }
 
+// ── Marathons ──
+//
+// Data model lives here (alongside the rest of GameState); the actual
+// templates + day-crediting/rollover logic live in src/lib/marathons.ts,
+// since checking a "nutrition_goal" day needs computeNutritionGoals() from
+// this file AND the NUTRITION_GOALS fallback from nutrition.ts — putting the
+// logic in its own leaf module avoids a circular import either direction.
+
+/** Which kind of daily condition a marathon template checks — see
+ * marathons.ts's marathonDayMet() for exactly how each is evaluated. */
+export type MarathonKind = "category" | "stat" | "nutrition_goal";
+
+/** The one marathon a user can have running at a time. `progressDays` resets
+ * to 0 the moment a day is missed (see ensureMarathonRollover in
+ * marathons.ts) — that's a deliberately separate mechanic from the
+ * discipline calendar/deposit, with no penalty beyond the reset itself.
+ * `lastCreditedDateKey` is the last calendar day already evaluated, so the
+ * rollover only ever walks forward from there instead of re-checking days
+ * it's already accounted for. */
+export interface ActiveMarathon {
+  templateId: string;
+  startedDateKey: string;
+  progressDays: number;
+  lastCreditedDateKey: string | null;
+  completed: boolean;
+}
+
+/** One permanent record of a fully-completed marathon — kept even after the
+ * user starts (and overwrites) a new one in `activeMarathon`. */
+export interface MarathonHistoryEntry {
+  templateId: string;
+  title: string;
+  completedAt: number;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -461,6 +496,11 @@ export interface GameState {
   // full-screen "Итоги недели" summary, same pattern as
   // lastSeasonSummary/seasonSummarySeen), true once dismissed.
   weeklyReportSeen: boolean;
+  // The one currently-running marathon (see ActiveMarathon above), or null
+  // if none has been started / the last one was abandoned. See marathons.ts.
+  activeMarathon: ActiveMarathon | null;
+  // Permanent history of completed marathons, newest first.
+  marathonHistory: MarathonHistoryEntry[];
   // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
   // skipped. Only ever false for a genuinely brand-new account: see the
   // explicit `?? true` patches in loadState() and use-game-state.ts, which
@@ -1018,6 +1058,8 @@ export function defaultState(): GameState {
     weekStats: emptyWeekStats(currentBossWeekKey()),
     weeklyReports: [],
     weeklyReportSeen: true,
+    activeMarathon: null,
+    marathonHistory: [],
     statQuizDone: false,
   };
   return base;
@@ -1074,6 +1116,8 @@ export function loadState(userId?: string): GameState | null {
           : emptyWeekStats(currentBossWeekKey()),
       weeklyReports: parsed.weeklyReports || [],
       weeklyReportSeen: parsed.weeklyReportSeen ?? true,
+      activeMarathon: parsed.activeMarathon ?? null,
+      marathonHistory: parsed.marathonHistory || [],
       // Any save that already exists locally predates or postdates the quiz
       // feature either way — if the field's simply missing, this is an
       // established local cache, not a fresh account, so treat it as done

@@ -41,9 +41,9 @@ export function FriendsPanel({ state, update }: Props) {
 
   const [code, setCode] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
-  // Friend whose extended profile is open. Only ever set for ACCEPTED
-  // friends — the modal's data is RLS-gated to accepted friends anyway
-  // (see friend-profile.ts), this just avoids offering a dead link.
+  // Whose extended profile is open — an accepted friend, or yourself. The
+  // modal's data is RLS-gated to your own row or accepted friends anyway
+  // (see friend-profile.ts), so this never needs to guess who's allowed.
   const [viewing, setViewing] = useState<PublicProfile | null>(null);
 
   const load = useCallback(async () => {
@@ -306,7 +306,7 @@ export function FriendsPanel({ state, update }: Props) {
                 rank={i + 1}
                 profile={p}
                 isMe={p.user_id === myId}
-                onOpen={p.user_id === myId ? undefined : () => setViewing(p)}
+                onOpen={() => setViewing(p)}
               />
             ))}
           </ul>
@@ -329,8 +329,14 @@ function LeaderboardRow({
   rank: number;
   profile: PublicProfile;
   isMe: boolean;
-  /** Omitted for your own row — there's nothing to "visit" on yourself. */
-  onOpen?: () => void;
+  /**
+   * Own row used to be un-openable ("nothing to visit on yourself"), but
+   * `friend_profiles`' RLS explicitly allows reading your own row too (see
+   * friend-profile.ts) and syncFriendProfile keeps it up to date on every
+   * save — so clicking your own avatar/name now opens the exact same
+   * FriendProfileModal a friend's row opens, just with your own data.
+   */
+  onOpen: () => void;
 }) {
   return (
     <li
@@ -341,28 +347,28 @@ function LeaderboardRow({
       <span className="w-7 shrink-0 text-center text-sm font-semibold text-muted-foreground">
         {rank <= 3 ? MEDAL[rank - 1] : rank}
       </span>
-      <span className="emoji text-2xl">{profile.avatar ?? "🙂"}</span>
-      <div className="min-w-0 flex-1">
-        {onOpen ? (
-          <button
-            type="button"
-            onClick={onOpen}
-            title="Открыть профиль"
-            className="block max-w-full truncate text-left text-sm font-medium underline-offset-2 hover:text-primary hover:underline"
-          >
-            {profile.username ?? "Без имени"}
-          </button>
-        ) : (
-          <div className="truncate text-sm font-medium">
-            {profile.username ?? "Без имени"}
-            {isMe && <span className="ml-1 text-xs text-primary">(ты)</span>}
+      <button
+        type="button"
+        onClick={onOpen}
+        title="Открыть профиль"
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <span className="emoji text-2xl transition-transform hover:scale-110">
+          {profile.avatar ?? "🙂"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="truncate text-sm font-medium underline-offset-2 hover:text-primary hover:underline">
+              {profile.username ?? "Без имени"}
+            </span>
+            {isMe && <span className="shrink-0 text-xs text-primary">(ты)</span>}
           </div>
-        )}
-        <div className="text-xs text-muted-foreground">
-          Уровень {profile.level}
-          {profile.fitness_index != null && <> · Форма {profile.fitness_index}</>}
+          <div className="text-xs text-muted-foreground">
+            Уровень {profile.level}
+            {profile.fitness_index != null && <> · Форма {profile.fitness_index}</>}
+          </div>
         </div>
-      </div>
+      </button>
       <div className="shrink-0 text-right">
         <div className="text-sm font-semibold text-primary">{profile.total_xp}</div>
         <div className="text-[10px] text-muted-foreground">XP</div>

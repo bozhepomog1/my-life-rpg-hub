@@ -36,6 +36,12 @@ export interface BossQuestProgress {
   byStat: Record<StatKey, number>;
   byCategory: Record<QuestCategory, number>;
   total: number;
+  /** Date keys (YYYY-MM-DD) on which at least one quest completion counted
+   * toward this boss quest — used to require the numeric-target kinds
+   * (stat_pair/quest_count/category_focus) to be spread across several days
+   * instead of clearable in one very active sitting. May be missing on boss
+   * quests saved before this field existed — always read via `?? []`. */
+  activeDays?: string[];
 }
 
 /** Weekly composite challenge — one of 6 templates (BossQuestKind), chosen
@@ -2096,7 +2102,28 @@ function emptyBossProgress(): BossQuestProgress {
     byStat: { strength: 0, intellect: 0, will: 0, appearance: 0 },
     byCategory: { daily: 0, story: 0, purchase: 0 },
     total: 0,
+    activeDays: [],
   };
+}
+
+/**
+ * Minimum number of distinct days a boss quest's completions must be spread
+ * across before it can be claimed — stat_pair/quest_count/category_focus
+ * only ever counted a raw total, so a single very productive day (all
+ * dailies + several custom/story quests) could clear the whole week's
+ * exclusive challenge in one sitting. streak_hold/combo/perfect_week don't
+ * need this: a multi-day streak is already impossible to build in one day.
+ */
+function minActiveDaysForBoss(bq: BossQuest): number {
+  switch (bq.kind) {
+    case "stat_pair":
+    case "quest_count":
+      return 3;
+    case "category_focus":
+      return bq.category === "daily" ? 3 : 2;
+    default:
+      return 0;
+  }
 }
 
 /** ISO-8601 week-of-year number (1-53) — used purely for the human-readable
@@ -2337,19 +2364,33 @@ function daysThisWeekSoFar(weekStartMs: number): string[] {
 export function computeBossQuestStatus(state: GameState, bq: BossQuest): BossQuestStatus {
   switch (bq.kind) {
     case "stat_pair": {
-      const bars = (bq.targets ?? []).map((t) => ({
+      const statBars = (bq.targets ?? []).map((t) => ({
         label: STAT_META[t.stat].label,
         current: Math.min(bq.progress.byStat[t.stat] ?? 0, t.count),
         target: t.count,
       }));
-      return { complete: bars.length > 0 && bars.every((b) => b.current >= b.target), bars };
+      const minDays = minActiveDaysForBoss(bq);
+      const daysCurrent = Math.min((bq.progress.activeDays ?? []).length, minDays);
+      const statsComplete = statBars.length > 0 && statBars.every((b) => b.current >= b.target);
+      return {
+        complete: statsComplete && daysCurrent >= minDays,
+        bars: [
+          ...statBars,
+          { label: "Разных дней с прогрессом", current: daysCurrent, target: minDays },
+        ],
+      };
     }
     case "quest_count": {
       const target = bq.questCount ?? 0;
       const current = Math.min(bq.progress.total, target);
+      const minDays = minActiveDaysForBoss(bq);
+      const daysCurrent = Math.min((bq.progress.activeDays ?? []).length, minDays);
       return {
-        complete: current >= target,
-        bars: [{ label: "Квестов выполнено", current, target }],
+        complete: current >= target && daysCurrent >= minDays,
+        bars: [
+          { label: "Квестов выполнено", current, target },
+          { label: "Разных дней с прогрессом", current: daysCurrent, target: minDays },
+        ],
       };
     }
     case "streak_hold": {
@@ -2379,14 +2420,17 @@ export function computeBossQuestStatus(state: GameState, bq: BossQuest): BossQue
         bq.category ? (bq.progress.byCategory[bq.category] ?? 0) : 0,
         target,
       );
+      const minDays = minActiveDaysForBoss(bq);
+      const daysCurrent = Math.min((bq.progress.activeDays ?? []).length, minDays);
       return {
-        complete: current >= target,
+        complete: current >= target && daysCurrent >= minDays,
         bars: [
           {
             label: bq.category ? `${CATEGORY_META[bq.category].label}: завершено` : "Завершено",
             current,
             target,
           },
+          { label: "Разных дней с прогрессом", current: daysCurrent, target: minDays },
         ],
       };
     }
@@ -2420,8 +2464,15 @@ export function registerQuestActivity(
   delta: number,
 ): GameState {
   let next = state;
+  const today = todayKey();
   if (next.bossQuest && !next.bossQuest.claimed) {
     const bq = next.bossQuest;
+    const prevActiveDays = bq.progress.activeDays ?? [];
+    // Only ADD today on a real completion (delta > 0) — an undo (delta < 0)
+    // doesn't retroactively un-spread the challenge across days, since that
+    // would let someone game the day-count back down and re-farm it.
+    const activeDays =
+      delta > 0 && !prevActiveDays.includes(today) ? [...prevActiveDays, today] : prevActiveDays;
     const progress: BossQuestProgress = {
       byStat: {
         ...bq.progress.byStat,
@@ -2432,12 +2483,12 @@ export function registerQuestActivity(
         [category]: Math.max(0, (bq.progress.byCategory[category] ?? 0) + delta),
       },
       total: Math.max(0, bq.progress.total + delta),
+      activeDays,
     };
     next = { ...next, bossQuest: { ...bq, progress } };
   }
 
   const ws = next.weekStats;
-  const today = todayKey();
   const weekStats: WeekStats = {
     ...ws,
     byCategory: {

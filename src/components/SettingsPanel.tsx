@@ -5,6 +5,7 @@ import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } 
 import { REMINDER_HOUR } from "@/lib/reminders";
 import { AutosaveField } from "@/components/AutosaveField";
 import { DepositSetupModal } from "@/components/DepositSetupModal";
+import { InstallAppButton } from "@/components/InstallAppButton";
 import { isValidHex } from "@/lib/color";
 import {
   ACCENT_PRESETS,
@@ -242,6 +243,17 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
   return (
     <div className="space-y-5">
+      <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Установка приложения</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Установи Life RPG как обычное приложение — быстрее открывается, работает в отдельном окне
+          без адресной строки браузера.
+        </p>
+        <div className="mt-3">
+          <InstallAppButton />
+        </div>
+      </section>
+
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Мой код друга</h2>
         <p className="mt-1 text-xs text-muted-foreground">

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  BarChart3,
   Home as HomeIcon,
   Plus,
   Settings,
@@ -848,6 +849,7 @@ const NAV_TABS = [
   { to: "/body", label: "Тело", icon: Activity },
   { to: "/friends", label: "Друзья", icon: Users },
   { to: "/achievements", label: "Достижения", icon: Trophy },
+  { to: "/stats", label: "Статистика", icon: BarChart3 },
   { to: "/shop", label: "Магазин", icon: ShoppingBag },
 ] as const;
 

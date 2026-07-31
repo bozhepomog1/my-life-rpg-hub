@@ -1915,7 +1915,7 @@ export function todayKey(d = new Date()) {
  * won't have an entry, so those fall back to today's current count too,
  * matching the old fixed-list behavior for historical data.
  */
-function mandatoryCountFor(state: GameState, dateKey: string): number {
+export function mandatoryCountFor(state: GameState, dateKey: string): number {
   if (dateKey === todayKey()) {
     // Quests postponed to a later date (Shop → "Отложить квест") don't count
     // toward today's requirement — that's the whole point of postponing:

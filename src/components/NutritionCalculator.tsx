@@ -10,6 +10,7 @@ import {
 } from "@/lib/game";
 import {
   addNutritionEntry,
+  baseGoals,
   cheatMealsRemaining,
   computeNutritionStreak,
   consumeCheatMeal,
@@ -63,8 +64,27 @@ export function NutritionCalculator({ state, update }: Props) {
   const feedbackId = useRef(0);
 
   const today = getTodayNutrition(state);
+  const base = baseGoals(state);
   const goals = effectiveGoals(state);
   const remaining = cheatMealsRemaining(state);
+
+  function handleUseCheatMeal() {
+    const captured = { before: base, after: goals };
+    update((s) => {
+      captured.before = baseGoals(s);
+      const next = consumeCheatMeal(s);
+      captured.after = effectiveGoals(next);
+      return next;
+    });
+    const carbsDelta = captured.before.carbs - captured.after.carbs;
+    const fatDelta = captured.before.fat - captured.after.fat;
+    if (carbsDelta <= 0 && fatDelta <= 0) return;
+    setFeedback({
+      id: ++feedbackId.current,
+      message: "Поощрение использовано",
+      detail: `Цель по углеводам на сегодня снижена на ${carbsDelta} г (${captured.before.carbs} → ${captured.after.carbs}), по жирам — на ${fatDelta} г (${captured.before.fat} → ${captured.after.fat}). День всё равно останется зелёным в календаре.`,
+    });
+  }
 
   async function handleSearch() {
     const trimmed = query.trim();
@@ -406,7 +426,7 @@ export function NutritionCalculator({ state, update }: Props) {
           </span>
           <button
             type="button"
-            onClick={() => update((s) => consumeCheatMeal(s))}
+            onClick={handleUseCheatMeal}
             disabled={remaining <= 0}
             className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -420,7 +440,9 @@ export function NutritionCalculator({ state, update }: Props) {
         )}
         {today.cheatMealUsed && (
           <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-            Сегодня цель по углеводам/жирам временно снижена — день всё равно засчитан ✅
+            Поощрение использовано: цель по углеводам сегодня снижена на {base.carbs - goals.carbs}{" "}
+            г ({base.carbs} → {goals.carbs}), по жирам — на {base.fat - goals.fat} г ({base.fat} →{" "}
+            {goals.fat}). День всё равно засчитан ✅
           </p>
         )}
       </section>

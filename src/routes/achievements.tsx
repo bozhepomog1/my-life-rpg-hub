@@ -261,7 +261,7 @@ function Achievements() {
         <section className="panel p-6">
           <h2 className="mb-1 text-sm font-semibold">📊 История недель</h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            Прошлые отчёты "Итоги недели" — нажми, чтобы открыть подробности.
+            Прошлые отчёты «Итоги недели» — нажми, чтобы открыть подробности.
           </p>
           {state.weeklyReports.length === 0 ? (
             <div className="py-6 text-center">

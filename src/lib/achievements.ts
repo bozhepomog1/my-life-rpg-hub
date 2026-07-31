@@ -372,7 +372,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     secret: true,
     icon: "⏳",
     title: "Мастер отсрочки",
-    description: 'Воспользуйся "Отложить квест" в сумме 5 раз',
+    description: "Воспользуйся «Отложить квест» в сумме 5 раз",
     unlocked: (state) => totalPostpones(state) >= 5,
   },
   {
@@ -430,7 +430,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     secret: true,
     icon: "😅",
     title: "Ты серьёзно?",
-    description: 'Воспользуйся отменой ("Отменить") хотя бы раз',
+    description: "Воспользуйся отменой («Отменить») хотя бы раз",
     unlocked: (state) => state.everUsedUndo,
   },
   {

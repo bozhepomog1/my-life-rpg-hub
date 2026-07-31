@@ -21,7 +21,6 @@ import {
   MONTHLY_CHEAT_LIMIT,
   PORTION_UNIT_LABELS,
   PORTION_UNITS,
-  portionMultiplier,
   scaledMacro,
   searchProducts,
   suggestedUnitFor,
@@ -43,20 +42,16 @@ const METRICS = [
   { key: "carbs", label: "Углеводы", unit: "г", color: STAT_META.appearance.color },
 ] as const;
 
-/** Which sub-screen of the "add a product" flow is showing right now. */
-type Phase = "search" | "quantity" | "added";
-
 export function NutritionCalculator({ state, update }: Props) {
-  const [phase, setPhase] = useState<Phase>("search");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [candidates, setCandidates] = useState<ProductCandidate[] | null>(null);
-  const [selected, setSelected] = useState<ProductCandidate | null>(null);
-  const [amount, setAmount] = useState(100);
-  const [unit, setUnit] = useState<PortionUnit>("g");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [draftItems, setDraftItems] = useState<MealDraftItem[]>([]);
-  const [lastAdded, setLastAdded] = useState<string>("");
+  // Brief inline confirmation after an instant-add — cleared by the next
+  // search/add so it never goes stale on screen.
+  const [justAdded, setJustAdded] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState<{ id: number; message: string; detail?: string } | null>(
     null,
@@ -92,10 +87,10 @@ export function NutritionCalculator({ state, update }: Props) {
     setSearching(true);
     setCandidates(null);
     setSaved(false);
+    setJustAdded(null);
     try {
       // Product-name-only search — Open Food Facts first, local FOOD_DB
-      // fallback per product, same sources as before, just no quantity
-      // parsing anymore (that's the separate step below).
+      // fallback per product, same sources as before.
       const result = await searchProducts(trimmed);
       setCandidates(result);
     } finally {
@@ -103,38 +98,32 @@ export function NutritionCalculator({ state, update }: Props) {
     }
   }
 
-  function pickCandidate(candidate: ProductCandidate) {
-    const initialUnit = suggestedUnitFor(candidate.label);
-    setSelected(candidate);
-    setUnit(initialUnit);
-    setAmount(defaultAmountFor(initialUnit));
-    setPhase("quantity");
-  }
-
-  function backToSearch() {
-    setSelected(null);
-    setPhase("search");
-  }
-
-  function addToDraft() {
-    if (!selected) return;
+  /**
+   * Instantly adds a candidate to the draft at a sensible default amount
+   * (100 г/мл for weight/volume products, 1 шт/порция for counted ones —
+   * see suggestedUnitFor/defaultAmountFor), then clears the search so the
+   * next product can be searched right away. Replaces the old three-step
+   * "pick → set exact quantity on its own screen → confirm added → tap
+   * 'add another'" cycle, which meant a full extra screen and click per
+   * product when adding a multi-component meal. The exact weight is still
+   * fully editable afterward, inline, in the "Текущий приём пищи" list
+   * below — so nothing about precision is lost, just reordered: add first,
+   * fine-tune the grams after, instead of fine-tuning before every add.
+   */
+  function addCandidate(candidate: ProductCandidate) {
+    const unit = suggestedUnitFor(candidate.label);
     const item: MealDraftItem = {
-      label: selected.label,
-      source: selected.source,
-      base: selected.base,
-      amount,
+      label: candidate.label,
+      source: candidate.source,
+      base: candidate.base,
+      amount: defaultAmountFor(unit),
       unit,
     };
     setDraftItems((prev) => [...prev, item]);
-    setLastAdded(selected.label);
-    setSelected(null);
+    setJustAdded(candidate.label);
     setQuery("");
     setCandidates(null);
-    setPhase("added");
-  }
-
-  function startAnotherProduct() {
-    setPhase("search");
+    searchInputRef.current?.focus();
   }
 
   function updateDraftItem(index: number, patch: Partial<Pick<MealDraftItem, "amount" | "unit">>) {
@@ -184,13 +173,10 @@ export function NutritionCalculator({ state, update }: Props) {
     }
     setDraftItems([]);
     setSaved(true);
-    setPhase("search");
+    setJustAdded(null);
     setQuery("");
     setCandidates(null);
-    setSelected(null);
   }
-
-  const previewMacro = selected ? scaledMacro({ base: selected.base, amount, unit }) : null;
 
   return (
     <div className="space-y-5">
@@ -207,137 +193,70 @@ export function NutritionCalculator({ state, update }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Что ты съел?</h2>
 
-        {phase === "search" && (
-          <>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ищи по одному продукту за раз — без веса, вес уточним на следующем шаге. Нашёл один,
-              добавил в приём пищи — и ищешь следующий кнопкой «Добавить ещё продукт». Смотрим в
-              Open Food Facts, при отсутствии сети или совпадений — в локальной базе.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Например: куриная грудка"
-                className="w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={!query.trim() || searching}
-                className="shrink-0 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {searching ? "Ищем…" : "Найти"}
-              </button>
-            </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Нажми на нужный продукт — он сразу добавится в приём пищи с обычным весом (100 г/мл или 1
+          шт/порция), а точный вес поправишь ниже в списке. Смотрим в Open Food Facts, при
+          отсутствии сети или совпадений — в локальной базе.
+        </p>
+        <div className="mt-3 flex gap-2">
+          <input
+            ref={searchInputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="Например: куриная грудка"
+            className="w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            disabled={!query.trim() || searching}
+            className="shrink-0 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {searching ? "Ищем…" : "Найти"}
+          </button>
+        </div>
 
-            {looksLikeMultipleProducts(query) && (
-              <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                💡 Похоже, тут два продукта — попробуй найти их по одному.
-              </p>
-            )}
-
-            {candidates && candidates.length === 0 && (
-              <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                Ничего не найдено ни в Open Food Facts, ни в локальной базе — попробуй другое
-                название.
-              </p>
-            )}
-
-            {candidates && candidates.length > 0 && (
-              <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
-                {candidates.map((c, i) => (
-                  <li key={c.code ?? `${c.source}-${c.label}-${i}`}>
-                    <button
-                      type="button"
-                      onClick={() => pickCandidate(c)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-foreground">{c.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {Math.round(c.base.kcal)} ккал
-                      </span>
-                      <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">
-                        {c.source === "online" ? "OFF" : "локальная"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+        {looksLikeMultipleProducts(query) && (
+          <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            💡 Похоже, тут два продукта — попробуй найти их по одному, каждый добавится отдельной
+            строкой.
+          </p>
         )}
 
-        {phase === "quantity" && selected && previewMacro && (
-          <div className="mt-3">
-            <p className="text-xs text-muted-foreground">
-              <span className="text-foreground">{selected.label}</span> — сколько ты съел?
-            </p>
-            <div className="mt-2 flex gap-2">
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value) || 0)}
-                className="w-28 rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-              <select
-                value={unit}
-                onChange={(e) => setUnit(e.target.value as PortionUnit)}
-                className="rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-              >
-                {PORTION_UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {PORTION_UNIT_LABELS[u]}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs">
-              <span className="font-medium text-foreground">
-                Итого: {Math.round(previewMacro.kcal)} ккал
-              </span>
-              {" · "}Белки {Math.round(previewMacro.protein * 10) / 10} · Жиры{" "}
-              {Math.round(previewMacro.fat * 10) / 10} · Углеводы{" "}
-              {Math.round(previewMacro.carbs * 10) / 10}
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={backToSearch}
-                className="flex-1 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary"
-              >
-                Назад
-              </button>
-              <button
-                type="button"
-                onClick={addToDraft}
-                disabled={portionMultiplier(amount, unit) <= 0}
-                className="flex-1 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Добавить в приём пищи
-              </button>
-            </div>
-          </div>
+        {justAdded && (
+          <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            ✅ Добавлено: <span className="text-foreground">{justAdded}</span> — ищи следующий
+            продукт или поправь вес в списке ниже.
+          </p>
         )}
 
-        {phase === "added" && (
-          <div className="mt-3">
-            <p className="rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-              ✅ Добавлено: <span className="text-foreground">{lastAdded}</span>
-            </p>
-            <button
-              type="button"
-              onClick={startAnotherProduct}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-            >
-              + Добавить ещё продукт
-            </button>
-          </div>
+        {candidates && candidates.length === 0 && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            Ничего не найдено ни в Open Food Facts, ни в локальной базе — попробуй другое название.
+          </p>
+        )}
+
+        {candidates && candidates.length > 0 && (
+          <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
+            {candidates.map((c, i) => (
+              <li key={c.code ?? `${c.source}-${c.label}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => addCandidate(c)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
+                >
+                  <span className="min-w-0 flex-1 truncate text-foreground">{c.label}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {Math.round(c.base.kcal)} ккал
+                  </span>
+                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">
+                    {c.source === "online" ? "OFF" : "локальная"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
 
         {draftItems.length > 0 && (

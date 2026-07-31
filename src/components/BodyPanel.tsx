@@ -73,8 +73,14 @@ export function BodyPanel({ state, update }: Props) {
 
   function commitRecord(key: RecordKey, raw: string): boolean {
     if (raw.trim() === "") return false;
-    const n = Math.max(0, Math.round(Number(raw) || 0));
-    if (!n || n === body[key]) return false;
+    const parsed = Number(raw);
+    // `!n` used to reject 0 as if it were "nothing entered" — but 0 is a
+    // completely valid record for a beginner (e.g. can't yet do a single
+    // pull-up). Only genuinely invalid input (NaN from non-numeric text)
+    // should be rejected now.
+    if (!Number.isFinite(parsed)) return false;
+    const n = Math.max(0, Math.round(parsed));
+    if (n === body[key]) return false;
     const prev = body[key];
     update((s) => ({ ...s, body: { ...s.body, [key]: n } }));
     if (prev != null && n > prev) {

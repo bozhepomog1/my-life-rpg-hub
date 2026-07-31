@@ -1,15 +1,18 @@
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   BarChart3,
   Home as HomeIcon,
+  MoreHorizontal,
   Plus,
   Settings,
   ShoppingBag,
   Trophy,
   Users,
   Utensils,
+  X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
@@ -840,9 +843,15 @@ function Home() {
   );
 }
 
-// Shared between the desktop pill row and the mobile bottom nav — icon
-// only matters below md, label only matters above it, but keeping one list
-// means the two navs can never drift out of sync with each other.
+// Full list — still used verbatim for the desktop/tablet pill row (which
+// scrolls horizontally and isn't what anyone complained about being
+// cramped). The mobile BottomNav below only surfaces the 4 busiest
+// screens directly (home loop + food logging, both touched multiple times
+// a day; achievements/streak, checked most sessions; the gold shop, the
+// main sink for earned currency) and tucks the rarer ones — body stats and
+// friends are typically set-and-check-occasionally, stats is a newer
+// periodic-glance screen — behind a 5th "Ещё" button instead of forcing 7
+// cramped tap targets into one row.
 const NAV_TABS = [
   { to: "/", label: "Профиль", icon: HomeIcon },
   { to: "/nutrition", label: "Питание", icon: Utensils },
@@ -851,6 +860,19 @@ const NAV_TABS = [
   { to: "/achievements", label: "Достижения", icon: Trophy },
   { to: "/stats", label: "Статистика", icon: BarChart3 },
   { to: "/shop", label: "Магазин", icon: ShoppingBag },
+] as const;
+
+const PRIMARY_NAV_TABS = [
+  { to: "/", label: "Профиль", icon: HomeIcon },
+  { to: "/nutrition", label: "Питание", icon: Utensils },
+  { to: "/achievements", label: "Достижения", icon: Trophy },
+  { to: "/shop", label: "Магазин", icon: ShoppingBag },
+] as const;
+
+const MORE_NAV_TABS = [
+  { to: "/stats", label: "Статистика", icon: BarChart3 },
+  { to: "/body", label: "Тело", icon: Activity },
+  { to: "/friends", label: "Друзья", icon: Users },
 ] as const;
 
 export function TabNav({ pathname }: { pathname: string }) {
@@ -936,29 +958,98 @@ export function TabNav({ pathname }: { pathname: string }) {
  *   so its "Отменить" toast floats above this bar instead of behind it.
  */
 function BottomNav({ pathname }: { pathname: string }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreActive = MORE_NAV_TABS.some((t) => t.to === pathname);
+
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-sm md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="mx-auto flex max-w-4xl items-stretch justify-around">
-        {NAV_TABS.map((t) => {
-          const active = pathname === t.to;
-          const Icon = t.icon;
-          return (
-            <Link
-              key={t.to}
-              to={t.to}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-              <span>{t.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-sm md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto flex max-w-4xl items-stretch justify-around">
+          {PRIMARY_NAV_TABS.map((t) => {
+            const active = pathname === t.to;
+            const Icon = t.icon;
+            return (
+              <Link
+                key={t.to}
+                to={t.to}
+                onClick={() => setMoreOpen(false)}
+                className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                <span>{t.label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            aria-label="Ещё разделы"
+            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+              moreActive || moreOpen ? "text-primary" : "text-muted-foreground"
+            }`}
+          >
+            <MoreHorizontal size={20} strokeWidth={moreActive || moreOpen ? 2.5 : 2} />
+            <span>Ещё</span>
+          </button>
+        </div>
+      </nav>
+
+      {moreOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[200] md:hidden">
+              <button
+                type="button"
+                aria-label="Закрыть"
+                onClick={() => setMoreOpen(false)}
+                className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+              />
+              <div
+                className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-card p-4 shadow-lg"
+                style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold">Ещё разделы</span>
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen(false)}
+                    aria-label="Закрыть"
+                    className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:bg-secondary"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {MORE_NAV_TABS.map((t) => {
+                    const active = pathname === t.to;
+                    const Icon = t.icon;
+                    return (
+                      <Link
+                        key={t.to}
+                        to={t.to}
+                        onClick={() => setMoreOpen(false)}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-colors ${
+                          active
+                            ? "border-primary/40 bg-primary/5 text-primary"
+                            : "border-border text-muted-foreground hover:bg-secondary"
+                        }`}
+                      >
+                        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                        <span>{t.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

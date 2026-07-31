@@ -152,10 +152,34 @@ const FOOD_DB: FoodItem[] = [
   },
   {
     label: "Куриная грудка",
-    keywords: ["куриная грудка", "куриное филе", "курица", "куриц"],
+    // "курин" catches every adjective form (куриная/куриное/куриные/
+    // куриного/куриных/...) that "куриц" alone misses — "куриные бёдра"
+    // doesn't contain "куриц" (different stem for the plural adjective),
+    // so it used to fall through entirely despite being one of the most
+    // common ways people actually phrase chicken.
+    keywords: ["куриная грудка", "куриное филе", "курица", "куриц", "курин"],
     kcal: 165,
     protein: 31,
     fat: 3.6,
+    carbs: 0,
+  },
+  // Distinct from breast — noticeably higher fat, common enough as its own
+  // dish (тушёные/жареные куриные бёдра) to warrant separate macros rather
+  // than folding it into "Куриная грудка".
+  {
+    label: "Куриное бедро",
+    keywords: ["бедр"],
+    kcal: 209,
+    protein: 24,
+    fat: 12,
+    carbs: 0,
+  },
+  {
+    label: "Индейка",
+    keywords: ["индейк", "индюш"],
+    kcal: 149,
+    protein: 26,
+    fat: 4.5,
     carbs: 0,
   },
   {
@@ -182,7 +206,28 @@ const FOOD_DB: FoodItem[] = [
   { label: "Омлет", keywords: ["омлет"], kcal: 154, protein: 11, fat: 11, carbs: 2 },
   // Per 100g cooked/boiled — see file-level note above.
   { label: "Рис варёный", keywords: ["рис"], kcal: 130, protein: 2.7, fat: 0.3, carbs: 28 },
-  { label: "Гречка", keywords: ["гречк"], kcal: 92, protein: 3.4, fat: 1, carbs: 20 },
+  // "гречнев" catches the adjective form "гречневая каша" — "гречк" alone
+  // doesn't (different stem: "гречн-евая" vs "гречк-а"), same class of gap
+  // as курин/свин above.
+  {
+    label: "Гречка",
+    keywords: ["гречк", "гречнев"],
+    kcal: 92,
+    protein: 3.4,
+    fat: 1,
+    carbs: 20,
+  },
+  { label: "Перловая каша", keywords: ["перлов"], kcal: 109, protein: 3.1, fat: 0.4, carbs: 22 },
+  { label: "Пшённая каша", keywords: ["пшён", "пшен"], kcal: 135, protein: 4, fat: 1.5, carbs: 26 },
+  { label: "Манная каша", keywords: ["манн"], kcal: 98, protein: 3, fat: 3.2, carbs: 15 },
+  {
+    label: "Рисовая каша (молочная)",
+    keywords: ["рисовая каш", "рисовой каш"],
+    kcal: 97,
+    protein: 2.7,
+    fat: 2.4,
+    carbs: 16,
+  },
   // Cooked with water (porridge), not dry oats — dry oats have ~60g
   // carbs/100g, but water roughly triples the weight once cooked.
   { label: "Овсянка", keywords: ["овсян"], kcal: 71, protein: 2.5, fat: 1.5, carbs: 12 },
@@ -237,11 +282,20 @@ const FOOD_DB: FoodItem[] = [
   // covers home-cooked dishes) with nothing found locally to fall back on.
   {
     label: "Картофельное пюре",
-    keywords: ["пюре", "картофел", "картошк"],
+    // "толчёнка"/"толченка" — common colloquial synonym for mashed potato.
+    keywords: ["пюре", "картофел", "картошк", "толчёнк", "толченк"],
     kcal: 87,
     protein: 1.9,
     fat: 0.1,
     carbs: 20,
+  },
+  {
+    label: "Драники",
+    keywords: ["драник"],
+    kcal: 220,
+    protein: 4,
+    fat: 12,
+    carbs: 24,
   },
   // Distinct from "Картофель фри" (deep-fried) — pan-fried potato slices/
   // wedges, a very common separate home dish with its own denser calorie
@@ -256,6 +310,7 @@ const FOOD_DB: FoodItem[] = [
       "жареного картофеля",
       "картошка жареная",
       "картофель жареный",
+      "жарёх", // common colloquial synonym
     ],
     kcal: 190,
     protein: 2.7,
@@ -265,7 +320,11 @@ const FOOD_DB: FoodItem[] = [
   // Meat/fish below were already on a per-100g-cooked basis and check out
   // against standard references — left unchanged.
   { label: "Говядина", keywords: ["говядин", "говяж"], kcal: 250, protein: 26, fat: 15, carbs: 0 },
-  { label: "Свинина", keywords: ["свинин"], kcal: 263, protein: 27, fat: 17, carbs: 0 },
+  // "свин" (not just "свинин") also catches the adjective forms "свиной"/
+  // "свиная"/"свиные" — same gap as курин/куриц above for chicken.
+  { label: "Свинина", keywords: ["свинин", "свин"], kcal: 263, protein: 27, fat: 17, carbs: 0 },
+  { label: "Телятина", keywords: ["телятин", "теляч"], kcal: 172, protein: 24, fat: 8, carbs: 0 },
+  { label: "Баранина", keywords: ["баранин", "баран"], kcal: 294, protein: 25, fat: 21, carbs: 0 },
   {
     label: "Лосось / сёмга",
     keywords: ["лосос", "сёмг", "семг"],
@@ -283,6 +342,16 @@ const FOOD_DB: FoodItem[] = [
     carbs: 0,
   },
   { label: "Тунец", keywords: ["тунец", "тунц"], kcal: 116, protein: 25, fat: 1, carbs: 0 },
+  { label: "Форель", keywords: ["форел"], kcal: 190, protein: 21, fat: 11, carbs: 0 },
+  { label: "Скумбрия", keywords: ["скумбри"], kcal: 190, protein: 18, fat: 13, carbs: 0 },
+  {
+    label: "Селёдка / сельдь",
+    keywords: ["селёдк", "селедк", "сельд"],
+    kcal: 218,
+    protein: 18,
+    fat: 16,
+    carbs: 0,
+  },
   { label: "Орехи", keywords: ["орех"], kcal: 180, protein: 5, fat: 16, carbs: 5 },
   { label: "Яблоко", keywords: ["яблок"], kcal: 78, protein: 0.4, fat: 0.2, carbs: 20 },
   { label: "Апельсин", keywords: ["апельсин"], kcal: 70, protein: 1.4, fat: 0.2, carbs: 17 },
@@ -477,12 +546,27 @@ const FOOD_DB: FoodItem[] = [
   { label: "Спаржа", keywords: ["спарж"], kcal: 20, protein: 2.2, fat: 0.2, carbs: 3.9 },
   {
     label: "Овощи гриль / рагу",
-    keywords: ["овощи гриль", "овощное рагу"],
+    // Bare "рагу" now matches too (meat ragout included, not just
+    // vegetable) — it used to only match the exact phrase "овощное рагу".
+    keywords: ["овощи гриль", "овощное рагу", "рагу"],
     kcal: 90,
     protein: 2,
     fat: 5,
     carbs: 10,
   },
+  {
+    label: "Фаршированный перец",
+    keywords: ["фарширован"],
+    kcal: 130,
+    protein: 6,
+    fat: 6,
+    carbs: 13,
+  },
+  { label: "Зразы", keywords: ["зраз"], kcal: 210, protein: 12, fat: 12, carbs: 14 },
+  { label: "Долма", keywords: ["долм"], kcal: 170, protein: 8, fat: 10, carbs: 12 },
+  { label: "Лазанья", keywords: ["лазань"], kcal: 250, protein: 12, fat: 12, carbs: 22 },
+  { label: "Ризотто", keywords: ["ризотто"], kcal: 170, protein: 4, fat: 5, carbs: 27 },
+  { label: "Хачапури (кусок)", keywords: ["хачапур"], kcal: 280, protein: 9, fat: 15, carbs: 28 },
   { label: "Капуста", keywords: ["капуст"], kcal: 27, protein: 1.8, fat: 0.1, carbs: 6.6 },
   { label: "Морковь", keywords: ["морков"], kcal: 41, protein: 0.9, fat: 0.2, carbs: 10 },
 
@@ -579,6 +663,85 @@ function searchLocalFoodDb(query: string): (Macro & { label: string })[] {
   return out;
 }
 
+/**
+ * Classic Levenshtein edit distance, exited early once every cell in a row
+ * exceeds `max` — FOOD_DB keywords/query words are always short (a handful
+ * of characters), so this cheap O(n*m) version is plenty fast without a
+ * fancier algorithm.
+ */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const prevRow = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prevRow[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    let prevDiag = prevRow[0];
+    prevRow[0] = i;
+    let rowMin = prevRow[0];
+    for (let j = 1; j <= b.length; j++) {
+      const temp = prevRow[j];
+      prevRow[j] =
+        a[i - 1] === b[j - 1] ? prevDiag : 1 + Math.min(prevDiag, prevRow[j], prevRow[j - 1]);
+      prevDiag = temp;
+      rowMin = Math.min(rowMin, prevRow[j]);
+    }
+    if (rowMin > max) return max + 1;
+  }
+  return prevRow[b.length];
+}
+
+/** How many edits (typo, swapped/missing letter, wrong case ending) still
+ * count as "close enough" for a given word length — scaled so a 3-letter
+ * word doesn't match almost anything, but a longer word tolerates a couple
+ * of mistakes (e.g. a wrong declension ending). */
+function fuzzyThreshold(len: number): number {
+  if (len <= 4) return 1;
+  if (len <= 8) return 2;
+  return 3;
+}
+
+/**
+ * Fuzzy fallback for when the exact/substring search above finds nothing
+ * locally — compares each word in the query against every single-word
+ * FOOD_DB keyword (multi-word phrase keywords like "кофе с молоком" are
+ * skipped, since edit-distance between a word and a phrase isn't
+ * meaningful) and accepts anything within fuzzyThreshold edits. Catches
+ * typos and declension endings the stem keywords don't already cover
+ * (e.g. "пюрешки" misspelled as "пюрешеки", or "гречневой" without a
+ * matching stem) without ever demoting an exact match — this only runs
+ * when searchLocalFoodDb already came back empty, so it can't push a
+ * confident hit further down the list.
+ */
+function searchLocalFoodDbFuzzy(query: string): (Macro & { label: string })[] {
+  const words = query
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  if (words.length === 0) return [];
+
+  const out: (Macro & { label: string })[] = [];
+  for (const food of FOOD_DB) {
+    const hit = food.keywords.some((kw) => {
+      if (kw.includes(" ") || kw.length < 3) return false;
+      return words.some(
+        (w) =>
+          editDistance(w, kw, fuzzyThreshold(Math.min(w.length, kw.length))) <=
+          fuzzyThreshold(Math.min(w.length, kw.length)),
+      );
+    });
+    if (hit) {
+      out.push({
+        label: food.label,
+        kcal: food.kcal,
+        protein: food.protein,
+        fat: food.fat,
+        carbs: food.carbs,
+      });
+    }
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Stepped nutrition-entry flow
 //
@@ -634,7 +797,13 @@ export async function searchProducts(query: string): Promise<ProductCandidate[]>
     code: p.code,
     base: { kcal: p.kcal, protein: p.protein, fat: p.fat, carbs: p.carbs },
   }));
-  const localCandidates: ProductCandidate[] = searchLocalFoodDb(trimmed).map((f) => ({
+  // Fuzzy matching only kicks in once the exact/stem search finds nothing
+  // locally — it's a fallback for typos/unhandled declensions, not a
+  // replacement for the confident keyword match.
+  const exactLocal = searchLocalFoodDb(trimmed);
+  const localCandidates: ProductCandidate[] = (
+    exactLocal.length > 0 ? exactLocal : searchLocalFoodDbFuzzy(trimmed)
+  ).map((f) => ({
     label: f.label,
     source: "local",
     base: { kcal: f.kcal, protein: f.protein, fat: f.fat, carbs: f.carbs },

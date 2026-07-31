@@ -506,6 +506,9 @@ export interface GameState {
   // one ever un-sets once true.
   midnightQuestDone: boolean; // a quest was completed between 00:00 and 00:04
   everUsedUndo: boolean; // the "Отменить" undo toast was ever used
+  // Short generated sound effects (see sound.ts) — on by default, toggled
+  // off in Settings → "Звуки".
+  soundEnabled: boolean;
   // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
   // skipped. Only ever false for a genuinely brand-new account: see the
   // explicit `?? true` patches in loadState() and use-game-state.ts, which
@@ -1067,6 +1070,7 @@ export function defaultState(): GameState {
     marathonHistory: [],
     midnightQuestDone: false,
     everUsedUndo: false,
+    soundEnabled: true,
     statQuizDone: false,
   };
   return base;
@@ -1127,6 +1131,7 @@ export function loadState(userId?: string): GameState | null {
       marathonHistory: parsed.marathonHistory || [],
       midnightQuestDone: parsed.midnightQuestDone ?? false,
       everUsedUndo: parsed.everUsedUndo ?? false,
+      soundEnabled: parsed.soundEnabled ?? true,
       // Any save that already exists locally predates or postdates the quiz
       // feature either way — if the field's simply missing, this is an
       // established local cache, not a fresh account, so treat it as done

@@ -23,6 +23,7 @@ import {
   type Title,
 } from "@/lib/shop";
 import { POSTPONE_DAILY_LIMIT, POSTPONE_PRICE_GOLD, type GameState } from "@/lib/game";
+import { playShopPurchase } from "@/lib/sound";
 
 interface Props {
   state: GameState;
@@ -58,7 +59,10 @@ export function ShopPanel({ state, update }: Props) {
               owned={ownsFrame(state, f.id)}
               equipped={state.equippedFrame === f.id}
               gold={state.gold}
-              onBuy={() => update((s) => buyFrame(s, f.id))}
+              onBuy={() => {
+                playShopPurchase(state.soundEnabled);
+                update((s) => buyFrame(s, f.id));
+              }}
               onEquip={() => update((s) => equipFrame(s, f.id))}
               onUnequip={() => update((s) => equipFrame(s, null))}
             />
@@ -79,7 +83,10 @@ export function ShopPanel({ state, update }: Props) {
               owned={ownsCardTheme(state, t.id)}
               equipped={state.equippedCardTheme === t.id}
               gold={state.gold}
-              onBuy={() => update((s) => buyCardTheme(s, t.id))}
+              onBuy={() => {
+                playShopPurchase(state.soundEnabled);
+                update((s) => buyCardTheme(s, t.id));
+              }}
               onEquip={() => update((s) => equipCardTheme(s, t.id))}
             />
           ))}
@@ -99,7 +106,10 @@ export function ShopPanel({ state, update }: Props) {
               owned={ownsTitle(state, t.id)}
               equipped={state.equippedTitle === t.id}
               gold={state.gold}
-              onBuy={() => update((s) => buyTitle(s, t.id))}
+              onBuy={() => {
+                playShopPurchase(state.soundEnabled);
+                update((s) => buyTitle(s, t.id));
+              }}
               onEquip={() => update((s) => equipTitle(s, t.id))}
               onUnequip={() => update((s) => equipTitle(s, null))}
             />
@@ -162,7 +172,10 @@ export function ShopPanel({ state, update }: Props) {
         <button
           type="button"
           disabled={!canBuyCheatMealBonus(state)}
-          onClick={() => update((s) => buyCheatMealBonus(s))}
+          onClick={() => {
+            playShopPurchase(state.soundEnabled);
+            update((s) => buyCheatMealBonus(s));
+          }}
           className="mt-3 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all enabled:hover:-translate-y-0.5 enabled:hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Купить +1 читмил ({CHEAT_MEAL_BONUS_PRICE}💰)

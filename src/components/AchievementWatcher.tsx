@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import { ACHIEVEMENTS, applyAchievementUnlocks, type AchievementDef } from "@/lib/achievements";
+import { playAchievementUnlock } from "@/lib/sound";
 
 const AUTO_DISMISS_MS = 4500;
 
@@ -70,6 +71,8 @@ export function AchievementWatcher() {
     const [next, ...rest] = queue;
     setCelebrating(next);
     setQueue(rest);
+    playAchievementUnlock(state.soundEnabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [celebrating, queue]);
 
   // Auto-dismiss, keyed ONLY on `celebrating` — not on state.unlockedAchievements

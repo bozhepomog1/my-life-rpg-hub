@@ -28,6 +28,7 @@ import { UndoToast } from "@/components/UndoToast";
 import { WorkScheduleStatus } from "@/components/WorkScheduleStatus";
 import { useGameStateContext } from "@/lib/use-game-state-context";
 import { abandonMarathon, ensureMarathonRollover, startMarathon } from "@/lib/marathons";
+import { playLevelUp, playQuestComplete } from "@/lib/sound";
 import {
   applyReward,
   type BigGoalIdea,
@@ -285,7 +286,9 @@ function Home() {
         quest.reward,
         1,
       );
+      playQuestComplete(s.soundEnabled);
       if (rewarded.level > prev) {
+        playLevelUp(s.soundEnabled);
         setTimeout(() => {
           setLevelPulse(true);
           setTimeout(() => setLevelPulse(false), 1500);
@@ -376,7 +379,9 @@ function Home() {
         quest.reward,
         1,
       );
+      playQuestComplete(s.soundEnabled);
       if (rewarded.level > prev) {
+        playLevelUp(s.soundEnabled);
         setTimeout(() => {
           setLevelPulse(true);
           setTimeout(() => setLevelPulse(false), 1500);

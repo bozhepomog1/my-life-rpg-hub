@@ -385,6 +385,26 @@ export function SettingsPanel({ state, update, setState }: Props) {
       </section>
 
       <section className="panel p-6">
+        <h2 className="text-sm font-semibold">Звуки</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Короткие звуковые эффекты при выполнении квеста, левел-апе, разблокировке достижения и
+          покупке в магазине.
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-sm font-medium">
+            {state.soundEnabled ? "Включены" : "Выключены"}
+          </span>
+          <button
+            type="button"
+            onClick={() => update((s) => ({ ...s, soundEnabled: !s.soundEnabled }))}
+            className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+          >
+            {state.soundEnabled ? "Выключить" : "Включить"}
+          </button>
+        </div>
+      </section>
+
+      <section className="panel p-6">
         <h2 className="text-sm font-semibold">График работы</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           В рабочий день ежедневные квесты автоматически облегчаются (короткая разминка вместо

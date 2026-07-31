@@ -52,6 +52,14 @@ export function AddQuestModal({
   const [title, setTitle] = useState(initialTitle ?? "");
   const [stat, setStat] = useState<StatKey>(initialStat ?? "strength");
   const [reward, setReward] = useState(initialReward ?? 15);
+  // Separate raw string draft for the reward input — binding the input
+  // directly to the numeric `reward` state meant clearing the field to
+  // type a fresh number briefly produced "", which `Number("") || 1`
+  // immediately snapped back to 1 before the next keystroke landed, so any
+  // edit effectively typed after a fixed leading "1" (couldn't type just
+  // "5", only ended up with "15" etc.). This lets the field sit empty or
+  // mid-edit without being clamped until the user's done (onBlur).
+  const [rewardDraft, setRewardDraft] = useState(String(initialReward ?? 15));
   const [proof, setProof] = useState<ProofType>("none");
 
   const trimmed = title.trim();
@@ -134,8 +142,18 @@ export function AddQuestModal({
             type="number"
             min={1}
             max={100}
-            value={reward}
-            onChange={(e) => setReward(Number(e.target.value) || 1)}
+            value={rewardDraft}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setRewardDraft(raw);
+              const n = Number(raw);
+              if (raw.trim() !== "" && Number.isFinite(n)) setReward(n);
+            }}
+            onBlur={() => {
+              const n = Math.min(100, Math.max(1, Math.round(Number(rewardDraft) || 1)));
+              setReward(n);
+              setRewardDraft(String(n));
+            }}
             className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
           />
         </div>

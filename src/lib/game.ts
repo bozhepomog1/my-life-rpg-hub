@@ -1747,7 +1747,15 @@ export const BONUS_QUEST_POOL: BonusQuestTemplate[] = [
   { title: "Прогуляйся на свежем воздухе 10 минут", stat: "strength", reward: 8 },
   { title: "Разбери 10 старых фото в галерее телефона", stat: "will", reward: 5 },
   { title: "Напиши список дел на завтра", stat: "intellect", reward: 6 },
-  { title: "Сделай себе комплимент перед зеркалом", stat: "appearance", reward: 5 },
+  // Replaced "Сделай себе комплимент перед зеркалом" — a vague affirmation
+  // with nothing to actually do or check — with a genuine short grooming
+  // habit, matching the concrete, actionable pattern of the other
+  // appearance-stat entries here (Завари чай осознанно, Полей цветы).
+  {
+    title: "Сделай короткий уходовый ритуал: умойся и нанеси крем осознанно",
+    stat: "appearance",
+    reward: 5,
+  },
   { title: "Проветри комнату 10 минут", stat: "will", reward: 5 },
   { title: "Сделай 10 глубоких осознанных вдохов-выдохов", stat: "will", reward: 5 },
   { title: "Полей цветы или приберись у растений", stat: "appearance", reward: 5 },

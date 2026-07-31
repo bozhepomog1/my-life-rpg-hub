@@ -249,6 +249,9 @@ const FOOD_DB: FoodItem[] = [
   { label: "Чай", keywords: ["чай"], kcal: 2, protein: 0, fat: 0, carbs: 0.5 },
   { label: "Молоко", keywords: ["молок"], kcal: 122, protein: 6.6, fat: 6.4, carbs: 9.6 },
   { label: "Йогурт натуральный", keywords: ["йогурт"], kcal: 90, protein: 5, fat: 3, carbs: 8 },
+  { label: "Кефир", keywords: ["кефир"], kcal: 52, protein: 3.4, fat: 2.5, carbs: 4.7 },
+  { label: "Ряженка", keywords: ["ряженк"], kcal: 67, protein: 2.9, fat: 4, carbs: 4.2 },
+  { label: "Сметана", keywords: ["сметан"], kcal: 206, protein: 2.8, fat: 20, carbs: 3.2 },
   { label: "Сыр", keywords: ["сыр"], kcal: 110, protein: 7, fat: 9, carbs: 0.5 },
   {
     label: "Сливочное масло",
@@ -569,6 +572,28 @@ const FOOD_DB: FoodItem[] = [
   { label: "Хачапури (кусок)", keywords: ["хачапур"], kcal: 280, protein: 9, fat: 15, carbs: 28 },
   { label: "Капуста", keywords: ["капуст"], kcal: 27, protein: 1.8, fat: 0.1, carbs: 6.6 },
   { label: "Морковь", keywords: ["морков"], kcal: 41, protein: 0.9, fat: 0.2, carbs: 10 },
+  { label: "Лук репчатый", keywords: ["лук"], kcal: 40, protein: 1.1, fat: 0.1, carbs: 9 },
+  { label: "Чеснок", keywords: ["чеснок", "чесн"], kcal: 149, protein: 6.4, fat: 0.5, carbs: 33 },
+  {
+    label: "Болгарский перец",
+    keywords: ["болгарский перец", "болгарского перца", "сладкий перец"],
+    kcal: 27,
+    protein: 1,
+    fat: 0.3,
+    carbs: 6,
+  },
+  { label: "Свёкла", keywords: ["свёкл", "свекл"], kcal: 43, protein: 1.6, fat: 0.2, carbs: 10 },
+  { label: "Шпинат", keywords: ["шпинат"], kcal: 23, protein: 2.9, fat: 0.4, carbs: 3.6 },
+  { label: "Тыква", keywords: ["тыкв"], kcal: 26, protein: 1, fat: 0.1, carbs: 6.5 },
+  {
+    label: "Кабачок / цукини",
+    keywords: ["кабачок", "кабачк", "цукини"],
+    kcal: 24,
+    protein: 1.2,
+    fat: 0.3,
+    carbs: 4.6,
+  },
+  { label: "Редис", keywords: ["редис"], kcal: 16, protein: 0.7, fat: 0.1, carbs: 3.4 },
 
   // --- pastries / desserts ---
   { label: "Круассан", keywords: ["круассан"], kcal: 280, protein: 6, fat: 16, carbs: 30 },
@@ -614,6 +639,31 @@ const FOOD_DB: FoodItem[] = [
   { label: "Виноград", keywords: ["виноград"], kcal: 67, protein: 0.6, fat: 0.2, carbs: 17 },
   { label: "Груша", keywords: ["груш"], kcal: 57, protein: 0.4, fat: 0.1, carbs: 15 },
   { label: "Клубника", keywords: ["клубник"], kcal: 32, protein: 0.7, fat: 0.3, carbs: 7.7 },
+  { label: "Мандарин", keywords: ["мандарин"], kcal: 53, protein: 0.8, fat: 0.3, carbs: 13 },
+  { label: "Киви", keywords: ["киви"], kcal: 61, protein: 1.1, fat: 0.5, carbs: 15 },
+  { label: "Ананас", keywords: ["ананас"], kcal: 50, protein: 0.5, fat: 0.1, carbs: 13 },
+  { label: "Персик", keywords: ["персик"], kcal: 39, protein: 0.9, fat: 0.3, carbs: 10 },
+  { label: "Слива", keywords: ["слив"], kcal: 46, protein: 0.7, fat: 0.3, carbs: 11 },
+  { label: "Арбуз", keywords: ["арбуз"], kcal: 30, protein: 0.6, fat: 0.2, carbs: 8 },
+  { label: "Дыня", keywords: ["дын"], kcal: 34, protein: 0.8, fat: 0.2, carbs: 8 },
+  { label: "Миндаль", keywords: ["миндал"], kcal: 579, protein: 21, fat: 50, carbs: 22 },
+  {
+    label: "Грецкий орех",
+    keywords: ["грецкий орех", "грецкого ореха"],
+    kcal: 654,
+    protein: 15,
+    fat: 65,
+    carbs: 14,
+  },
+  { label: "Кешью", keywords: ["кешью"], kcal: 553, protein: 18, fat: 44, carbs: 30 },
+  {
+    label: "Мюсли-батончик",
+    keywords: ["мюсли-батончик", "мюслибатончик"],
+    kcal: 380,
+    protein: 6,
+    fat: 12,
+    carbs: 62,
+  },
   { label: "Финики", keywords: ["финик"], kcal: 277, protein: 2, fat: 0.4, carbs: 75 },
   { label: "Курага", keywords: ["кураг"], kcal: 241, protein: 3.4, fat: 0.5, carbs: 63 },
   { label: "Изюм", keywords: ["изюм"], kcal: 299, protein: 3, fat: 0.5, carbs: 79 },
@@ -828,7 +878,17 @@ export function looksLikeMultipleProducts(query: string): boolean {
 }
 
 /** Units offered on the quantity step, in the app's canonical display order. */
-export const PORTION_UNITS = ["g", "ml", "portion", "pcs", "tbsp", "tsp", "cup"] as const;
+export const PORTION_UNITS = [
+  "g",
+  "ml",
+  "portion",
+  "pcs",
+  "tbsp",
+  "tsp",
+  "cup",
+  "plate",
+  "slice",
+] as const;
 export type PortionUnit = (typeof PORTION_UNITS)[number];
 
 export const PORTION_UNIT_LABELS: Record<PortionUnit, string> = {
@@ -839,6 +899,8 @@ export const PORTION_UNIT_LABELS: Record<PortionUnit, string> = {
   tbsp: "ст.л.",
   tsp: "ч.л.",
   cup: "стакан",
+  plate: "тарелка",
+  slice: "кусок",
 };
 
 /**
@@ -848,6 +910,10 @@ export const PORTION_UNIT_LABELS: Record<PortionUnit, string> = {
  * "per-100g" multiplier. "порция"/"шт" aren't weight-based — those use the
  * entered amount directly as the multiplier (1 порция = ×1, 2 шт = ×2),
  * matching FOOD_DB's per-natural-unit entries (eggs, a banana, ...).
+ * "тарелка"/"кусок" ARE weight-based (a typical bowl of soup, a typical
+ * bread slice) — added so common ways of measuring a per-100g dish/staple
+ * ("1 тарелка супа", "1 кусок хлеба") don't require typing out the grams
+ * by hand every time.
  */
 const PORTION_UNIT_GRAMS: Partial<Record<PortionUnit, number>> = {
   g: 1,
@@ -855,6 +921,8 @@ const PORTION_UNIT_GRAMS: Partial<Record<PortionUnit, number>> = {
   tbsp: 15,
   tsp: 5,
   cup: 200,
+  plate: 300,
+  slice: 30,
 };
 
 /** Converts an entered amount + unit into the multiplier applied to a product's base macros. */
@@ -869,25 +937,35 @@ export function portionMultiplier(amount: number, unit: PortionUnit): number {
  * A reasonable DEFAULT unit for a product, guessed from its label text —
  * purely a starting point on the quantity step, every unit stays selectable
  * regardless. Eggs default to "шт" (nobody weighs an egg), drinks default
- * to "мл", soups default to "порция", everything else defaults to "г".
+ * to "мл", bread defaults to "кусок", soups default to "тарелка", everything
+ * else defaults to "г".
+ *
+ * Entries whose macros are already calibrated PER SERVING rather than per
+ * 100g — labeled "(кусок)"/"(N яйца)" in FOOD_DB, e.g. a pizza/cake slice or
+ * "Яичница (2 яйца)" — default to "шт" too (a direct ×1 multiplier), never "г":
+ * defaulting those to grams would silently present a whole-serving number
+ * as if it were a 100g measurement, which happens to look plausible but
+ * isn't actually one.
  */
 export function suggestedUnitFor(label: string): PortionUnit {
   const l = label.toLowerCase();
+  if (/\(кусок\)|\(\d+ яйц|яичниц/.test(l)) return "pcs";
   if (/яйц|яиц/.test(l)) return "pcs";
   if (/молок|кофе|латте|капучино|чай|сок|квас|морс|компот|кисель|лимонад|газировк|смузи/.test(l)) {
     return "ml";
   }
+  if (/хлеб|тост/.test(l)) return "slice";
   if (
     /суп|борщ|щи|солянк|харчо|окрошк|холодник|свекольник|рассольник|гаспачо|уха|рамен|минестроне|шурпа|лагман/.test(
       l,
     )
   ) {
-    return "portion";
+    return "plate";
   }
   return "g";
 }
 
-/** Sensible default amount for a given unit — 100 for weight/volume units, 1 for everything counted. */
+/** Sensible default amount for a given unit — 100 for weight/volume units, 1 for everything counted (including тарелка/кусок, which already fold their typical weight into PORTION_UNIT_GRAMS). */
 export function defaultAmountFor(unit: PortionUnit): number {
   return unit === "g" || unit === "ml" ? 100 : 1;
 }

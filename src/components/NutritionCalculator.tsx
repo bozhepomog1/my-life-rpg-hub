@@ -19,6 +19,7 @@ import {
   getTodayNutrition,
   looksLikeMultipleProducts,
   MONTHLY_CHEAT_LIMIT,
+  parseMealText,
   PORTION_UNIT_LABELS,
   PORTION_UNITS,
   scaledMacro,
@@ -47,6 +48,20 @@ export function NutritionCalculator({ state, update }: Props) {
   const [searching, setSearching] = useState(false);
   const [candidates, setCandidates] = useState<ProductCandidate[] | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Block 4: free-text meal entry ("гречка с курицей"). textInput is the
+  // raw sentence the user types; parseMealText() (Claude via Edge Function)
+  // turns it into a list of item names, which then feed the SAME
+  // search→pick→weight flow as manual search, one name at a time —
+  // queue[0] is always "the item currently being searched/added", advanced
+  // by addCandidate() (on a pick) or skipQueueItem() (if nothing matches).
+  const [textInput, setTextInput] = useState("");
+  const [parsingText, setParsingText] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [queue, setQueue] = useState<string[]>([]);
+  // How many items the CURRENT queue started with — queue itself only holds
+  // what's left, so this is what lets the UI show "продукт 2 из 3".
+  const [queueTotal, setQueueTotal] = useState(0);
 
   const [draftItems, setDraftItems] = useState<MealDraftItem[]>([]);
   // Brief inline confirmation after an instant-add — cleared by the next
@@ -81,21 +96,27 @@ export function NutritionCalculator({ state, update }: Props) {
     });
   }
 
-  async function handleSearch() {
-    const trimmed = query.trim();
-    if (!trimmed) return;
+  /** Runs the actual name search (Open Food Facts + local FOOD_DB) and fills
+   * the candidate list — shared by manual search and the text-recognition
+   * queue below, since both end up wanting the exact same "search this
+   * name" step. */
+  async function runSearch(name: string) {
     setSearching(true);
     setCandidates(null);
-    setSaved(false);
-    setJustAdded(null);
     try {
-      // Product-name-only search — Open Food Facts first, local FOOD_DB
-      // fallback per product, same sources as before.
-      const result = await searchProducts(trimmed);
+      const result = await searchProducts(name);
       setCandidates(result);
     } finally {
       setSearching(false);
     }
+  }
+
+  async function handleSearch() {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setSaved(false);
+    setJustAdded(null);
+    await runSearch(trimmed);
   }
 
   /**
@@ -109,6 +130,11 @@ export function NutritionCalculator({ state, update }: Props) {
    * fully editable afterward, inline, in the "Текущий приём пищи" list
    * below — so nothing about precision is lost, just reordered: add first,
    * fine-tune the grams after, instead of fine-tuning before every add.
+   *
+   * When a text-recognition queue is active (see handleParseText), adding a
+   * candidate also advances to the next recognized item automatically —
+   * that's the "спросить по очереди сколько грамм каждого" part of Block 4,
+   * reusing this exact same instant-add-then-edit-weight flow per item.
    */
   function addCandidate(candidate: ProductCandidate) {
     const unit = suggestedUnitFor(candidate.label);
@@ -121,9 +147,66 @@ export function NutritionCalculator({ state, update }: Props) {
     };
     setDraftItems((prev) => [...prev, item]);
     setJustAdded(candidate.label);
-    setQuery("");
-    setCandidates(null);
     searchInputRef.current?.focus();
+    if (queue.length > 0) {
+      advanceQueue();
+    } else {
+      setQuery("");
+      setCandidates(null);
+    }
+  }
+
+  /** Moves past the current queue[0] (either just added, or explicitly
+   * skipped via "Пропустить") and auto-searches the next recognized item,
+   * if any. */
+  function advanceQueue() {
+    const rest = queue.slice(1);
+    setQueue(rest);
+    if (rest.length > 0) {
+      setQuery(rest[0]);
+      void runSearch(rest[0]);
+    } else {
+      setQuery("");
+      setCandidates(null);
+      setQueueTotal(0);
+    }
+  }
+
+  function skipQueueItem() {
+    setJustAdded(null);
+    advanceQueue();
+  }
+
+  /**
+   * Block 4: recognizes individual food items in a free-text meal
+   * description via the parse-meal-text Edge Function (Claude API,
+   * server-side — see nutrition.ts), then kicks off the same search flow
+   * for the first recognized item. Never crashes on failure — parseMealText
+   * always resolves, an empty result just shows parseError so the user can
+   * fall back to manual search.
+   */
+  async function handleParseText() {
+    const trimmed = textInput.trim();
+    if (!trimmed) return;
+    setParsingText(true);
+    setParseError(null);
+    try {
+      const items = await parseMealText(trimmed);
+      if (items.length === 0) {
+        setParseError(
+          "Не получилось распознать отдельные продукты в тексте — попробуй переформулировать или найди их вручную ниже.",
+        );
+        return;
+      }
+      setTextInput("");
+      setQueue(items);
+      setQueueTotal(items.length);
+      setQuery(items[0]);
+      searchInputRef.current?.focus();
+      await runSearch(items[0]);
+    } finally {
+      setParsingText(false);
+    }
   }
 
   function updateDraftItem(index: number, patch: Partial<Pick<MealDraftItem, "amount" | "unit">>) {
@@ -176,6 +259,9 @@ export function NutritionCalculator({ state, update }: Props) {
     setJustAdded(null);
     setQuery("");
     setCandidates(null);
+    setQueue([]);
+    setQueueTotal(0);
+    setParseError(null);
   }
 
   return (
@@ -193,11 +279,53 @@ export function NutritionCalculator({ state, update }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Что ты съел?</h2>
 
-        <p className="mt-1 text-xs text-muted-foreground">
-          Нажми на нужный продукт — он сразу добавится в приём пищи с обычным весом (100 г/мл или 1
-          шт/порция), а точный вес поправишь ниже в списке. Смотрим в Open Food Facts, при
-          отсутствии сети или совпадений — в локальной базе.
-        </p>
+        <div className="mt-3 rounded-xl border border-dashed border-border p-3">
+          <label className="text-xs font-medium text-muted-foreground">
+            Опиши текстом, что съел
+          </label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleParseText()}
+              placeholder="Например: гречка с курицей"
+              className="w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={handleParseText}
+              disabled={!textInput.trim() || parsingText}
+              className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {parsingText ? "Распознаём…" : "Распознать"}
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Разберём фразу на отдельные продукты и по очереди спросим вес каждого — точные калории
+            всё равно берутся из базы, а не придумываются на лету.
+          </p>
+          {parseError && (
+            <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              {parseError}
+            </p>
+          )}
+        </div>
+
+        {queue.length > 0 ? (
+          <p className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+            Продукт {queueTotal - queue.length + 1} из {queueTotal}:{" "}
+            <span className="font-medium">{queue[0]}</span> — выбери подходящий вариант ниже.{" "}
+            <button type="button" onClick={skipQueueItem} className="underline hover:no-underline">
+              Пропустить
+            </button>
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Или найди продукт по названию вручную — нажми на нужный в списке, он сразу добавится в
+            приём пищи с обычным весом (100 г/мл или 1 шт/порция), а точный вес поправишь ниже в
+            списке.
+          </p>
+        )}
         <div className="mt-3 flex gap-2">
           <input
             ref={searchInputRef}
@@ -217,10 +345,10 @@ export function NutritionCalculator({ state, update }: Props) {
           </button>
         </div>
 
-        {looksLikeMultipleProducts(query) && (
+        {looksLikeMultipleProducts(query) && queue.length === 0 && (
           <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-            💡 Похоже, тут два продукта — попробуй найти их по одному, каждый добавится отдельной
-            строкой.
+            💡 Похоже, тут два продукта — попробуй найти их по одному (или воспользуйся полем «Опиши
+            текстом» выше), каждый добавится отдельной строкой.
           </p>
         )}
 

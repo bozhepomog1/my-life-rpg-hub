@@ -6,6 +6,7 @@ import {
   type NutritionDay,
 } from "@/lib/game";
 import { searchOpenFoodFacts, type OffProduct } from "@/lib/openfoodfacts";
+import { supabase } from "@/lib/supabase";
 
 export type { Macro, NutritionDay } from "@/lib/game";
 
@@ -875,6 +876,38 @@ export async function searchProducts(query: string): Promise<ProductCandidate[]>
 export function looksLikeMultipleProducts(query: string): boolean {
   const q = ` ${query.trim().toLowerCase()} `;
   return q.includes(",") || q.includes(" с ");
+}
+
+/**
+ * Free-text meal entry ("гречка с курицей" → ["гречка", "курица"]) — calls
+ * the parse-meal-text Supabase Edge Function, which itself calls the Claude
+ * API server-side (the API key lives only in Supabase Edge Function
+ * Secrets, never in this bundle — see supabase/functions/parse-meal-text/
+ * index.ts). This function only extracts item NAMES; the caller then runs
+ * each one through the normal searchProducts()/addCandidate flow, one at a
+ * time, asking for its weight just like a manually-searched product — the
+ * existing local FOOD_DB/Open Food Facts macros stay the actual source of
+ * truth, Claude never estimates calories itself.
+ *
+ * Never throws — any failure (offline, not logged in, malformed response,
+ * Edge Function not deployed yet) resolves to an empty array, matching
+ * searchOpenFoodFacts/searchProducts's "fail soft" convention, so the UI can
+ * just show "couldn't recognize anything, try searching manually" instead
+ * of crashing.
+ */
+export async function parseMealText(text: string): Promise<string[]> {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  try {
+    const { data, error } = await supabase.functions.invoke<{ items?: unknown }>(
+      "parse-meal-text",
+      { body: { text: trimmed } },
+    );
+    if (error || !data || !Array.isArray(data.items)) return [];
+    return data.items.filter((i): i is string => typeof i === "string" && i.trim().length > 0);
+  } catch {
+    return [];
+  }
 }
 
 /** Units offered on the quantity step, in the app's canonical display order. */

@@ -99,6 +99,10 @@ function Achievements() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     {defs.map((def) => {
                       const unlockedAt = state.unlockedAchievements[def.id];
+                      // Hidden achievement, still locked — reveal nothing
+                      // about it (not even the description) beyond a "???"
+                      // silhouette. See AchievementDef.secret.
+                      const isHiddenSilhouette = def.secret && !unlockedAt;
                       const progress = def.progress?.(state, {
                         friendsCount: 0,
                         leaderboardTop3: false,
@@ -113,26 +117,39 @@ function Achievements() {
                           }`}
                         >
                           <div className="flex items-start gap-2.5">
-                            <span className="text-xl leading-none">{def.icon}</span>
+                            <span className="text-xl leading-none">
+                              {isHiddenSilhouette ? "❔" : def.icon}
+                            </span>
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium">{def.title}</div>
+                              <div className="text-sm font-medium">
+                                {isHiddenSilhouette ? "???" : def.title}
+                              </div>
                               {unlockedAt ? (
                                 <div className="mt-0.5 text-[11px] text-primary">
                                   Получено {new Date(unlockedAt).toLocaleDateString("ru-RU")}
+                                </div>
+                              ) : isHiddenSilhouette ? (
+                                <div className="mt-0.5 text-[11px] italic text-muted-foreground">
+                                  Скрытое достижение — условие раскроется после разблокировки
                                 </div>
                               ) : (
                                 <div className="mt-0.5 text-[11px] text-muted-foreground">
                                   {def.description}
                                 </div>
                               )}
-                              {!unlockedAt && progress && progress.target > 1 && (
-                                <div className="mt-1.5">
-                                  <ProgressBar value={(progress.current / progress.target) * 100} />
-                                  <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                    {progress.current}/{progress.target}
+                              {!unlockedAt &&
+                                !isHiddenSilhouette &&
+                                progress &&
+                                progress.target > 1 && (
+                                  <div className="mt-1.5">
+                                    <ProgressBar
+                                      value={(progress.current / progress.target) * 100}
+                                    />
+                                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                      {progress.current}/{progress.target}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
                             </div>
                           </div>
                         </div>

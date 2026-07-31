@@ -501,6 +501,11 @@ export interface GameState {
   activeMarathon: ActiveMarathon | null;
   // Permanent history of completed marathons, newest first.
   marathonHistory: MarathonHistoryEntry[];
+  // Small durable flags for hidden-achievement conditions that leave no
+  // other trace in state — see achievements.ts's "secret" category. Neither
+  // one ever un-sets once true.
+  midnightQuestDone: boolean; // a quest was completed between 00:00 and 00:04
+  everUsedUndo: boolean; // the "Отменить" undo toast was ever used
   // Starter stat quiz (StatQuiz.tsx) — true once taken OR explicitly
   // skipped. Only ever false for a genuinely brand-new account: see the
   // explicit `?? true` patches in loadState() and use-game-state.ts, which
@@ -1060,6 +1065,8 @@ export function defaultState(): GameState {
     weeklyReportSeen: true,
     activeMarathon: null,
     marathonHistory: [],
+    midnightQuestDone: false,
+    everUsedUndo: false,
     statQuizDone: false,
   };
   return base;
@@ -1118,6 +1125,8 @@ export function loadState(userId?: string): GameState | null {
       weeklyReportSeen: parsed.weeklyReportSeen ?? true,
       activeMarathon: parsed.activeMarathon ?? null,
       marathonHistory: parsed.marathonHistory || [],
+      midnightQuestDone: parsed.midnightQuestDone ?? false,
+      everUsedUndo: parsed.everUsedUndo ?? false,
       // Any save that already exists locally predates or postdates the quiz
       // feature either way — if the field's simply missing, this is an
       // established local cache, not a fresh account, so treat it as done

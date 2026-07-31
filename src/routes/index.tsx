@@ -72,6 +72,14 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 
 const UNDO_WINDOW_MS = 10_000;
 
+/** True right around midnight (00:00–00:04) — backs the "Полуночный герой"
+ * hidden achievement (see achievements.ts). Deliberately a few minutes wide
+ * rather than the literal single instant of 00:00:00, so it's actually
+ * reachable rather than requiring frame-perfect timing. */
+function isMidnightWindow(d = new Date()): boolean {
+  return d.getHours() === 0 && d.getMinutes() < 5;
+}
+
 /** "+ Добавить ..." button label, per quest category — all three tabs are
  * user-populated now (see game.ts), so each needs its own copy. */
 const ADD_QUEST_LABEL: Record<QuestCategory, string> = {
@@ -166,6 +174,7 @@ function Home() {
     const { questId, source, stat, category, reward, dailyKey } = pendingUndo;
     update((s) => {
       let next = registerQuestActivity(undoReward(s, stat, reward), stat, category, reward, -1);
+      next = { ...next, everUsedUndo: true };
       if (source === "quests") {
         next = {
           ...next,
@@ -293,6 +302,7 @@ function Home() {
       return checkBossQuestCompletion({
         ...rewarded,
         dailyCompletions,
+        midnightQuestDone: rewarded.midnightQuestDone || isMidnightWindow(),
         quests: rewarded.quests.map((q) =>
           q.id === id
             ? {
@@ -374,6 +384,7 @@ function Home() {
       }
       return checkBossQuestCompletion({
         ...rewarded,
+        midnightQuestDone: rewarded.midnightQuestDone || isMidnightWindow(),
         bonusQuests: rewarded.bonusQuests.map((q) =>
           q.id === id ? { ...q, done: true, completedAt: Date.now() } : q,
         ),

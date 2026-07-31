@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useGameStateContext } from "@/lib/use-game-state-context";
@@ -11,13 +11,20 @@ const AUTO_DISMISS_MS = 4500;
  * <Outlet/>) so achievement unlocks are checked and celebrated regardless of
  * which tab the user is on — not just from the Achievements page itself.
  *
- * Re-checks the achievements that can be derived purely from GameState
- * (streak/level/stats/nutrition/quests/deposit) whenever those values
- * change. Social achievements (friends/leaderboard) need data that only the
- * Friends page has loaded, so FriendsPanel runs its own
- * applyAchievementUnlocks() call with that context — this watcher only
- * needs to notice the resulting unlock and celebrate it, which it does via
- * the shared state.unlockedAchievements diff below.
+ * Re-checks the achievements that can be derived purely from GameState on
+ * every state change (see the `[hydrated, state, update]` deps below —
+ * deliberately the whole state object rather than an itemized list of
+ * fields, now that hidden achievements can key off almost any corner of it:
+ * postpone counts, cheat-meal usage, equipped cosmetics, marathon history,
+ * etc. This is safe from update-loops because applyAchievementUnlocks()
+ * returns the SAME state reference when nothing newly unlocked — React
+ * bails out of re-rendering on an identical reference, so a no-op check
+ * never triggers another effect run). Social achievements (friends/
+ * leaderboard) need data that only the Friends page has loaded, so
+ * FriendsPanel runs its own applyAchievementUnlocks() call with that
+ * context — this watcher only needs to notice the resulting unlock and
+ * celebrate it, which it does via the shared state.unlockedAchievements
+ * diff below.
  */
 export function AchievementWatcher() {
   const { state, update, hydrated } = useGameStateContext();
@@ -25,11 +32,6 @@ export function AchievementWatcher() {
   const [celebrating, setCelebrating] = useState<AchievementDef | null>(null);
   const seen = useRef<Set<string> | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const nutritionEntryCount = useMemo(
-    () => Object.values(state.nutrition).reduce((sum, d) => sum + d.entries.length, 0),
-    [state.nutrition],
-  );
 
   // Seed the "already known" set on first hydration so achievements earned
   // before this session (or before this feature existed) don't celebrate.
@@ -39,22 +41,12 @@ export function AchievementWatcher() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
-  // Re-run the state-derived checks whenever the relevant values change.
+  // Re-run every achievement check on every state change — see the doc
+  // comment above for why this is both simple and safe.
   useEffect(() => {
     if (!hydrated) return;
     update((s) => applyAchievementUnlocks(s));
-  }, [
-    hydrated,
-    state.completedCount,
-    state.level,
-    state.longestStreak,
-    state.stats.strength.level,
-    state.stats.intellect.level,
-    state.stats.will.level,
-    state.stats.appearance.level,
-    nutritionEntryCount,
-    update,
-  ]);
+  }, [hydrated, state, update]);
 
   // Detect newly unlocked ids and queue ALL of them (not just the first) —
   // two achievements can legitimately unlock in the same update (e.g. a

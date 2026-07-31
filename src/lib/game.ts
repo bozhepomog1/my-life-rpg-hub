@@ -1163,8 +1163,21 @@ export function clearLegacyLocalState() {
   }
 }
 
+/**
+ * Cumulative total-XP threshold needed to have reached level+1 — used as
+ * `totalXp >= xpForNextLevel(currentLevel)` in the level-up loops below.
+ * Each level now costs progressively more than the last (100 XP for
+ * level 1→2, growing by 40 XP per level after that: 140 for 2→3, 180 for
+ * 3→4, …) instead of a flat 100 XP/level. The flat curve let one very
+ * active day (~150-250 XP from a full daily set + a bonus/story quest)
+ * blow through 2-3 levels at once; the escalating cost keeps early levels
+ * quick wins while later ones realistically take many days of sustained
+ * play, matching a months-long RPG progression instead of a single sitting.
+ * Closed form of sum_{i=1}^{level} (100 + 40*(i-1)) = 20*level^2 + 80*level.
+ */
 export function xpForNextLevel(level: number) {
-  return 100 * level;
+  if (level <= 0) return 0;
+  return 20 * level * level + 80 * level;
 }
 
 export type ScheduleMode = "weekly" | "cycle";
@@ -1635,8 +1648,17 @@ export interface SeasonSummary {
 
 export const SEASON_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Season XP needed to unlock the season's cosmetic badge. */
-export const SEASON_BADGE_XP_TARGET = 800;
+/**
+ * Season XP needed to unlock the season's cosmetic badge. A fully engaged
+ * day (all dailies + a bonus/story quest) earns roughly 70-120 season XP,
+ * so 800 meant the badge — meant to reward sustained effort across the
+ * whole 30-day season — could fall in a single very active day (~1/3 of it
+ * in one sitting, per report). Raised so it takes on the order of 20+ days
+ * of typical activity at that pace, i.e. most of the season played
+ * consistently rather than one binge day, while staying reachable without
+ * requiring literally every single day.
+ */
+export const SEASON_BADGE_XP_TARGET = 1800;
 
 /** Cosmetic badge icons, one per season, cycling if a player outlasts the list. */
 const SEASON_BADGE_ICONS = ["🏵️", "🎖️", "🏆", "🥇", "💠", "🔶", "🌟"];

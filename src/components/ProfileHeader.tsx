@@ -102,8 +102,19 @@ export function ProfileHeader({
     }
   }
 
-  const need = xpForNextLevel(state.level);
-  const currentLevelXp = state.totalXp - (state.level - 1) * need;
+  // xpForNextLevel(L) is the CUMULATIVE totalXp threshold to have reached
+  // level L+1, not a flat per-level amount (it now grows with level — see
+  // game.ts) — so the XP needed for the current level alone is the gap
+  // between consecutive thresholds, and progress within it is totalXp minus
+  // the previous threshold. The old code multiplied (level - 1) by the
+  // cumulative `need` for the *current* level, which over-subtracted more
+  // and more at higher levels, producing the reported negative progress
+  // (e.g. "-874/400 XP"). Clamped defensively so this can never go negative
+  // or over 100%, regardless of any future rounding edge cases.
+  const prevThreshold = xpForNextLevel(state.level - 1);
+  const nextThreshold = xpForNextLevel(state.level);
+  const need = nextThreshold - prevThreshold;
+  const currentLevelXp = Math.max(0, Math.min(need, state.totalXp - prevThreshold));
   const pct = Math.min(100, Math.max(0, (currentLevelXp / need) * 100));
 
   const strongest = (Object.keys(state.stats) as StatKey[]).reduce((a, b) =>

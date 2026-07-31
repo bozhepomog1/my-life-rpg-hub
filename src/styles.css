@@ -309,6 +309,35 @@
   animation: tab-pill 220ms ease-out;
 }
 
+/* Skill-tree view (StatSkillTree component): current-level node gets a slow
+   breathing glow, every node fades/rises in on mount with a per-node delay
+   set via inline `animationDelay` so the tree "grows" from the root up. */
+@keyframes skill-node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--node-color, var(--color-primary)) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--node-color, var(--color-primary)) 0%, transparent);
+  }
+}
+@keyframes skill-node-grow {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-skill-node-pulse {
+  animation: skill-node-pulse 2.2s ease-in-out infinite;
+}
+.animate-skill-node-grow {
+  animation: skill-node-grow 420ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
 /* Opt-in hover shade for solid-accent buttons, using the HSL-derived hover
    variables (see computeAccentCssVars in personalization.ts) instead of a
    fixed opacity — keeps working correctly no matter what accent color/theme

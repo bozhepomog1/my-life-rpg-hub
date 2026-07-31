@@ -13,6 +13,7 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { StatBar } from "@/components/StatBar";
+import { StatSkillTree } from "@/components/StatSkillTree";
 import { QuestCard } from "@/components/QuestCard";
 import { AddQuestModal } from "@/components/AddQuestModal";
 import { DepositSection } from "@/components/DepositSection";
@@ -228,6 +229,12 @@ function Home() {
   const longestStreak = Math.max(state.longestStreak, streak);
 
   const [milestone, setMilestone] = useState<number | null>(null);
+  // View preference for the "Характеристики" section (skill-tree vs flat
+  // cards) — deliberately local UI state rather than a new GameState field:
+  // it's a display toggle, not game data, so there's nothing to sync or
+  // persist across devices; defaulting to the new tree view each visit is
+  // the simplest option and also the best way to surface the new feature.
+  const [statView, setStatView] = useState<"tree" | "cards">("tree");
   const prevStreak = useRef(streak);
 
   // Persist a new all-time-longest streak.
@@ -532,14 +539,44 @@ function Home() {
         <DepositSection state={state} update={update} />
 
         <section>
-          <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
-            Характеристики
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-            {STAT_ORDER.map((k) => (
-              <StatBar key={k} stat={k} level={state.stats[k].level} xp={state.stats[k].xp} />
-            ))}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-medium tracking-wide text-muted-foreground">
+              Характеристики
+            </h2>
+            <div className="flex shrink-0 gap-1 rounded-full border border-border p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setStatView("tree")}
+                className={`rounded-full px-2.5 py-1 font-medium transition-colors ${
+                  statView === "tree"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary"
+                }`}
+              >
+                Дерево
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatView("cards")}
+                className={`rounded-full px-2.5 py-1 font-medium transition-colors ${
+                  statView === "cards"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary"
+                }`}
+              >
+                Карточки
+              </button>
+            </div>
           </div>
+          {statView === "tree" ? (
+            <StatSkillTree state={state} />
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+              {STAT_ORDER.map((k) => (
+                <StatBar key={k} stat={k} level={state.stats[k].level} xp={state.stats[k].xp} />
+              ))}
+            </div>
+          )}
         </section>
 
         <DisciplineCalendar state={state} update={update} />

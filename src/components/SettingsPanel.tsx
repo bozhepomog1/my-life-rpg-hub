@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
-import { REMINDER_HOUR } from "@/lib/reminders";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { AutosaveField } from "@/components/AutosaveField";
 import { DepositSetupModal } from "@/components/DepositSetupModal";
 import { InstallAppButton } from "@/components/InstallAppButton";
@@ -24,9 +24,15 @@ import { useAuthContext } from "@/lib/use-auth-context";
 import { getBackgroundPhotoUrl, uploadBackgroundPhoto } from "@/lib/background-photo";
 import { useMyShortCode } from "@/hooks/use-my-short-code";
 
-type NotificationPermissionState = NotificationPermission | "unsupported";
-
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+const PUSH_ERROR_MESSAGES: Record<string, string> = {
+  unsupported: "Этот браузер не поддерживает push-уведомления.",
+  "no-vapid-key": "Push пока не настроен на сервере — сообщи об этом разработчику.",
+  "permission-denied":
+    "Уведомления заблокированы в настройках браузера. Разреши их вручную для этого сайта.",
+  error: "Не удалось включить уведомления. Попробуй ещё раз.",
+};
 
 interface Props {
   state: GameState;
@@ -37,7 +43,8 @@ interface Props {
 export function SettingsPanel({ state, update, setState }: Props) {
   const { user } = useAuthContext();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermissionState>("unsupported");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [bgUploading, setBgUploading] = useState(false);
   const [bgPreviewUrl, setBgPreviewUrl] = useState<string | null>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
@@ -57,14 +64,6 @@ export function SettingsPanel({ state, update, setState }: Props) {
   }
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      setPermission("unsupported");
-      return;
-    }
-    setPermission(Notification.permission);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     if (state.background.mode !== "photo" || !state.background.photoPath) {
       setBgPreviewUrl(null);
@@ -79,14 +78,23 @@ export function SettingsPanel({ state, update, setState }: Props) {
   }, [state.background.mode, state.background.photoPath]);
 
   async function handleEnableReminders() {
-    if (permission === "unsupported") return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    if (result === "granted") update((s) => ({ ...s, remindersEnabled: true }));
+    if (!user) return;
+    setPushBusy(true);
+    setPushError(null);
+    const result = await subscribeToPush(user.id);
+    setPushBusy(false);
+    if (result.ok) {
+      update((s) => ({ ...s, remindersEnabled: true }));
+    } else {
+      setPushError(PUSH_ERROR_MESSAGES[result.reason] ?? PUSH_ERROR_MESSAGES.error);
+    }
   }
 
-  function handleToggleReminders() {
-    update((s) => ({ ...s, remindersEnabled: !s.remindersEnabled }));
+  async function handleDisableReminders() {
+    setPushBusy(true);
+    await unsubscribeFromPush();
+    setPushBusy(false);
+    update((s) => ({ ...s, remindersEnabled: false }));
   }
 
   function setScheduleMode(mode: ScheduleMode) {
@@ -352,45 +360,42 @@ export function SettingsPanel({ state, update, setState }: Props) {
       <section className="panel p-6">
         <h2 className="text-sm font-semibold">Напоминания</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Если к {REMINDER_HOUR}:00 по твоему времени ещё остались незакрытые ежедневные квесты,
-          пришлём уведомление в браузере. Работает, только пока эта вкладка открыта — при закрытой
-          вкладке или браузере уведомление не придёт, это ограничение самой технологии, не наше.
+          Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. Раз в день,
+          вечером, если остались незакрытые ежедневные квесты.
         </p>
 
-        {permission === "unsupported" && (
+        {!isPushSupported() && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Этот браузер не поддерживает уведомления.
+            Этот браузер не поддерживает push-уведомления.
           </p>
         )}
 
-        {permission === "denied" && (
-          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
-            Уведомления заблокированы в настройках браузера. Разреши их вручную для этого сайта,
-            чтобы включить напоминания.
+        {pushError && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-destructive">
+            {pushError}
           </p>
         )}
 
-        {permission === "default" && (
-          <button
-            type="button"
-            onClick={handleEnableReminders}
-            className="btn-accent-hover mt-3 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:-translate-y-0.5"
-          >
-            Включить напоминания
-          </button>
-        )}
-
-        {permission === "granted" && (
+        {isPushSupported() && (
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-sm font-medium">
               {state.remindersEnabled ? "Включены" : "Выключены"}
             </span>
             <button
               type="button"
-              onClick={handleToggleReminders}
-              className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+              disabled={pushBusy}
+              onClick={state.remindersEnabled ? handleDisableReminders : handleEnableReminders}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
+                state.remindersEnabled
+                  ? "border border-border hover:bg-secondary"
+                  : "btn-accent-hover bg-primary text-primary-foreground"
+              }`}
             >
-              {state.remindersEnabled ? "Выключить" : "Включить"}
+              {pushBusy
+                ? "Подождите…"
+                : state.remindersEnabled
+                  ? "Выключить"
+                  : "Включить напоминания"}
             </button>
           </div>
         )}

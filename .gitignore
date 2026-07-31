@@ -24,6 +24,14 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Leftover renamed-not-deleted files — this sandbox's FUSE-mounted working
+# tree supports rename() but not unlink(), so removing a tracked file goes
+# through `mv <path> <path>.deleted` (same-directory rename, not a real
+# delete) followed by `git add <path>` to stage the removal from git's
+# perspective. The renamed leftover then just needs to stay out of `git
+# status` noise — it can't be cleaned up from inside this sandbox either.
+*.deleted
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -16,7 +16,6 @@ import { AuthProvider } from "../lib/auth-context";
 import { GameStateProvider } from "../lib/game-state-context";
 import { StatQuizGate } from "../components/StatQuizGate";
 import { AchievementWatcher } from "../components/AchievementWatcher";
-import { DailyReminderService } from "../components/DailyReminderService";
 import { AccentApplier } from "../components/AccentApplier";
 import { BackgroundPhotoLayer } from "../components/BackgroundPhotoLayer";
 
@@ -171,7 +170,6 @@ function RootComponent() {
               <AccentApplier />
               <BackgroundPhotoLayer />
               <AchievementWatcher />
-              <DailyReminderService />
               {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
               <Outlet />
             </StatQuizGate>

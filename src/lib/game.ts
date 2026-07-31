@@ -347,14 +347,27 @@ export const FITNESS_LEVELS: FitnessLevel[] = [
   { label: "Любитель", min: 25 },
   { label: "Продвинутый", min: 50 },
   { label: "Атлет", min: 75 },
+  // Above 100 used to be unreachable (each stat was capped at its
+  // benchmark), so "Атлет" was a hard ceiling with nothing beyond it.
+  // These two extend the ladder for anyone who keeps improving past the
+  // benchmark reps — a real progression, not just a label change, since
+  // the index itself is no longer capped at 100 either (see below).
+  { label: "Элита", min: 100 },
+  { label: "Легенда", min: 150 },
 ];
 
 /**
- * 0-100 index averaging all 4 records, each normalized against its
- * benchmark (capped at 100% so one very strong lift can't drag the
- * average over 100). Requires all 4 records to be set — averaging over
- * only the ones that are filled in would show a misleadingly high index
- * from partial data (e.g. only pushups entered, at "Атлет" level).
+ * Index averaging all 4 records, each normalized against its benchmark
+ * (100 = benchmark reps). Requires all 4 records to be set — averaging
+ * over only the ones that are filled in would show a misleadingly high
+ * index from partial data (e.g. only pushups entered, at "Атлет" level).
+ *
+ * Each stat's percentage is no longer capped at 100 — the benchmarks are
+ * an "advanced" reference point, not a maximum, so someone who trains
+ * well past it (e.g. 60 pushups vs. the 40 benchmark = 150%) should keep
+ * seeing their index climb instead of hitting an invisible wall the
+ * moment they match the benchmark on every exercise. FITNESS_LEVELS goes
+ * up to 150+ ("Легенда") so there's always a next tier to reach for.
  */
 export function computeFitnessIndex(body: BodyStats): number | null {
   const keys = Object.keys(FITNESS_BENCHMARKS) as RecordKey[];
@@ -362,7 +375,7 @@ export function computeFitnessIndex(body: BodyStats): number | null {
   const pct =
     keys.reduce((sum, k) => {
       const value = body[k] as number;
-      return sum + Math.min(100, (value / FITNESS_BENCHMARKS[k]) * 100);
+      return sum + (value / FITNESS_BENCHMARKS[k]) * 100;
     }, 0) / keys.length;
   return Math.round(pct);
 }

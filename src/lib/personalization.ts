@@ -21,10 +21,19 @@ export interface AccentPreset {
   colors: AccentColors;
 }
 
-// Five ready-made pairs, terracotta first (today's default, unchanged for
-// anyone who never opens this screen). The rest are hand-picked hue pairs
-// that stay legible once run through accentForMode() in both themes.
+// Amethyst first (today's default, matching the app icon — unchanged for
+// anyone who never opens this screen). Terracotta was the original default
+// before the icon redesign; kept in the list, just no longer first, so
+// anyone already using it keeps it (their saved accentColors never changed)
+// and it's still pickable by anyone else who wants it. The rest are
+// hand-picked hue pairs that stay legible once run through accentForMode()
+// in both themes.
 export const ACCENT_PRESETS: AccentPreset[] = [
+  {
+    id: "amethyst",
+    label: "Аметист",
+    colors: { primary: "#7c3aed", secondary: "#c9992e" },
+  },
   {
     id: "terracotta",
     label: "Терракота",

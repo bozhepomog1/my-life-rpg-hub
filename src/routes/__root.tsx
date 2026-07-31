@@ -97,10 +97,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       // PWA install-to-home-screen support (Android + iOS). theme-color
-      // matches the light-theme --primary terracotta from styles.css — the
-      // manifest's own theme_color/background_color mirror the same
-      // values for when the OS reads manifest.json directly instead.
-      { name: "theme-color", content: "#af5f3c" },
+      // matches the light-theme --primary amethyst from styles.css (the
+      // accentForMode()-adjusted shade actually painted on screen, not the
+      // raw #7c3aed brand/icon hex) — the manifest's own theme_color/
+      // background_color mirror the same value for when the OS reads
+      // manifest.json directly instead.
+      { name: "theme-color", content: "#5c14d7" },
       // iOS doesn't read manifest.json's `display: standalone` on its own —
       // these three Apple-specific tags are what actually make "Add to Home
       // Screen" launch fullscreen there instead of opening Safari.

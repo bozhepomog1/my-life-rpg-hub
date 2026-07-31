@@ -441,7 +441,8 @@ export interface GameState {
   seasonSummarySeen: boolean;
   // User's chosen accent colors (Settings → Персонализация). Optional so
   // states saved before this feature existed simply fall back to the
-  // terracotta default wherever this is read — see DEFAULT_ACCENT_COLORS.
+  // default (amethyst, matching the app icon) wherever this is read — see
+  // DEFAULT_ACCENT_COLORS.
   accentColors: AccentColors;
   // User's chosen app background (Settings → Персонализация → Фон): a
   // neutral default, a solid tint, or an uploaded photo with a dimming

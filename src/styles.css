@@ -59,24 +59,30 @@
   --card-muted-foreground: #6e6e73;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
-  --primary: #af5f3c;
+  /* Amethyst default (matches the app icon) — these are accentForMode()'s
+     own output for the canonical #7c3aed/#c9992e pair (see
+     DEFAULT_ACCENT_COLORS in personalization.ts) at this theme's target
+     lightness, precomputed so a first-time visitor doesn't need a JS-applied
+     override to see the right color; AccentApplier only overrides these at
+     runtime once someone picks something OTHER than the default. */
+  --primary: #5c14d7;
   --primary-foreground: #fefdfb;
   --secondary: #f2f2f3;
   --secondary-foreground: #1a1a1a;
   --muted: #f2f2f3;
   --muted-foreground: #6e6e73;
-  --accent: #af5f3c;
+  --accent: #5c14d7;
   --accent-foreground: #fefdfb;
-  --primary-hover: #974f30; /* darkened terracotta; overridden per-user by AccentApplier */
-  --accent-2: #7a9471;
-  --accent-2-foreground: #16241a;
-  --accent-2-hover: #698061;
+  --primary-hover: #4c11b2; /* darkened amethyst; overridden per-user by AccentApplier */
+  --accent-2: #bf912c;
+  --accent-2-foreground: #201510;
+  --accent-2-hover: #9e7824;
   --destructive: #b3543f;
   --destructive-foreground: #fefdfb;
   --success: #6f8f6a;
   --border: #eaeaec;
   --input: #ffffff;
-  --ring: #af5f3c;
+  --ring: #5c14d7;
   --shadow-color: 20 20 25;
 }
 
@@ -92,24 +98,26 @@
   --card-muted-foreground: #9c9ca6;
   --popover: #1a1c22;
   --popover-foreground: #ececf1;
-  --primary: #da9472;
+  /* Same amethyst default as :root above, adapted for dark mode via
+     accentForMode()'s dark-target lightness — see that block's comment. */
+  --primary: #925bf0;
   --primary-foreground: #201510;
   --secondary: #20222a;
   --secondary-foreground: #ececf1;
   --muted: #20222a;
   --muted-foreground: #9c9ca6;
-  --accent: #da9472;
+  --accent: #925bf0;
   --accent-foreground: #201510;
-  --primary-hover: #e3a689; /* lightened terracotta; overridden per-user by AccentApplier */
-  --accent-2: #96b98d;
-  --accent-2-foreground: #16241a;
-  --accent-2-hover: #a5c49d;
+  --primary-hover: #ab80f3; /* lightened amethyst; overridden per-user by AccentApplier */
+  --accent-2: #debb6e;
+  --accent-2-foreground: #201510;
+  --accent-2-hover: #e6cb8f;
   --destructive: #d67d6a;
   --destructive-foreground: #201510;
   --success: #97b88f;
   --border: #2a2c35;
   --input: #1a1c22;
-  --ring: #da9472;
+  --ring: #925bf0;
   --shadow-color: 0 0 0;
 }
 

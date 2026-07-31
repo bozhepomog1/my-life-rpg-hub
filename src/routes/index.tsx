@@ -625,6 +625,8 @@ function Home() {
 
           {tab === "purchase" && (
             <RandomGoalRoller
+              state={state}
+              update={update}
               onAddAsIs={(idea) => {
                 setGoalPrefill(idea);
                 setAddQuestOpen(true);

@@ -501,6 +501,11 @@ export interface GameState {
   // Shop "extra cheat meal" purchases, keyed by month (YYYY-MM) — adds to
   // the free monthly limit in nutrition.ts.
   cheatMealBonus: Record<string, number>;
+  // Most-recently-shown BIG_GOAL_IDEAS titles (see randomBigGoalIdea/
+  // recordBigGoalShown) — persisted so the roller can't immediately
+  // resurface something the user just saw, even across closing the roller
+  // or reloading the page.
+  recentBigGoalTitles: string[];
   // Weekly boss quest (see generateBossQuest/ensureWeekRollover below). Null
   // only very briefly before the periodic effect first runs.
   bossQuest: BossQuest | null;
@@ -1081,6 +1086,7 @@ export function defaultState(): GameState {
     equippedTitle: null,
     postponesUsed: {},
     cheatMealBonus: {},
+    recentBigGoalTitles: [],
     bossQuest: null,
     bossWins: [],
     weekStats: emptyWeekStats(currentBossWeekKey()),
@@ -1122,6 +1128,7 @@ export function loadState(userId?: string): GameState | null {
       // fresh default (classic 5/2) schedule to configure in Settings.
       schedule: parsed.schedule || defaultSchedule(),
       cheatMealsUsed: parsed.cheatMealsUsed || {},
+      recentBigGoalTitles: parsed.recentBigGoalTitles || [],
       bonusQuests: parsed.bonusQuests || [],
       bonusQuestsDate: parsed.bonusQuestsDate,
       dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
@@ -1815,6 +1822,18 @@ export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
     reward: 20,
   },
   { title: "Разобрать и оптимизировать все текущие подписки", stat: "intellect", reward: 15 },
+  {
+    title: "Провести полную ревизию расходов за 3 месяца и найти точки экономии",
+    stat: "intellect",
+    reward: 25,
+  },
+  { title: "Оформить страхование здоровья или жизни", stat: "intellect", reward: 20 },
+  {
+    title: "Сделать первый шаг в инвестициях — открыть счёт и вложить небольшую сумму осознанно",
+    stat: "intellect",
+    reward: 40,
+  },
+  { title: "Создать подушку безопасности на 3 месяца расходов", stat: "will", reward: 45 },
 
   // ── Покупки ──
   { title: "Купить качественную куртку взамен старой", stat: "appearance", reward: 20 },
@@ -1822,6 +1841,8 @@ export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
   { title: "Купить надёжный рюкзак для путешествий", stat: "appearance", reward: 15 },
   { title: "Заменить старый матрас на новый", stat: "will", reward: 30 },
   { title: "Собрать капсульный гардероб на сезон", stat: "appearance", reward: 25 },
+  { title: "Обновить домашнюю рабочую зону под продуктивность", stat: "will", reward: 20 },
+  { title: "Купить качественную обувь для спорта или ходьбы", stat: "strength", reward: 15 },
 
   // ── Обучение ──
   { title: "Пройти полный онлайн-курс по новой для себя теме", stat: "intellect", reward: 35 },
@@ -1829,6 +1850,13 @@ export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
   { title: "Освоить базовый уровень нового языка программирования", stat: "intellect", reward: 35 },
   { title: "Прочитать 5 книг по выбранной теме за квартал", stat: "intellect", reward: 30 },
   { title: "Начать изучать новый иностранный язык", stat: "intellect", reward: 25 },
+  {
+    title: "Сдать международный языковой экзамен (например IELTS/TOEFL)",
+    stat: "intellect",
+    reward: 45,
+  },
+  { title: "Освоить слепую печать на клавиатуре", stat: "intellect", reward: 20 },
+  { title: "Пройти курс или тренинг по публичным выступлениям", stat: "will", reward: 30 },
 
   // ── Личные проекты ──
   { title: "Вести личный блог или канал 3 месяца подряд", stat: "will", reward: 35 },
@@ -1844,11 +1872,58 @@ export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
   },
   { title: "Организовать домашний архив документов", stat: "intellect", reward: 15 },
   { title: "Собрать личный сайт-портфолио", stat: "intellect", reward: 40 },
+  { title: "Запустить небольшой побочный проект или подработку", stat: "will", reward: 40 },
+  { title: "Разобрать и оцифровать старые фотографии и документы", stat: "intellect", reward: 20 },
+  { title: "Научиться готовить 5 новых полноценных блюд с нуля", stat: "appearance", reward: 25 },
+
+  // ── Карьера ──
+  { title: "Обновить резюме и портфолио под свой текущий уровень", stat: "intellect", reward: 25 },
+  {
+    title: "Пройти собеседование на позицию мечты, даже тренировочное",
+    stat: "will",
+    reward: 30,
+  },
+  { title: "Найти наставника или ментора в своей области", stat: "intellect", reward: 30 },
+  {
+    title: "Подготовить и провести доклад или встречу внутри команды",
+    stat: "will",
+    reward: 35,
+  },
+  {
+    title: "Освоить один новый рабочий инструмент или навык до уверенного уровня",
+    stat: "intellect",
+    reward: 30,
+  },
 
   // ── Здоровье и активность ──
   { title: "Пробежать первые 5 км без остановки", stat: "strength", reward: 35 },
+  { title: "Пробежать первые 10 км", stat: "strength", reward: 45 },
   { title: "Пройти полный медицинский чек-ап", stat: "will", reward: 25 },
   { title: "Записаться и начать заниматься в секции или зале", stat: "strength", reward: 20 },
+  {
+    title: "Закрыть давно отложенный визит к врачу (стоматолог, терапевт и т.д.)",
+    stat: "will",
+    reward: 30,
+  },
+  {
+    title: "Освоить с нуля одно сложное силовое упражнение (подтягивание, отжимание на одной руке)",
+    stat: "strength",
+    reward: 35,
+  },
+
+  // ── Отношения и социальное ──
+  {
+    title: "Организовать встречу с друзьями, с которыми давно не виделись",
+    stat: "appearance",
+    reward: 20,
+  },
+  { title: "Написать благодарственное письмо важному для тебя человеку", stat: "will", reward: 15 },
+  {
+    title: "Помочь кому-то безвозмездно — волонтёрство или разовая помощь",
+    stat: "will",
+    reward: 25,
+  },
+  { title: "Провести целый день без телефона с близкими", stat: "will", reward: 20 },
 
   // ── Разное ──
   { title: "Провести неделю цифрового детокса по вечерам", stat: "will", reward: 30 },
@@ -1857,17 +1932,34 @@ export const BIG_GOAL_IDEAS: BigGoalIdea[] = [
   { title: "Съездить в город или страну, где ещё не был", stat: "appearance", reward: 35 },
 ];
 
+/** How many recently-shown BIG_GOAL_IDEAS titles to remember — see
+ * randomBigGoalIdea/recordBigGoalShown. Persisted in GameState (not just
+ * component state) so closing the roller and reopening it, or even
+ * reloading the page, still won't immediately resurface something just
+ * seen. Well under half the pool size, so there's always plenty left to
+ * pick from. */
+export const RECENT_BIG_GOALS_REMEMBERED = 8;
+
 /**
- * Picks a random BIG_GOAL_IDEAS entry, optionally excluding one by title —
- * used for the roller's "Ещё вариант" so an immediate reroll can't just
- * hand back the exact same idea again.
+ * Picks a random BIG_GOAL_IDEAS entry, excluding any titles in
+ * excludeTitles (falls back to the full pool if that would exclude
+ * everything, which can't actually happen at the current pool size but is
+ * a cheap safety net either way).
  */
-export function randomBigGoalIdea(excludeTitle?: string): BigGoalIdea {
-  const pool = excludeTitle
-    ? BIG_GOAL_IDEAS.filter((i) => i.title !== excludeTitle)
-    : BIG_GOAL_IDEAS;
+export function randomBigGoalIdea(excludeTitles: string[] = []): BigGoalIdea {
+  const pool = BIG_GOAL_IDEAS.filter((i) => !excludeTitles.includes(i.title));
   const source = pool.length > 0 ? pool : BIG_GOAL_IDEAS;
   return source[Math.floor(Math.random() * source.length)];
+}
+
+/** Records that `title` was just shown by the roller, for randomBigGoalIdea's
+ * exclusion list — most-recent-first, capped at RECENT_BIG_GOALS_REMEMBERED. */
+export function recordBigGoalShown(state: GameState, title: string): GameState {
+  const recent = [title, ...state.recentBigGoalTitles.filter((t) => t !== title)].slice(
+    0,
+    RECENT_BIG_GOALS_REMEMBERED,
+  );
+  return { ...state, recentBigGoalTitles: recent };
 }
 
 /**

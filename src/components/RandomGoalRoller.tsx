@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { randomBigGoalIdea, STAT_META, type BigGoalIdea } from "@/lib/game";
+import {
+  randomBigGoalIdea,
+  recordBigGoalShown,
+  STAT_META,
+  type BigGoalIdea,
+  type GameState,
+} from "@/lib/game";
 
 interface Props {
+  state: GameState;
+  update: (fn: (s: GameState) => GameState) => void;
   // Opens AddQuestModal pre-filled with the idea, rather than saving it
   // directly — the request specifically wants the wording editable before
   // it's actually saved, so this never creates a quest by itself.
@@ -12,14 +20,19 @@ interface Props {
  * "🎲 Случайная цель" button for "Крупные цели": rolls one random idea from
  * BIG_GOAL_IDEAS and offers to add it (opening it pre-filled in
  * AddQuestModal for editing), reroll for another, or close. Rerolling is
- * unlimited — each tap just swaps in a fresh idea, excluding the one
- * currently shown so "Ещё вариант" can't hand back the same suggestion.
+ * unlimited — each tap swaps in a fresh idea, excluding not just the one
+ * currently shown but the last several shown (persisted in GameState via
+ * recordBigGoalShown), so closing the roller and reopening it — or even
+ * reloading the page — still won't immediately resurface the same handful
+ * of ideas.
  */
-export function RandomGoalRoller({ onAddAsIs }: Props) {
+export function RandomGoalRoller({ state, update, onAddAsIs }: Props) {
   const [idea, setIdea] = useState<BigGoalIdea | null>(null);
 
   function roll() {
-    setIdea((prev) => randomBigGoalIdea(prev?.title));
+    const next = randomBigGoalIdea(state.recentBigGoalTitles);
+    setIdea(next);
+    update((s) => recordBigGoalShown(s, next.title));
   }
 
   if (!idea) {

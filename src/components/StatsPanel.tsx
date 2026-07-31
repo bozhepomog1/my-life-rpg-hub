@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -13,7 +13,15 @@ import {
 } from "recharts";
 import { StreakBanner } from "@/components/StreakBanner";
 import { computeStreak, type GameState } from "@/lib/game";
-import { dailyCompletionSeries, dailyXpSeries, questsByStat } from "@/lib/stats";
+import {
+  dailyCompletionSeries,
+  dailyXpSeries,
+  questsByStat,
+  STATS_PERIOD_LABELS,
+  type StatsPeriod,
+} from "@/lib/stats";
+
+const PERIOD_ORDER: StatsPeriod[] = ["week", "month", "all"];
 
 interface Props {
   state: GameState;
@@ -58,13 +66,33 @@ function ChartTooltipStyle() {
 }
 
 export function StatsPanel({ state }: Props) {
-  const xp = dailyXpSeries(state, "month");
-  const byStat = questsByStat(state, "month");
-  const completion = dailyCompletionSeries(state, "month");
+  const [period, setPeriod] = useState<StatsPeriod>("month");
+  const xp = dailyXpSeries(state, period);
+  const byStat = questsByStat(state, period);
+  const completion = dailyCompletionSeries(state, period);
 
   return (
     <div className="space-y-4">
       <StreakBanner current={computeStreak(state)} longest={state.longestStreak} />
+
+      <div className="flex justify-end">
+        <div className="inline-flex gap-1 rounded-full border border-border p-0.5 text-xs">
+          {PERIOD_ORDER.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={`rounded-full px-3 py-1.5 font-medium transition-colors ${
+                period === p
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {STATS_PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <ChartCard title="Общий XP по дням">
         <LineChart data={xp} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>

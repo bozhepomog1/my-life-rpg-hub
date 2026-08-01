@@ -123,7 +123,8 @@ export const Route = createFileRoute("/")({
       { title: "Life RPG — Геймификация жизни" },
       {
         name: "description",
-        content: "Личный RPG-трекер: квесты, залог $1000 и календарь дисциплины.",
+        content:
+          "Личный RPG-трекер: квесты, календарь дисциплины и опциональный символический залог.",
       },
     ],
   }),
@@ -540,7 +541,7 @@ function Home() {
           onAbandon={() => update((s) => abandonMarathon(s))}
         />
 
-        <DepositSection state={state} update={update} />
+        <DepositSection state={state} />
 
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -801,7 +802,8 @@ function Home() {
             <div className="text-xs font-medium tracking-wide text-destructive">Игра окончена</div>
             <div className="mt-2 text-3xl font-semibold text-destructive">Ты проиграл</div>
             <p className="mt-4 text-sm text-muted-foreground">
-              $1000 сгорели. Ты не выполнил условия 30-дневного залога.
+              Залог в {state.depositAmount} (символически, реальные деньги не списывались) не
+              отыгран — условия {state.depositDurationDays}-дневного испытания не выполнены.
             </p>
             <Link
               to="/achievements"

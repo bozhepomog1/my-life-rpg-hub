@@ -1,64 +1,22 @@
-import { useState } from "react";
 import type { GameState } from "@/lib/game";
 import { DepositWidget } from "@/components/DepositWidget";
-import { DepositSetupModal } from "@/components/DepositSetupModal";
 
 interface Props {
   state: GameState;
-  update: (fn: (s: GameState) => GameState) => void;
 }
 
 /**
- * Deposit is opt-in: shows the full widget only once the user has actually
- * configured and confirmed one. Otherwise a small, low-commitment prompt
- * card replaces it — no more assuming everyone wants $1000 on the line by
- * default.
+ * Deposit is opt-in and, since this pass, opt-in ONLY through Settings →
+ * Игра → «Залог» (see SettingsPanel.tsx) — there used to also be a compact
+ * "Хочешь мотивацию посерьёзнее?" prompt card rendered here unconditionally
+ * for every user on the main profile screen, which meant the deposit
+ * feature still claimed a slice of prime real estate by default even for
+ * people who never asked for it. Now this renders the live countdown
+ * widget once a deposit is actually active, and nothing at all otherwise —
+ * a user who hasn't touched the feature sees zero trace of it on their main
+ * screen, exactly like any other opted-out gameplay mechanic.
  */
-export function DepositSection({ state, update }: Props) {
-  const [setupOpen, setSetupOpen] = useState(false);
-
-  function confirmSetup(amount: number, durationDays: number) {
-    update((s) => ({
-      ...s,
-      depositEnabled: true,
-      depositAmount: amount,
-      depositDurationDays: durationDays,
-      depositStartAt: Date.now(),
-      depositLost: false,
-    }));
-    setSetupOpen(false);
-  }
-
-  if (state.depositEnabled) {
-    return <DepositWidget state={state} />;
-  }
-
-  return (
-    <>
-      <div className="panel flex items-center justify-between gap-3 p-3 sm:p-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">Хочешь мотивацию посерьёзнее?</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Не получишь деньги обратно, пока не выполнишь все поставленные задачи.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setSetupOpen(true)}
-          className="shrink-0 rounded-full border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
-        >
-          Настроить залог
-        </button>
-      </div>
-
-      {setupOpen && (
-        <DepositSetupModal
-          initialAmount={state.depositAmount}
-          initialDurationDays={state.depositDurationDays}
-          onConfirm={confirmSetup}
-          onCancel={() => setSetupOpen(false)}
-        />
-      )}
-    </>
-  );
+export function DepositSection({ state }: Props) {
+  if (!state.depositEnabled) return null;
+  return <DepositWidget state={state} />;
 }

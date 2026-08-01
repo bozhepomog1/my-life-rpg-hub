@@ -237,7 +237,14 @@ export function QuestCard({
                     ? `Снять этот квест с сегодняшнего списка без штрафа — появится завтра. Стоит ${postponePrice ?? ""}💰, без XP/золота за него.`
                     : "Недостаточно золота или лимит откладываний на сегодня исчерпан"
                 }
-                className="text-xs text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 disabled:group-hover:opacity-40"
+                // Used to be opacity-0 + group-hover:opacity-100, like
+                // "Удалить" — invisible until the card is hovered. That's a
+                // dead end on touch screens (no persistent :hover), which is
+                // most of this app's actual usage, so the shop's promise of
+                // "a button right on every unfinished daily quest" was true
+                // on desktop-with-a-mouse only. Always visible now, just
+                // dimmed (not hidden) while disabled.
+                className="text-xs text-muted-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Отложить ({postponePrice ?? ""}💰) →
               </button>

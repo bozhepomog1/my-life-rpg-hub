@@ -1837,20 +1837,17 @@ const BONUS_REWARD_MULTIPLIER = 1.5;
 
 /**
  * Ensures today's bonus-quest set is up to date: draws 2-3 random quests
- * from BONUS_QUEST_POOL (rewarded at 1.5x) once every daily quest is done,
- * and clears them out for a new day otherwise. Regenerating only once per
- * day (tracked via bonusQuestsDate) means completing/reopening quests during
- * the same day doesn't reshuffle the bonus set under the user.
+ * from BONUS_QUEST_POOL (rewarded at 1.5x) once per day. Used to only
+ * appear once every mandatory daily quest was already done — moved to the
+ * permanent "Ещё квесты" section (see index.tsx) instead, available any
+ * time there's spare time/motivation rather than only as an
+ * end-of-checklist bonus, so this now generates unconditionally regardless
+ * of daily-completion status. Regenerating only once per day (tracked via
+ * bonusQuestsDate) means completing/reopening quests during the same day
+ * doesn't reshuffle the bonus set under the user.
  */
 export function ensureBonusQuests(state: GameState): GameState {
   const today = todayKey();
-  const dailyQuests = state.quests.filter((q) => q.category === "daily");
-  const allDailyDone = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
-
-  if (!allDailyDone) {
-    if (state.bonusQuestsDate === today && state.bonusQuests.length === 0) return state;
-    return { ...state, bonusQuests: [], bonusQuestsDate: today };
-  }
 
   if (state.bonusQuestsDate === today && state.bonusQuests.length > 0) return state;
 

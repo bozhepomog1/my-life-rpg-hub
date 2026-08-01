@@ -145,6 +145,10 @@ function Home() {
   const [levelPulse, setLevelPulse] = useState(false);
   const [tab, setTab] = useState<QuestCategory>("daily");
   const [addQuestOpen, setAddQuestOpen] = useState(false);
+  // "Ещё квесты" (see the bonus-quest section below) — collapsed by default
+  // so it doesn't compete for attention with the mandatory daily list, but
+  // always reachable regardless of how many dailies are still open.
+  const [bonusExpanded, setBonusExpanded] = useState(false);
   // Set by RandomGoalRoller's "Добавить как есть" — opens AddQuestModal
   // pre-filled with the rolled idea instead of saving it straight away, so
   // the wording stays editable. Cleared whenever the modal closes.
@@ -509,8 +513,6 @@ function Home() {
     !state.dailyOnboardingDismissed &&
     state.quests.every((q) => q.category !== "daily");
 
-  const dailyQuests = state.quests.filter((q) => q.category === "daily");
-  const noActiveDailies = dailyQuests.length > 0 && dailyQuests.every((q) => q.done);
   const bonusActive = sortByStatOrder(state.bonusQuests.filter((q) => !q.done));
   const bonusDone = sortByStatOrder(state.bonusQuests.filter((q) => q.done));
 
@@ -711,46 +713,67 @@ function Home() {
           )}
         </section>
 
-        {noActiveDailies && (bonusActive.length > 0 || bonusDone.length > 0) && (
-          <section>
-            <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
-              ✨ Дополнительно
-            </h2>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Все ежедневные квесты выполнены — вот пара лёгких бонусов с наградой ×1.5.
+        {tab === "daily" && (bonusActive.length > 0 || bonusDone.length > 0) && (
+          <section className="panel p-4 sm:p-5">
+            <button
+              type="button"
+              onClick={() => setBonusExpanded((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+              aria-expanded={bonusExpanded}
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-semibold">✨ Ещё квесты</span>
+                {bonusActive.length > 0 && (
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    {bonusActive.length}
+                  </span>
+                )}
+              </span>
+              <span
+                className={`text-muted-foreground transition-transform ${bonusExpanded ? "rotate-180" : ""}`}
+              >
+                ▾
+              </span>
+            </button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Есть свободная минута сверх плана? Вот пара необязательных квестов с наградой ×1.5 —
+              доступны в любой момент, не только когда обязательные уже закрыты.
             </p>
-            <div className="space-y-3">
-              {bonusActive.map((q: Quest) => (
-                <QuestCard
-                  key={q.id}
-                  quest={q}
-                  body={state.body}
-                  onComplete={completeBonusQuest}
-                  onDelete={() =>
-                    update((s) => ({
-                      ...s,
-                      bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
-                    }))
-                  }
-                  onPhoto={() => {}}
-                />
-              ))}
-              {bonusDone.map((q: Quest) => (
-                <QuestCard
-                  key={q.id}
-                  quest={q}
-                  body={state.body}
-                  onComplete={() => {}}
-                  onDelete={() =>
-                    update((s) => ({
-                      ...s,
-                      bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
-                    }))
-                  }
-                  onPhoto={() => {}}
-                />
-              ))}
-            </div>
+
+            {bonusExpanded && (
+              <div className="mt-3 space-y-3">
+                {bonusActive.map((q: Quest) => (
+                  <QuestCard
+                    key={q.id}
+                    quest={q}
+                    body={state.body}
+                    onComplete={completeBonusQuest}
+                    onDelete={() =>
+                      update((s) => ({
+                        ...s,
+                        bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
+                      }))
+                    }
+                    onPhoto={() => {}}
+                  />
+                ))}
+                {bonusDone.map((q: Quest) => (
+                  <QuestCard
+                    key={q.id}
+                    quest={q}
+                    body={state.body}
+                    onComplete={() => {}}
+                    onDelete={() =>
+                      update((s) => ({
+                        ...s,
+                        bonusQuests: s.bonusQuests.filter((b) => b.id !== q.id),
+                      }))
+                    }
+                    onPhoto={() => {}}
+                  />
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>

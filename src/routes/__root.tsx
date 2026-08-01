@@ -115,7 +115,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      // ?v=2 busts browsers' notoriously aggressive favicon caching (they'll
+      // happily keep serving a tab icon from cache for weeks, ignoring
+      // normal HTTP cache headers) — bump this query param again any time
+      // favicon.ico's contents change in the future, same idea as a
+      // cache-busting hash on a built asset.
+      { rel: "icon", href: "/favicon.ico?v=2", type: "image/x-icon" },
       { rel: "manifest", href: "/manifest.json" },
       // iOS ignores manifest.json icons entirely — apple-touch-icon is the
       // only way it picks up an icon for the home-screen shortcut.

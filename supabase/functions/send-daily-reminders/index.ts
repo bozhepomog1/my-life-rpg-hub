@@ -10,8 +10,10 @@
 // tab.
 //
 // For every user with `remindersEnabled: true` in their saved GameState,
-// whose `reminderHour` (local hour, 0-23) matches the current hour in their
-// own `reminderTimezone` (both fields live in the same GameState JSONB blob
+// whose `reminderHours` (local hours, each 0-23 — a user can pick as many as
+// they want via the chip list in Settings → Уведомления, was a single
+// `reminderHour: number` before) includes the current hour in their own
+// `reminderTimezone` (all three fields live in the same GameState JSONB blob
 // — see game.ts — NOT in the public.profiles table, since that table is
 // friend-readable and a notification-time preference has no reason to leak
 // there), AND who still has at least one undone daily quest right now,
@@ -19,10 +21,12 @@
 // from. Expired/revoked subscriptions (410 Gone / 404 Not Found from the
 // push service) are deleted so they stop being retried forever.
 //
-// Running hourly instead of daily means each user gets checked (and, if
-// eligible, pushed) up to 24x more often than before, but only ever
-// actually SENDS a notification on the one pass where their local hour
-// matches reminderHour — the other 23 passes are a cheap no-op for them.
+// Running hourly means each user gets checked up to 24x/day, but only
+// actually SENDS a notification on each pass where their local hour is one
+// of their chosen reminderHours — the rest are a cheap no-op. A user with
+// 3 chosen hours simply gets 3 cheap "yes" passes instead of 1; there's no
+// per-run cap or dedup needed since each cron invocation only ever fires
+// once per hour by construction.
 //
 // Uses `npm:web-push` rather than hand-rolling the RFC 8291/8292 message
 // encryption + VAPID JWT signing — Supabase Edge Functions run on Deno,
@@ -47,7 +51,8 @@ interface Quest {
 interface GameStateShape {
   remindersEnabled?: boolean;
   quests?: Quest[];
-  reminderHour?: number;
+  reminderHours?: number[];
+  reminderHour?: number; // legacy single-value field, pre-migration rows only
   reminderTimezone?: string;
 }
 
@@ -118,13 +123,18 @@ Deno.serve(async (_req) => {
     usersChecked++;
     const state = row.state as GameStateShape;
     if (!state?.remindersEnabled) continue;
-    // reminderHour defaults to 20 client-side (see defaultState() in
-    // game.ts) for every row saved after this feature shipped, but a row
-    // written before that still won't have it — same 20 fallback here so
-    // those users keep getting the old fixed-hour behavior instead of
-    // silently going quiet.
-    const wantedHour = typeof state.reminderHour === "number" ? state.reminderHour : 20;
-    if (currentHourInTimezone(state.reminderTimezone) !== wantedHour) continue;
+    // reminderHours defaults to [20] client-side (see defaultState() in
+    // game.ts) for every row saved after this feature shipped. Rows written
+    // before the multi-time picker existed only have the old single
+    // `reminderHour` field — wrap it into a one-element list rather than
+    // dropping their preference. Rows from even before that (no reminder
+    // field at all) fall back to [20], same as the old fixed-hour behavior.
+    const wantedHours = Array.isArray(state.reminderHours)
+      ? state.reminderHours
+      : typeof state.reminderHour === "number"
+        ? [state.reminderHour]
+        : [20];
+    if (!wantedHours.includes(currentHourInTimezone(state.reminderTimezone))) continue;
     const { remaining } = dailyQuestsRemaining(state);
     if (remaining > 0) eligibleUserIds.push(row.user_id);
   }

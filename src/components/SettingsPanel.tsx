@@ -73,6 +73,7 @@ export function SettingsPanel({ state, update, setState }: Props) {
   const [codeCopied, setCodeCopied] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [category, setCategory] = useState<SettingsCategory>("account");
+  const [newReminderHour, setNewReminderHour] = useState("9");
   const { theme, setTheme } = useTheme();
 
   async function copyMyCode() {
@@ -142,10 +143,18 @@ export function SettingsPanel({ state, update, setState }: Props) {
     update((s) => ({ ...s, schedule: { ...s.schedule, cycleAnchor: raw } }));
   }
 
-  function setReminderHour(raw: string) {
+  function addReminderHour(raw: string) {
     const n = Math.min(23, Math.max(0, Math.round(Number(raw))));
     if (!Number.isFinite(n)) return;
-    update((s) => ({ ...s, reminderHour: n }));
+    update((s) =>
+      s.reminderHours.includes(n)
+        ? s
+        : { ...s, reminderHours: [...s.reminderHours, n].sort((a, b) => a - b) },
+    );
+  }
+
+  function removeReminderHour(hour: number) {
+    update((s) => ({ ...s, reminderHours: s.reminderHours.filter((h) => h !== hour) }));
   }
 
   function commitName(raw: string): boolean {
@@ -498,29 +507,63 @@ export function SettingsPanel({ state, update, setState }: Props) {
         <section className="panel p-6">
           <h2 className="text-sm font-semibold">Напоминания</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. Раз в день,
-            в выбранное ниже время, если остались незакрытые ежедневные квесты.
+            Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. В любое из
+            выбранных ниже времён (можно добавить сколько угодно), если остались незакрытые
+            ежедневные квесты.
           </p>
 
           <div className="mt-3">
-            <label className="text-xs text-muted-foreground" htmlFor="reminder-hour">
-              Время напоминания
-            </label>
-            <select
-              id="reminder-hour"
-              value={state.reminderHour}
-              onChange={(e) => setReminderHour(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-            >
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>
+            <span className="text-xs text-muted-foreground">Время напоминаний</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {state.reminderHours.length === 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Времена не выбраны — напоминания приходить не будут.
+                </span>
+              )}
+              {state.reminderHours.map((h) => (
+                <span
+                  key={h}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium"
+                >
                   {String(h).padStart(2, "0")}:00
-                </option>
+                  <button
+                    type="button"
+                    onClick={() => removeReminderHour(h)}
+                    aria-label={`Убрать время ${String(h).padStart(2, "0")}:00`}
+                    className="text-muted-foreground transition-colors hover:text-destructive"
+                  >
+                    ✕
+                  </button>
+                </span>
               ))}
-            </select>
+            </div>
+
+            <div className="mt-2.5 flex items-center gap-2">
+              <select
+                aria-label="Добавить время напоминания"
+                value={newReminderHour}
+                onChange={(e) => setNewReminderHour(e.target.value)}
+                className="rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h} disabled={state.reminderHours.includes(h)}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => addReminderHour(newReminderHour)}
+                disabled={state.reminderHours.includes(Number(newReminderHour))}
+                className="rounded-full border border-primary/40 px-3 py-2 text-xs font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                + Добавить время
+              </button>
+            </div>
+
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               По часовому поясу устройства, на котором это включалось ({state.reminderTimezone}) —
-              рассылка проверяет твой выбранный час каждый час, а не только один раз в сутки.
+              рассылка проверяет каждый час, входит ли он в твой список.
             </p>
           </div>
 

@@ -458,13 +458,17 @@ export interface GameState {
   // Opt-in browser Notification reminders for unfinished daily quests.
   // Only ever set to true after the user explicitly grants permission.
   remindersEnabled: boolean;
-  // Local hour (0-23) the user wants their reminder push at — read by
-  // send-daily-reminders (now cron'd hourly instead of once at a fixed UTC
-  // time) alongside reminderTimezone below to decide "is it this user's
-  // chosen hour right now". Defaults to 20 (matches the old fixed-UTC-20:00
-  // behavior for anyone who never touches the new picker in Settings →
-  // Уведомления).
-  reminderHour: number;
+  // Local hours (0-23 each) the user wants a reminder push at — read by
+  // send-daily-reminders (cron'd hourly) alongside reminderTimezone below to
+  // decide "is the current hour one of this user's chosen hours right now".
+  // Used to be a single reminderHour: number; now a user can add as many
+  // times as they want (chips in Settings → Уведомления), so on any given
+  // hourly cron pass they may get notified 0 or 1 times depending on whether
+  // that hour is in the list — never more than once per hour even if the
+  // list somehow contained a duplicate, since the Edge Function checks
+  // membership, not count. Defaults to [20] (matches the old fixed-20:00
+  // behavior for anyone who never touches the picker).
+  reminderHours: number[];
   // IANA timezone name (e.g. "Europe/Moscow"), captured once from
   // Intl.DateTimeFormat().resolvedOptions().timeZone — this is what makes
   // reminderHour a genuinely LOCAL hour rather than another UTC hour in
@@ -1110,7 +1114,7 @@ export function defaultState(): GameState {
     unlockedAchievements: {},
     isPrivate: false,
     remindersEnabled: false,
-    reminderHour: 20,
+    reminderHours: [20],
     reminderTimezone: detectTimezone(),
     season: defaultSeason(),
     seasonSummarySeen: true,
@@ -1142,6 +1146,28 @@ export function defaultState(): GameState {
     statQuizDone: false,
   };
   return base;
+}
+
+function isValidHour(h: unknown): h is number {
+  return typeof h === "number" && Number.isInteger(h) && h >= 0 && h <= 23;
+}
+
+/**
+ * Normalizes the stored reminder-hours field, migrating from the old
+ * single `reminderHour: number` shape (still present in rows/local caches
+ * saved before this feature shipped) to the current `reminderHours:
+ * number[]`. Prefers the new array field when it's present and valid;
+ * falls back to wrapping the old single value; falls back to the caller's
+ * default otherwise. Always deduped + sorted so the Settings chip list and
+ * the Edge Function's membership check both see a clean, stable list.
+ */
+function normalizeReminderHours(parsed: Record<string, unknown>, fallback: number[]): number[] {
+  if (Array.isArray(parsed.reminderHours)) {
+    const cleaned = [...new Set(parsed.reminderHours.filter(isValidHour))].sort((a, b) => a - b);
+    if (cleaned.length > 0) return cleaned;
+  }
+  if (isValidHour(parsed.reminderHour)) return [parsed.reminderHour];
+  return fallback;
 }
 
 /**
@@ -1177,13 +1203,7 @@ export function loadState(userId?: string): GameState | null {
       unlockedAchievements: parsed.unlockedAchievements || {},
       isPrivate: parsed.isPrivate ?? false,
       remindersEnabled: parsed.remindersEnabled ?? false,
-      reminderHour:
-        typeof parsed.reminderHour === "number" &&
-        Number.isInteger(parsed.reminderHour) &&
-        parsed.reminderHour >= 0 &&
-        parsed.reminderHour <= 23
-          ? parsed.reminderHour
-          : base.reminderHour,
+      reminderHours: normalizeReminderHours(parsed, base.reminderHours),
       reminderTimezone: parsed.reminderTimezone || base.reminderTimezone,
       season: parsed.season || defaultSeason(),
       lastSeasonSummary: parsed.lastSeasonSummary,

@@ -191,7 +191,17 @@ export function equipTitle(state: GameState, id: string | null): GameState {
 
 // ── Extra cheat meal (extends the monthly limit in nutrition.ts) ──
 
-export const CHEAT_MEAL_BONUS_PRICE = 30;
+// Was 30 — cheap next to a rare frame (120-200) let alone an epic one (450),
+// even though this isn't a cosmetic: it's an official pass to skip the
+// nutrition goal for a day. Repriced against the "epic ≈ a month of fully
+// completed days" anchor from AVATAR_FRAMES above (~15 gold/day baseline ×
+// 30 ≈ 450): at 150 gold, buying out all CHEAT_MEAL_BONUS_MAX_PER_MONTH (3)
+// extra cheat meals in one month costs 450 gold — the same "a full month's
+// grind" price as an epic cosmetic, which feels right for something that
+// substantively bypasses the system 3 times over, while a single one still
+// sits inside the existing rare tier (120-200) rather than needing its own
+// new price bracket.
+export const CHEAT_MEAL_BONUS_PRICE = 150;
 /** Cap on how many extra cheat meals can be bought in a single month — keeps
  * this a small nice-to-have rather than a way to buy your way out of the
  * cheat-meal system entirely. */

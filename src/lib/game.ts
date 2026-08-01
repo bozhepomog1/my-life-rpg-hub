@@ -2305,6 +2305,17 @@ const BOSS_QUEST_KINDS: BossQuestKind[] = [
   "perfect_week",
 ];
 
+/** Whether a stored boss quest's `kind` is one this build still understands.
+ * A BossQuest is deserialized from JSON (Supabase game_states / localStorage),
+ * so its `kind` is only a `BossQuestKind` by assumption — a quest saved
+ * before the 6-template redesign carries a value that no longer maps to any
+ * case in computeBossQuestStatus. Checking membership rather than mere
+ * truthiness is what makes ensureWeekRollover actually replace such a quest.
+ */
+export function isKnownBossQuestKind(kind: unknown): kind is BossQuestKind {
+  return typeof kind === "string" && (BOSS_QUEST_KINDS as string[]).includes(kind);
+}
+
 /** Picks one of 6 challenge templates at random each Monday for variety —
  * ranges are kept modest on purpose so the weekly challenge stays reachable
  * through normal quest completion rather than requiring a grind. */
@@ -2466,7 +2477,18 @@ const MAX_WEEKLY_REPORTS = 52;
  */
 export function ensureWeekRollover(state: GameState): GameState {
   const weekKey = currentBossWeekKey();
-  const bossOk = !!(state.bossQuest && state.bossQuest.weekKey === weekKey && state.bossQuest.kind);
+  // The kind check used to be a bare truthiness test (`&& state.bossQuest.kind`),
+  // which only caught quests saved before `kind` existed at all — a quest
+  // carrying an OLD kind string from before the 6-template redesign passed
+  // it happily, was never regenerated, and then made computeBossQuestStatus
+  // return undefined every render (the "Cannot read properties of undefined
+  // (reading 'bars')" crash). Validating against the kinds this build
+  // actually implements means such a quest is replaced with a fresh one.
+  const bossOk = !!(
+    state.bossQuest &&
+    state.bossQuest.weekKey === weekKey &&
+    isKnownBossQuestKind(state.bossQuest.kind)
+  );
   const statsOk = state.weekStats.weekKey === weekKey;
   if (bossOk && statsOk) return state;
 
@@ -2593,6 +2615,21 @@ export function computeBossQuestStatus(state: GameState, bq: BossQuest): BossQue
         bars: [{ label: "Идеальных дней", current: doneDays, target: 7 }],
       };
     }
+    // ROOT CAUSE of "Cannot read properties of undefined (reading 'bars')"
+    // in BossQuestCard: this switch had no default, so an unrecognized
+    // `kind` fell straight through and the function returned undefined —
+    // and the caller then read .bars off it. TypeScript never caught this
+    // because the switch IS exhaustive over the BossQuestKind union; the
+    // problem is that a BossQuest doesn't actually come from TypeScript, it
+    // comes from JSON (Supabase game_states / localStorage), where nothing
+    // guarantees `kind` is one of the six current values — a quest stored
+    // before the boss-quest redesign carries a kind string that no longer
+    // exists. Now such a state degrades to an empty, non-complete status
+    // instead of crashing the whole screen (isKnownBossQuestKind in
+    // ensureWeekRollover also replaces it with a fresh quest on the next
+    // tick, so this is a brief fallback rather than a permanent blank card).
+    default:
+      return { complete: false, bars: [] };
   }
 }
 

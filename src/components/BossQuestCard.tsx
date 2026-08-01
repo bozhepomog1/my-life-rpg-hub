@@ -13,7 +13,16 @@ interface Props {
  * renders any of the 6 challenge templates without needing to know which. */
 export function BossQuestCard({ state, bossQuest }: Props) {
   if (!bossQuest) return null;
+  // computeBossQuestStatus is typed as always returning a BossQuestStatus,
+  // but a BossQuest reaching this component came out of JSON, not out of
+  // TypeScript — so treat the result as possibly-missing anyway rather than
+  // trusting the type. Same reasoning as the `if (!bossQuest)` guard above:
+  // this component renders on every load, so anything unexpected in the
+  // stored state must degrade to "render nothing" instead of taking the
+  // whole screen down with an unhandled exception.
   const status = computeBossQuestStatus(state, bossQuest);
+  const bars = status?.bars ?? [];
+  if (bars.length === 0) return null;
 
   return (
     <div className="panel p-5 sm:p-6">
@@ -29,7 +38,7 @@ export function BossQuestCard({ state, bossQuest }: Props) {
       </p>
 
       <div className="mt-3 space-y-2.5">
-        {status.bars.map((bar) => {
+        {bars.map((bar) => {
           const pct = bar.target > 0 ? (bar.current / bar.target) * 100 : 0;
           return (
             <div key={bar.label}>

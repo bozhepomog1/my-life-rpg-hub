@@ -133,13 +133,26 @@ alter table public.profiles drop column if exists email;
 
 alter table public.profiles enable row level security;
 
--- Any authenticated user can read these public fields (needed to render
--- friends on the leaderboard). No email is present in this table.
+-- Read access is NARROW: own row only at this point in the file. It gets
+-- widened to "own row + accepted friends" in section 9, once
+-- is_accepted_friend() exists (a policy can't reference a function that
+-- hasn't been created yet, and that function is defined down in section 8).
+--
+-- This used to be `using (true)` — which meant any authenticated user could
+-- dump the entire table (every username, avatar, XP, level, fitness index
+-- and short_code in the app) with a single direct API call, bypassing the
+-- UI that only ever showed them their friends. See section 9 and
+-- privacy-migration.sql: friend search by short code now goes through the
+-- SECURITY DEFINER find_profile_by_code() instead of a blanket read, the
+-- same way email search already went through find_user_by_email().
 drop policy if exists "read profiles (authenticated)" on public.profiles;
-create policy "read profiles (authenticated)"
+drop policy if exists "read own and friends profiles" on public.profiles;
+create policy "read own and friends profiles"
   on public.profiles for select
   to authenticated
-  using (true);
+  using (auth.uid() = user_id);
+
+revoke all on public.profiles from anon;
 
 -- A user may create/update only their own profile row.
 drop policy if exists "insert own profile" on public.profiles;
@@ -487,7 +500,143 @@ create trigger trg_friend_profiles_updated_at
   for each row execute function public.set_updated_at();
 
 -- ─────────────────────────────────────────────────────────────
--- 9. Auth settings (do this in the Dashboard, not SQL):
+-- 9. Profile privacy + locking down bulk reads of `profiles`.
+--
+--    Kept identical to privacy-migration.sql (which is what an existing
+--    install runs); this section is here so a FRESH install from schema.sql
+--    alone ends up in exactly the same state. See that file's header for
+--    the full rationale — short version:
+--
+--    • profiles was `using (true)`: any signed-in user could dump the whole
+--      user table via a direct API call. Now: own row + accepted friends.
+--    • "Soft" privacy: being found by short code and receiving a friend
+--      request works for EVERYONE regardless of is_private. What privacy
+--      changes is that a NON-friend sees only name + avatar, never progress.
+--    • Accepted friends of a private user see everything as normal —
+--      privacy never applies between friends.
+--    • Column-level hiding isn't expressible in RLS (it's row-level), so
+--      the redaction lives in the SECURITY DEFINER functions below while
+--      the table itself stays locked down.
+-- ─────────────────────────────────────────────────────────────
+alter table public.profiles add column if not exists is_private boolean not null default false;
+
+-- Widen the placeholder policy from section 3 now that is_accepted_friend()
+-- exists. Pending-request counterparts deliberately go through
+-- get_visible_profiles() instead of being allowed here, because they must
+-- see a REDACTED row for a private user and RLS can't drop columns.
+drop policy if exists "read own and friends profiles" on public.profiles;
+create policy "read own and friends profiles"
+  on public.profiles for select
+  to authenticated
+  using (
+    auth.uid() = user_id
+    or public.is_accepted_friend(user_id)
+  );
+
+create or replace function public.has_pending_request_with(p_other uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.friend_requests
+    where status = 'pending'
+      and (
+        (from_user = auth.uid() and to_user = p_other)
+        or (from_user = p_other and to_user = auth.uid())
+      )
+  );
+$$;
+
+revoke all on function public.has_pending_request_with(uuid) from public, anon;
+grant execute on function public.has_pending_request_with(uuid) to authenticated;
+
+drop function if exists public.find_profile_by_code(text);
+create or replace function public.find_profile_by_code(p_code text)
+returns table (
+  user_id uuid,
+  username text,
+  avatar text,
+  total_xp integer,
+  level integer,
+  fitness_index integer,
+  short_code text,
+  is_private boolean
+)
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select
+    p.user_id,
+    p.username,
+    p.avatar,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.total_xp end,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.level end,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.fitness_index end,
+    p.short_code,
+    p.is_private
+  from public.profiles p
+  where p_code is not null
+    and length(btrim(p_code)) > 0
+    and p.short_code = upper(btrim(p_code))
+    and p.user_id <> auth.uid()
+  limit 1;
+$$;
+
+revoke all on function public.find_profile_by_code(text) from public, anon;
+grant execute on function public.find_profile_by_code(text) to authenticated;
+
+drop function if exists public.get_visible_profiles(uuid[]);
+create or replace function public.get_visible_profiles(p_user_ids uuid[])
+returns table (
+  user_id uuid,
+  username text,
+  avatar text,
+  total_xp integer,
+  level integer,
+  fitness_index integer,
+  short_code text,
+  is_private boolean
+)
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select
+    p.user_id,
+    p.username,
+    p.avatar,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.total_xp end,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.level end,
+    case when not p.is_private or public.is_accepted_friend(p.user_id)
+         then p.fitness_index end,
+    p.short_code,
+    p.is_private
+  from public.profiles p
+  where p.user_id = any(coalesce(p_user_ids, '{}'::uuid[]))
+    and (
+      p.user_id = auth.uid()
+      or public.is_accepted_friend(p.user_id)
+      or public.has_pending_request_with(p.user_id)
+    );
+$$;
+
+revoke all on function public.get_visible_profiles(uuid[]) from public, anon;
+grant execute on function public.get_visible_profiles(uuid[]) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────
+-- 10. Auth settings (do this in the Dashboard, not SQL):
 --    Authentication → Providers → Email: enable "Email" provider.
 --    Authentication → URL Configuration: set Site URL and add your
 --    dev/prod URLs (e.g. http://localhost:3000, your deployed domain)

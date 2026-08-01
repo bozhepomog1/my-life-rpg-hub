@@ -447,6 +447,14 @@ export interface GameState {
   // Unlocked achievement ids → the timestamp they were unlocked at. Once set,
   // an id is never removed (achievements don't "re-lock").
   unlockedAchievements: Record<string, number>;
+  // Profile privacy ("мягкий" режим — see supabase/privacy-migration.sql).
+  // Being findable by short code and receiving friend requests works the
+  // same either way; what this changes is that someone who is NOT an
+  // accepted friend sees only name + avatar, never progress. Accepted
+  // friends always see everything. Mirrored into profiles.is_private by
+  // syncProfile — the actual enforcement is RLS + SECURITY DEFINER
+  // functions in the database, this flag is only the user's stored choice.
+  isPrivate: boolean;
   // Opt-in browser Notification reminders for unfinished daily quests.
   // Only ever set to true after the user explicitly grants permission.
   remindersEnabled: boolean;
@@ -1100,6 +1108,7 @@ export function defaultState(): GameState {
     bonusQuests: [],
     dailyMandatoryCounts: {},
     unlockedAchievements: {},
+    isPrivate: false,
     remindersEnabled: false,
     reminderHour: 20,
     reminderTimezone: detectTimezone(),
@@ -1166,6 +1175,7 @@ export function loadState(userId?: string): GameState | null {
       bonusQuestsDate: parsed.bonusQuestsDate,
       dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
       unlockedAchievements: parsed.unlockedAchievements || {},
+      isPrivate: parsed.isPrivate ?? false,
       remindersEnabled: parsed.remindersEnabled ?? false,
       reminderHour:
         typeof parsed.reminderHour === "number" &&

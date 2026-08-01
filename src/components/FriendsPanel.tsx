@@ -87,9 +87,15 @@ export function FriendsPanel({ state, update }: Props) {
     level: state.level,
     fitness_index: computeFitnessIndex(state.body),
     short_code: null,
+    // Never redacted to yourself, whatever your own privacy setting is.
+    isPrivate: false,
   };
+  // total_xp can come back null when a profile's progress is redacted (see
+  // PublicProfile) — that never happens for the leaderboard, which only
+  // contains accepted friends, but sort defensively rather than relying on
+  // that staying true.
   const leaderboard = [myEntry, ...friendIds.map((id) => profiles[id]).filter(Boolean)].sort(
-    (a, b) => b.total_xp - a.total_xp,
+    (a, b) => (b.total_xp ?? 0) - (a.total_xp ?? 0),
   );
   const myRank = leaderboard.findIndex((p) => p.user_id === myId) + 1;
 
@@ -187,7 +193,9 @@ export function FriendsPanel({ state, update }: Props) {
                 {search.profile.username ?? "Без имени"}
               </div>
               <div className="text-xs text-muted-foreground">
-                Уровень {search.profile.level} · {search.profile.total_xp} XP
+                {search.profile.isPrivate
+                  ? "Закрытый профиль — прогресс будет виден после добавления в друзья"
+                  : `Уровень ${search.profile.level} · ${search.profile.total_xp} XP`}
               </div>
             </div>
             <button

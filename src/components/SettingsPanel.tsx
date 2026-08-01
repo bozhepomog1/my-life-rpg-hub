@@ -341,6 +341,52 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
       {category === "privacy" && (
         <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Видимость профиля</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ограничение работает на уровне базы данных, а не только в интерфейсе — посторонний не
+            получит скрытые данные даже прямым запросом к API в обход приложения.
+          </p>
+
+          <div className="mt-3 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => update((s) => ({ ...s, isPrivate: false }))}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                !state.isPrivate
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Открытый
+            </button>
+            <button
+              type="button"
+              onClick={() => update((s) => ({ ...s, isPrivate: true }))}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                state.isPrivate
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Закрытый
+            </button>
+          </div>
+
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            {state.isPrivate
+              ? "Тот, кто не у тебя в друзьях, видит только имя и аватар — уровень, XP, индекс формы, характеристики, серии и достижения скрыты. Найти тебя по коду и отправить заявку по-прежнему может кто угодно."
+              : "Тот, кто нашёл тебя по коду, видит имя, аватар, уровень и общий XP ещё до добавления в друзья. Характеристики, серии и достижения в любом случае видны только принятым друзьям."}
+          </p>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Принятые друзья видят полный профиль в обоих режимах — приватность на них не
+            распространяется. Квесты, фото-подтверждения, питание и замеры тела не видны никому и
+            никогда, независимо от этой настройки.
+          </p>
+        </section>
+      )}
+
+      {category === "privacy" && (
+        <section className="panel p-6">
           <h2 className="text-sm font-semibold">Мой код друга</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Неизменяемый код — только по нему друзья могут найти тебя и добавить в друзья (не по

@@ -79,7 +79,13 @@ export function FriendProfileModal({ profile, onClose }: Props) {
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-lg font-semibold">{profile.username ?? "Без имени"}</h3>
             <p className="text-xs text-muted-foreground">
-              Уровень {profile.level} · {profile.total_xp} XP
+              {/* This modal only ever opens for yourself or an accepted
+                  friend, and privacy never redacts either of those — but
+                  render defensively so a redacted row (level/XP null, see
+                  PublicProfile) could never show "Уровень  ·  XP". */}
+              {profile.level != null && profile.total_xp != null
+                ? `Уровень ${profile.level} · ${profile.total_xp} XP`
+                : "Профиль скрыт настройками приватности"}
             </p>
           </div>
           <button

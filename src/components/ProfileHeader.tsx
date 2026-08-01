@@ -211,28 +211,40 @@ export function ProfileHeader({
                 className="w-full border-b border-primary bg-transparent text-xl font-semibold outline-none sm:text-2xl"
               />
             ) : (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div>
+                {/* Name used to share one flex row with the archetype/title
+                    badges (`flex flex-wrap items-center gap-1.5`), which left
+                    it only a sliver of the row's width once the badges took
+                    their share — so even a short-ish name like "Антон" got
+                    ellipsis-truncated to "Анто…". Giving the name its own
+                    full-width line (badges now wrap below it) means the
+                    truncation, still width-based rather than a fixed
+                    character count, only kicks in for names that are
+                    genuinely too long for the whole card, not the leftover
+                    space next to two badges. */}
                 <h1
                   onClick={() => {
                     setNameDraft(state.name);
                     setEditingName(true);
                   }}
-                  className="cursor-pointer truncate text-xl font-semibold sm:text-2xl"
-                  title="Изменить имя"
+                  className="w-full cursor-pointer truncate text-xl font-semibold sm:text-2xl"
+                  title={`${state.name} — нажми, чтобы изменить`}
                 >
                   {state.name}
                 </h1>
-                <span
-                  className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                  title="Класс определяется автоматически по ведущей характеристике"
-                >
-                  {archetype.icon} {archetype.label}
-                </span>
-                {equippedTitle && (
-                  <span className="rounded-full border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary">
-                    «{equippedTitle.label}»
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                    title="Класс определяется автоматически по ведущей характеристике"
+                  >
+                    {archetype.icon} {archetype.label}
                   </span>
-                )}
+                  {equippedTitle && (
+                    <span className="rounded-full border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary">
+                      «{equippedTitle.label}»
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             <p className="mt-0.5 truncate text-sm text-muted-foreground">

@@ -899,13 +899,34 @@ export async function parseMealText(text: string): Promise<string[]> {
   const trimmed = text.trim();
   if (!trimmed) return [];
   try {
-    const { data, error } = await supabase.functions.invoke<{ items?: unknown }>(
+    const { data, error } = await supabase.functions.invoke<{ items?: unknown; error?: string }>(
       "parse-meal-text",
       { body: { text: trimmed } },
     );
-    if (error || !data || !Array.isArray(data.items)) return [];
+    // Still resolves to [] on any failure (fail-soft — see doc comment
+    // above), but logs *why* to the browser console instead of swallowing
+    // it silently, so a real problem (function not deployed, missing
+    // secret, expired session) is distinguishable from "Claude genuinely
+    // found nothing" without needing Supabase dashboard log access.
+    if (error) {
+      console.warn("parseMealText: Edge Function invoke failed", error);
+      return [];
+    }
+    if (!data) {
+      console.warn("parseMealText: Edge Function returned no data");
+      return [];
+    }
+    if (data.error) {
+      console.warn("parseMealText: Edge Function returned an error", data.error);
+      return [];
+    }
+    if (!Array.isArray(data.items)) {
+      console.warn("parseMealText: unexpected response shape", data);
+      return [];
+    }
     return data.items.filter((i): i is string => typeof i === "string" && i.trim().length > 0);
-  } catch {
+  } catch (e) {
+    console.warn("parseMealText: unexpected exception", e);
     return [];
   }
 }

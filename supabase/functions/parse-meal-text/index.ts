@@ -40,21 +40,39 @@ const CORS_HEADERS = {
 
 const JSON_HEADERS = { ...CORS_HEADERS, "content-type": "application/json" };
 
-const SYSTEM_PROMPT = `Ты помогаешь распознать отдельные продукты питания в описании приёма пищи на русском языке.
-Пользователь опишет, что съел, одной фразой (например "гречка с курицей" или "омлет, тост и апельсиновый сок").
-Верни ТОЛЬКО JSON-массив строк — названия отдельных продуктов/блюд в именительном падеже, без количества, веса и лишних слов.
-Пример ответа: ["гречка", "куриная грудка"]
-Если продукт один — верни массив из одного элемента.
-Если текст непонятен или явно не описывает еду — верни пустой массив [].
-Не пиши ничего до или после JSON — ответом должен быть только сам массив, без markdown-разметки.`;
+// Original v1 of this function asked Claude to "return ONLY a JSON array"
+// in plain text and parsed that with JSON.parse (after stripping ``` fences).
+// That's brittle: a fast/terse model like Haiku will sometimes wrap a short
+// or single-word input in a stray sentence ("Единственный продукт: [\"творог\"]")
+// despite the instruction, which broke JSON.parse and silently produced [] —
+// exactly the "even a single simple product doesn't work" bug reported. This
+// version instead forces a tool call with a strict input_schema via
+// tool_choice, so the Messages API itself guarantees `input.items` is a
+// validated array of strings — no free-text JSON to parse or fail on.
+const SYSTEM_PROMPT = `Ты извлекаешь отдельные продукты питания из фразы пользователя о том, что он съел, на русском языке.
+Пользователь может описать один продукт ("творог", "яблоко") или несколько сразу, через "и", запятую или предлог "с" ("гречка с курицей", "омлет, тост и апельсиновый сок").
+Всегда вызывай инструмент extract_food_items со списком названий в именительном падеже, без количества и веса.
+Один продукт — список из одного элемента, например ["творог"]. Несколько продуктов — по одному элементу на каждый.
+Если фраза явно не описывает еду, вызови инструмент с пустым списком items.`;
 
-function stripCodeFence(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/, "")
-    .trim();
-}
+const EXTRACT_TOOL = {
+  name: "extract_food_items",
+  description:
+    "Сохраняет список отдельных продуктов/блюд, распознанных во фразе пользователя о приёме пищи.",
+  input_schema: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Названия отдельных продуктов или блюд в именительном падеже, без количества и веса. " +
+          "Один продукт в тексте — массив из одного элемента. Пустой массив, если текст не про еду.",
+      },
+    },
+    required: ["items"],
+  },
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -115,6 +133,11 @@ Deno.serve(async (req) => {
         max_tokens: 300,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: text }],
+        tools: [EXTRACT_TOOL],
+        // Forces Claude to always respond via the tool call (never plain
+        // text), so `input.items` below is guaranteed to already be a
+        // schema-validated array — nothing to JSON.parse or fail on.
+        tool_choice: { type: "tool", name: "extract_food_items" },
       }),
     });
 
@@ -127,15 +150,23 @@ Deno.serve(async (req) => {
     }
 
     const data = await res.json();
-    const raw: string = data?.content?.[0]?.text ?? "[]";
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripCodeFence(raw));
-    } catch {
-      parsed = [];
+    const toolUse = Array.isArray(data?.content)
+      ? data.content.find((block: { type?: string }) => block?.type === "tool_use")
+      : undefined;
+
+    if (!toolUse) {
+      // Shouldn't happen with tool_choice forcing the call, but don't crash
+      // the request over it — log the raw response so it's inspectable in
+      // Supabase's Edge Function logs if this ever comes up again.
+      console.warn("parse-meal-text: no tool_use block in response", JSON.stringify(data));
+      return new Response(JSON.stringify({ items: [] }), { headers: JSON_HEADERS });
     }
-    const items = Array.isArray(parsed)
-      ? parsed.filter((i): i is string => typeof i === "string" && i.trim().length > 0).slice(0, 10)
+
+    const rawItems = toolUse.input?.items;
+    const items = Array.isArray(rawItems)
+      ? rawItems
+          .filter((i: unknown): i is string => typeof i === "string" && i.trim().length > 0)
+          .slice(0, 10)
       : [];
 
     return new Response(JSON.stringify({ items }), { headers: JSON_HEADERS });

@@ -1,17 +1,28 @@
 // Supabase Edge Function: send-daily-reminders
 //
-// Invoked once a day by pg_cron (see push-notifications-migration.sql,
-// section 3 — 20:00 UTC as a v1 starting point, no per-user timezones yet).
-// Replaces the old purely-client-side setInterval+Notification approach
-// (DailyReminderService.tsx, lib/reminders.ts — both removed in this same
-// change) with real Web Push: this runs server-side regardless of whether
-// anyone has the app open in a tab.
+// Invoked HOURLY by pg_cron (see push-notifications-migration.sql, section 3
+// — changed from a single daily 20:00 UTC run to '0 * * * *' so this can
+// check each user's own chosen local hour instead of firing everyone at the
+// same UTC instant). Replaces the old purely-client-side
+// setInterval+Notification approach (DailyReminderService.tsx,
+// lib/reminders.ts — both removed in an earlier change) with real Web Push:
+// this runs server-side regardless of whether anyone has the app open in a
+// tab.
 //
-// For every user with `remindersEnabled: true` in their saved GameState AND
-// at least one still-undone daily quest right now, sends a push to every
-// device (push_subscriptions row) they've subscribed from. Expired/revoked
-// subscriptions (410 Gone / 404 Not Found from the push service) are
-// deleted so they stop being retried forever.
+// For every user with `remindersEnabled: true` in their saved GameState,
+// whose `reminderHour` (local hour, 0-23) matches the current hour in their
+// own `reminderTimezone` (both fields live in the same GameState JSONB blob
+// — see game.ts — NOT in the public.profiles table, since that table is
+// friend-readable and a notification-time preference has no reason to leak
+// there), AND who still has at least one undone daily quest right now,
+// sends a push to every device (push_subscriptions row) they've subscribed
+// from. Expired/revoked subscriptions (410 Gone / 404 Not Found from the
+// push service) are deleted so they stop being retried forever.
+//
+// Running hourly instead of daily means each user gets checked (and, if
+// eligible, pushed) up to 24x more often than before, but only ever
+// actually SENDS a notification on the one pass where their local hour
+// matches reminderHour — the other 23 passes are a cheap no-op for them.
 //
 // Uses `npm:web-push` rather than hand-rolling the RFC 8291/8292 message
 // encryption + VAPID JWT signing — Supabase Edge Functions run on Deno,
@@ -36,6 +47,29 @@ interface Quest {
 interface GameStateShape {
   remindersEnabled?: boolean;
   quests?: Quest[];
+  reminderHour?: number;
+  reminderTimezone?: string;
+}
+
+/** Current hour (0-23) in the given IANA timezone, per Intl — this is what
+ * lets "reminderHour: 20" mean 20:00 in the USER's zone rather than UTC.
+ * Falls back to the current UTC hour for a missing/invalid/unrecognized
+ * timezone string (old rows saved before this field existed, or a garbage
+ * value) rather than throwing and skipping that user's reminder entirely. */
+function currentHourInTimezone(timeZone: string | undefined): number {
+  try {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      timeZone: timeZone || "UTC",
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date());
+    // hour12: false can still format midnight as "24" in some ICU versions
+    // instead of "00" — normalize so the 0-23 comparison below is reliable.
+    const h = Number(formatted) % 24;
+    return Number.isFinite(h) ? h : new Date().getUTCHours();
+  } catch {
+    return new Date().getUTCHours();
+  }
 }
 
 interface PushSubscriptionRow {
@@ -84,6 +118,13 @@ Deno.serve(async (_req) => {
     usersChecked++;
     const state = row.state as GameStateShape;
     if (!state?.remindersEnabled) continue;
+    // reminderHour defaults to 20 client-side (see defaultState() in
+    // game.ts) for every row saved after this feature shipped, but a row
+    // written before that still won't have it — same 20 fallback here so
+    // those users keep getting the old fixed-hour behavior instead of
+    // silently going quiet.
+    const wantedHour = typeof state.reminderHour === "number" ? state.reminderHour : 20;
+    if (currentHourInTimezone(state.reminderTimezone) !== wantedHour) continue;
     const { remaining } = dailyQuestsRemaining(state);
     if (remaining > 0) eligibleUserIds.push(row.user_id);
   }

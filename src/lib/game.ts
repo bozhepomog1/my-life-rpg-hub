@@ -450,6 +450,22 @@ export interface GameState {
   // Opt-in browser Notification reminders for unfinished daily quests.
   // Only ever set to true after the user explicitly grants permission.
   remindersEnabled: boolean;
+  // Local hour (0-23) the user wants their reminder push at — read by
+  // send-daily-reminders (now cron'd hourly instead of once at a fixed UTC
+  // time) alongside reminderTimezone below to decide "is it this user's
+  // chosen hour right now". Defaults to 20 (matches the old fixed-UTC-20:00
+  // behavior for anyone who never touches the new picker in Settings →
+  // Уведомления).
+  reminderHour: number;
+  // IANA timezone name (e.g. "Europe/Moscow"), captured once from
+  // Intl.DateTimeFormat().resolvedOptions().timeZone — this is what makes
+  // reminderHour a genuinely LOCAL hour rather than another UTC hour in
+  // disguise. Deliberately NOT stored in the public.profiles table (that
+  // table is readable by any authenticated user for the friends/leaderboard
+  // feature — a notification-time/timezone preference has no reason to leak
+  // to friends), so it lives here in the same per-user, RLS-private
+  // game_states blob as remindersEnabled itself.
+  reminderTimezone: string;
   // Current 30-day season — a rolling XP/quest counter that resets every
   // season without touching overall hero level/XP. See SeasonState below.
   season: SeasonState;
@@ -1037,6 +1053,21 @@ export function createQuest(input: {
   };
 }
 
+/** Best-effort IANA timezone read, e.g. "Europe/Moscow" — falls back to UTC
+ * if Intl is unavailable for some reason (shouldn't happen in any real
+ * browser/Node, but this runs during SSR too where being defensive is
+ * cheap). Only ever called once, when a fresh GameState is created — after
+ * that the user's stored reminderTimezone is what send-daily-reminders
+ * trusts, so it explicitly does NOT re-detect on every load (a user
+ * traveling shouldn't have their reminder time silently shift). */
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 export function defaultState(): GameState {
   const base: GameState = {
     avatar: "🥷",
@@ -1070,6 +1101,8 @@ export function defaultState(): GameState {
     dailyMandatoryCounts: {},
     unlockedAchievements: {},
     remindersEnabled: false,
+    reminderHour: 20,
+    reminderTimezone: detectTimezone(),
     season: defaultSeason(),
     seasonSummarySeen: true,
     accentColors: { ...DEFAULT_ACCENT_COLORS },
@@ -1134,6 +1167,14 @@ export function loadState(userId?: string): GameState | null {
       dailyMandatoryCounts: parsed.dailyMandatoryCounts || {},
       unlockedAchievements: parsed.unlockedAchievements || {},
       remindersEnabled: parsed.remindersEnabled ?? false,
+      reminderHour:
+        typeof parsed.reminderHour === "number" &&
+        Number.isInteger(parsed.reminderHour) &&
+        parsed.reminderHour >= 0 &&
+        parsed.reminderHour <= 23
+          ? parsed.reminderHour
+          : base.reminderHour,
+      reminderTimezone: parsed.reminderTimezone || base.reminderTimezone,
       season: parsed.season || defaultSeason(),
       lastSeasonSummary: parsed.lastSeasonSummary,
       seasonSummarySeen: parsed.seasonSummarySeen ?? true,

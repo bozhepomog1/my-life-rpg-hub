@@ -142,6 +142,12 @@ export function SettingsPanel({ state, update, setState }: Props) {
     update((s) => ({ ...s, schedule: { ...s.schedule, cycleAnchor: raw } }));
   }
 
+  function setReminderHour(raw: string) {
+    const n = Math.min(23, Math.max(0, Math.round(Number(raw))));
+    if (!Number.isFinite(n)) return;
+    update((s) => ({ ...s, reminderHour: n }));
+  }
+
   function commitName(raw: string): boolean {
     const trimmed = raw.trim();
     if (!trimmed || trimmed === state.name) return false;
@@ -439,8 +445,30 @@ export function SettingsPanel({ state, update, setState }: Props) {
           <h2 className="text-sm font-semibold">Напоминания</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. Раз в день,
-            вечером, если остались незакрытые ежедневные квесты.
+            в выбранное ниже время, если остались незакрытые ежедневные квесты.
           </p>
+
+          <div className="mt-3">
+            <label className="text-xs text-muted-foreground" htmlFor="reminder-hour">
+              Время напоминания
+            </label>
+            <select
+              id="reminder-hour"
+              value={state.reminderHour}
+              onChange={(e) => setReminderHour(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              По часовому поясу устройства, на котором это включалось ({state.reminderTimezone}) —
+              рассылка проверяет твой выбранный час каждый час, а не только один раз в сутки.
+            </p>
+          </div>
 
           {!isPushSupported() && (
             <p className="mt-3 text-xs text-muted-foreground">

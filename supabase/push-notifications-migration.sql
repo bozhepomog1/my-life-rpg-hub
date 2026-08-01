@@ -68,21 +68,23 @@ create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
 -- ─────────────────────────────────────────────────────────────
--- 3. Daily schedule: 20:00 UTC, matching the old client-side REMINDER_HOUR
---    (20:00 local time) as a starting point. This does NOT yet account for
---    each user's own timezone — everyone gets pinged at the same UTC
---    instant regardless of where they are. Deliberately left as a simple v1
---    (per the brief: "не усложняй сейчас") — a real per-user-timezone
---    schedule would mean either many more cron entries or moving the
---    per-user "is it evening for them yet" decision inside the function and
---    running it more often (e.g. hourly) instead of once — a bigger change
---    better done as its own follow-up.
+-- 3. Hourly schedule (was: once daily at 20:00 UTC for everyone).
+--    Now that reminderHour/reminderTimezone live per-user in game_states
+--    (see game.ts GameState + Settings → Уведомления), the "is it this
+--    user's chosen hour" decision moved inside the Edge Function itself —
+--    cron.schedule() just needs to invoke it once an hour so that decision
+--    gets a chance to be true for every user's timezone at some point during
+--    their day, instead of everyone being pinged at the same UTC instant.
+--    cron.schedule() re-registering the SAME job name ('send-daily-reminders')
+--    updates the existing job in place, so re-running this block on a
+--    project that already had the old daily version is exactly how you pick
+--    up this change — no need to unschedule first.
 --
 -- Replace <SERVICE_ROLE_KEY> below before running this block.
 -- ─────────────────────────────────────────────────────────────
 select cron.schedule(
   'send-daily-reminders',
-  '0 20 * * *',
+  '0 * * * *',
   $$
   select net.http_post(
     url := 'https://vvddprnytmlcsbxwiayr.supabase.co/functions/v1/send-daily-reminders',

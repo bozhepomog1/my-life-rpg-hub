@@ -37,19 +37,19 @@ export function DepositWidget({ state }: Props) {
         <div className="min-w-0">
           <div
             className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-            title={`Ставка на себя: выполняй ежедневные квесты ${state.depositDurationDays} дней подряд, чтобы вернуть эту сумму.`}
+            title={`Символическая ставка на себя (без реальных денег): выполняй ежедневные квесты ${state.depositDurationDays} дней подряд, чтобы «вернуть» эту цифру.`}
           >
             <span
               className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: statusColor }}
             />
             <span className="truncate">
-              Залог · {active ? "заблокировано" : lost ? "не возвращены" : "возвращены"}
+              Залог (символически) · {active ? "в игре" : lost ? "не отыгран" : "отыгран"}
             </span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="text-xl font-semibold text-foreground sm:text-2xl">
-              ${state.depositAmount}
+              {state.depositAmount}
             </span>
             <span className="text-xs tabular-nums text-muted-foreground">
               {days}д {fmt(hours)}:{fmt(mins)}:{fmt(secs)}
@@ -70,9 +70,14 @@ export function DepositWidget({ state }: Props) {
 
       {lost && (
         <div className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-center text-[11px] text-destructive">
-          Условия не выполнены — ${state.depositAmount} остаются не возвращены
+          Условия не выполнены — залог в {state.depositAmount} остаётся не отыгранным
         </div>
       )}
+
+      <p className="mt-2 text-center text-[10px] text-muted-foreground">
+        Это локальный трекер обязательства внутри приложения. Реальные деньги не списываются и не
+        переводятся.
+      </p>
     </div>
   );
 }

@@ -9,11 +9,14 @@ interface Props {
 }
 
 /**
- * Shared setup form for the (optional) deposit challenge — used both from
- * the compact prompt card on the main profile view and from the "Изменить"
- * button in Settings once a deposit is already active. Amount and duration
- * are entirely up to the user: the amount doesn't have to represent real
- * money, and the duration isn't locked to 30 days.
+ * Setup form for the (optional) deposit challenge. Opened only from
+ * Settings → Игра → «Залог» — both the initial "Настроить залог" button and
+ * the "Изменить" button once a deposit is already active use this same
+ * form. There is no entry point anywhere on the main screen; a user who
+ * hasn't visited Settings and turned this on never sees it. Amount and
+ * duration are entirely up to the user: the amount doesn't have to
+ * represent real money (nothing is ever actually charged — see the
+ * disclaimer in the JSX below), and the duration isn't locked to 30 days.
  */
 export function DepositSetupModal({
   initialAmount,
@@ -41,9 +44,9 @@ export function DepositSetupModal({
       >
         <h3 className="text-sm font-semibold">Настроить залог</h3>
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Сумма не обязательно должна быть настоящими деньгами — можно указать любую цифру, лишь бы
-          она мотивировала именно тебя. Ничего не списывается автоматически, это просто личная
-          ставка на себя.
+          Это символический трекер обязательства внутри игры — не настоящие деньги. Укажи любую
+          цифру, какая мотивирует именно тебя: ничего не списывается ни с карты, ни откуда-либо ещё,
+          это просто личная ставка на себя, которую видишь только ты.
         </p>
 
         <label

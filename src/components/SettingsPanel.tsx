@@ -169,7 +169,9 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
   function disableDeposit() {
     if (
-      !confirm("Отключить залог? Текущий отсчёт остановится, деньги (если реальные) не сгорят.")
+      !confirm(
+        "Отключить залог? Это символический трекер — реальные деньги нигде не участвуют, поэтому отключение просто остановит текущий отсчёт.",
+      )
     ) {
       return;
     }
@@ -428,16 +430,22 @@ export function SettingsPanel({ state, update, setState }: Props) {
       {category === "game" && (
         <section className="panel p-6">
           <h2 className="text-sm font-semibold">Залог</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Символический трекер обязательства внутри приложения — никаких реальных денег, карт или
+            платежей. Это просто цифра, которую ты сам придумываешь, и игра отслеживает, «выполнил»
+            ты её условие или нет.
+          </p>
           {state.depositEnabled ? (
             <>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Ставка на самого себя: эта сумма «замораживается» на {state.depositDurationDays}{" "}
-                дней. Закрывай все ежедневные квесты каждый день — и получишь её обратно полностью.
-                Не получишь обратно часть суммы, если будешь пропускать слишком часто.
+              <p className="mt-2 text-xs text-muted-foreground">
+                Ставка на самого себя: эта сумма считается «в игре» {state.depositDurationDays}{" "}
+                дней. Закрывай все ежедневные квесты каждый день — и она полностью «вернётся» (в
+                игре, не в реальности). Часть суммы останется «не отыгранной», если будешь
+                пропускать слишком часто — это тоже никак не влияет на реальные деньги.
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Текущая сумма:{" "}
-                <span className="font-medium text-foreground">${state.depositAmount}</span>
+                <span className="font-medium text-foreground">{state.depositAmount}</span>
                 {" · "}
                 {state.depositDurationDays} дней
               </p>
@@ -460,10 +468,10 @@ export function SettingsPanel({ state, update, setState }: Props) {
             </>
           ) : (
             <>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Необязательная функция. Если хочешь мотивацию посерьёзнее — настрой сумму (не
-                обязательно реальные деньги, можно и символическую цифру) и срок, на который она
-                «замораживается».
+              <p className="mt-2 text-xs text-muted-foreground">
+                Необязательная функция, по умолчанию выключена. Если хочешь мотивацию посерьёзнее —
+                настрой цифру (это не реальные деньги, а личная символическая ставка) и срок, на
+                который она «в игре».
               </p>
               <button
                 type="button"

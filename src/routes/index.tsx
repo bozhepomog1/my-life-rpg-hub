@@ -1009,7 +1009,14 @@ function BottomNav({ pathname }: { pathname: string }) {
                 type="button"
                 aria-label="Закрыть"
                 onClick={() => setMoreOpen(false)}
-                className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+                // Was bg-background/60 + backdrop-blur-sm — dark enough
+                // (plus the blur on top) that the screen underneath was
+                // barely legible while the sheet was open. Chosen variant 1
+                // from the preview set: a much lighter scrim, no blur, so
+                // the content behind stays readable; the sheet itself
+                // (shadow-lg + its own bg-card fill) still reads clearly
+                // separated from it.
+                className="absolute inset-0 bg-background/20"
               />
               <div
                 className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-card p-4 shadow-lg"

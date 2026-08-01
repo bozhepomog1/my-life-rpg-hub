@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
+import { Bell, Gamepad2, Palette, ShieldCheck, UserCog } from "lucide-react";
 import { defaultState, isWorkDay, todayKey, type GameState, type ScheduleMode } from "@/lib/game";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { AutosaveField } from "@/components/AutosaveField";
 import { DepositSetupModal } from "@/components/DepositSetupModal";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { isValidHex } from "@/lib/color";
+import { signOut } from "@/lib/auth";
+import { useTheme } from "@/hooks/use-theme";
 import {
   ACCENT_PRESETS,
   accentContrastWarning,
@@ -25,6 +28,24 @@ import { getBackgroundPhotoUrl, uploadBackgroundPhoto } from "@/lib/background-p
 import { useMyShortCode } from "@/hooks/use-my-short-code";
 
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+// Settings used to be one long unstructured scroll of 13 panels — grouped
+// into categories below, purely a presentation change (a tab strip filters
+// which existing <section> panels render; nothing about what each setting
+// does or where its state lives changed). Sections that don't map cleanly
+// onto Account/Appearance/Notifications/Privacy (install button, work
+// schedule, deposit, sound effects — all gameplay-mechanic toggles rather
+// than identity, look, alerts, or visibility) get a 5th "Игра" bucket
+// instead of being forced into a category they don't really belong to.
+type SettingsCategory = "account" | "appearance" | "notifications" | "privacy" | "game";
+
+const SETTINGS_CATEGORIES: { id: SettingsCategory; label: string; icon: typeof UserCog }[] = [
+  { id: "account", label: "Аккаунт и безопасность", icon: UserCog },
+  { id: "appearance", label: "Оформление", icon: Palette },
+  { id: "notifications", label: "Уведомления", icon: Bell },
+  { id: "privacy", label: "Приватность", icon: ShieldCheck },
+  { id: "game", label: "Игра", icon: Gamepad2 },
+];
 
 const PUSH_ERROR_MESSAGES: Record<string, string> = {
   unsupported: "Этот браузер не поддерживает push-уведомления.",
@@ -51,6 +72,8 @@ export function SettingsPanel({ state, update, setState }: Props) {
   const { code: myCode, loading: myCodeLoading } = useMyShortCode();
   const [codeCopied, setCodeCopied] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [category, setCategory] = useState<SettingsCategory>("account");
+  const { theme, setTheme } = useTheme();
 
   async function copyMyCode() {
     if (!myCode) return;
@@ -251,102 +274,156 @@ export function SettingsPanel({ state, update, setState }: Props) {
 
   return (
     <div className="space-y-5">
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Установка приложения</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Установи Life RPG как обычное приложение — быстрее открывается, работает в отдельном окне
-          без адресной строки браузера.
-        </p>
-        <div className="mt-3">
-          <InstallAppButton />
-        </div>
-      </section>
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {SETTINGS_CATEGORIES.map((c) => {
+          const Icon = c.icon;
+          const active = category === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCategory(c.id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              <Icon size={14} />
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Мой код друга</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Неизменяемый код — только по нему друзья могут найти тебя и добавить в друзья (не по имени
-          и не по email). Скинь его текстом тому, кого хочешь добавить.
-        </p>
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
-          <div className="text-xl font-semibold tracking-widest">
-            {myCode ?? (myCodeLoading ? "…" : "—")}
+      {category === "game" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Установка приложения</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Установи Life RPG как обычное приложение — быстрее открывается, работает в отдельном
+            окне без адресной строки браузера.
+          </p>
+          <div className="mt-3">
+            <InstallAppButton />
+          </div>
+        </section>
+      )}
+
+      {category === "account" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Аккаунт</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {/* Passwordless by design (see lib/auth.ts) — sign-in is only ever
+                magic-link email or Google OAuth, so there's genuinely no
+                password to change here, not a missing feature. */}
+            Вход по magic-ссылке на email или через Google — отдельного пароля в приложении нет,
+            менять нечего.
+          </p>
+          <div className="mt-3 rounded-xl border border-border bg-secondary px-4 py-3">
+            <div className="text-xs text-muted-foreground">Email</div>
+            <div className="mt-0.5 truncate text-sm font-medium">{user?.email ?? "—"}</div>
           </div>
           <button
             type="button"
-            disabled={!myCode}
-            onClick={copyMyCode}
-            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => signOut()}
+            className="mt-3 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:border-destructive/50 hover:text-destructive"
           >
-            {codeCopied ? "Скопировано ✓" : "Скопировать"}
+            Выйти
           </button>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Как тебя зовут в игре?</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Это имя видно на главном экране и в таблице рейтингов у друзей.
-        </p>
-        <div className="mt-3">
-          <AutosaveField
-            value={state.name}
-            placeholder="Герой"
-            ariaLabel="Имя персонажа"
-            onCommit={commitName}
-          />
-        </div>
-      </section>
+      {category === "privacy" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Мой код друга</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Неизменяемый код — только по нему друзья могут найти тебя и добавить в друзья (не по
+            имени и не по email). Скинь его текстом тому, кого хочешь добавить.
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
+            <div className="text-xl font-semibold tracking-widest">
+              {myCode ?? (myCodeLoading ? "…" : "—")}
+            </div>
+            <button
+              type="button"
+              disabled={!myCode}
+              onClick={copyMyCode}
+              className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {codeCopied ? "Скопировано ✓" : "Скопировать"}
+            </button>
+          </div>
+        </section>
+      )}
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Залог</h2>
-        {state.depositEnabled ? (
-          <>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ставка на самого себя: эта сумма «замораживается» на {state.depositDurationDays} дней.
-              Закрывай все ежедневные квесты каждый день — и получишь её обратно полностью. Не
-              получишь обратно часть суммы, если будешь пропускать слишком часто.
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Текущая сумма:{" "}
-              <span className="font-medium text-foreground">${state.depositAmount}</span>
-              {" · "}
-              {state.depositDurationDays} дней
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+      {category === "account" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Как тебя зовут в игре?</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Это имя видно на главном экране и в таблице рейтингов у друзей.
+          </p>
+          <div className="mt-3">
+            <AutosaveField
+              value={state.name}
+              placeholder="Герой"
+              ariaLabel="Имя персонажа"
+              onCommit={commitName}
+            />
+          </div>
+        </section>
+      )}
+
+      {category === "game" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Залог</h2>
+          {state.depositEnabled ? (
+            <>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ставка на самого себя: эта сумма «замораживается» на {state.depositDurationDays}{" "}
+                дней. Закрывай все ежедневные квесты каждый день — и получишь её обратно полностью.
+                Не получишь обратно часть суммы, если будешь пропускать слишком часто.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Текущая сумма:{" "}
+                <span className="font-medium text-foreground">${state.depositAmount}</span>
+                {" · "}
+                {state.depositDurationDays} дней
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDepositModalOpen(true)}
+                  className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+                >
+                  Изменить
+                </button>
+                <button
+                  type="button"
+                  onClick={disableDeposit}
+                  className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
+                >
+                  Отключить залог
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Необязательная функция. Если хочешь мотивацию посерьёзнее — настрой сумму (не
+                обязательно реальные деньги, можно и символическую цифру) и срок, на который она
+                «замораживается».
+              </p>
               <button
                 type="button"
                 onClick={() => setDepositModalOpen(true)}
-                className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+                className="mt-3 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
               >
-                Изменить
+                Настроить залог
               </button>
-              <button
-                type="button"
-                onClick={disableDeposit}
-                className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
-              >
-                Отключить залог
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Необязательная функция. Если хочешь мотивацию посерьёзнее — настрой сумму (не
-              обязательно реальные деньги, можно и символическую цифру) и срок, на который она
-              «замораживается».
-            </p>
-            <button
-              type="button"
-              onClick={() => setDepositModalOpen(true)}
-              className="mt-3 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
-            >
-              Настроить залог
-            </button>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </section>
+      )}
 
       {depositModalOpen && (
         <DepositSetupModal
@@ -357,470 +434,523 @@ export function SettingsPanel({ state, update, setState }: Props) {
         />
       )}
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Напоминания</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. Раз в день,
-          вечером, если остались незакрытые ежедневные квесты.
-        </p>
-
-        {!isPushSupported() && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Этот браузер не поддерживает push-уведомления.
+      {category === "notifications" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Напоминания</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Настоящие push-уведомления — приходят даже если вкладка или браузер закрыты. Раз в день,
+            вечером, если остались незакрытые ежедневные квесты.
           </p>
-        )}
 
-        {pushError && (
-          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-destructive">
-            {pushError}
+          {!isPushSupported() && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Этот браузер не поддерживает push-уведомления.
+            </p>
+          )}
+
+          {pushError && (
+            <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-destructive">
+              {pushError}
+            </p>
+          )}
+
+          {isPushSupported() && (
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span className="text-sm font-medium">
+                {state.remindersEnabled ? "Включены" : "Выключены"}
+              </span>
+              <button
+                type="button"
+                disabled={pushBusy}
+                onClick={state.remindersEnabled ? handleDisableReminders : handleEnableReminders}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  state.remindersEnabled
+                    ? "border border-border hover:bg-secondary"
+                    : "btn-accent-hover bg-primary text-primary-foreground"
+                }`}
+              >
+                {pushBusy
+                  ? "Подождите…"
+                  : state.remindersEnabled
+                    ? "Выключить"
+                    : "Включить напоминания"}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {category === "game" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Звуки</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Короткие звуковые эффекты при выполнении квеста, левел-апе, разблокировке достижения и
+            покупке в магазине.
           </p>
-        )}
-
-        {isPushSupported() && (
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-sm font-medium">
-              {state.remindersEnabled ? "Включены" : "Выключены"}
+              {state.soundEnabled ? "Включены" : "Выключены"}
             </span>
             <button
               type="button"
-              disabled={pushBusy}
-              onClick={state.remindersEnabled ? handleDisableReminders : handleEnableReminders}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
-                state.remindersEnabled
-                  ? "border border-border hover:bg-secondary"
-                  : "btn-accent-hover bg-primary text-primary-foreground"
-              }`}
+              onClick={() => update((s) => ({ ...s, soundEnabled: !s.soundEnabled }))}
+              className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
             >
-              {pushBusy
-                ? "Подождите…"
-                : state.remindersEnabled
-                  ? "Выключить"
-                  : "Включить напоминания"}
+              {state.soundEnabled ? "Выключить" : "Включить"}
             </button>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Звуки</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Короткие звуковые эффекты при выполнении квеста, левел-апе, разблокировке достижения и
-          покупке в магазине.
-        </p>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="text-sm font-medium">
-            {state.soundEnabled ? "Включены" : "Выключены"}
-          </span>
-          <button
-            type="button"
-            onClick={() => update((s) => ({ ...s, soundEnabled: !s.soundEnabled }))}
-            className="shrink-0 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
-          >
-            {state.soundEnabled ? "Выключить" : "Включить"}
-          </button>
-        </div>
-      </section>
+      {category === "game" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">График работы</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            В рабочий день ежедневные квесты автоматически облегчаются (короткая разминка вместо
+            полной тренировки и т.п.), в выходной — доступна полная версия. Сегодня по этому
+            графику:{" "}
+            <span className="font-medium text-foreground">
+              {isWorkDay(state.schedule) ? "рабочий день" : "выходной"}
+            </span>
+            .
+          </p>
 
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">График работы</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          В рабочий день ежедневные квесты автоматически облегчаются (короткая разминка вместо
-          полной тренировки и т.п.), в выходной — доступна полная версия. Сегодня по этому графику:{" "}
-          <span className="font-medium text-foreground">
-            {isWorkDay(state.schedule) ? "рабочий день" : "выходной"}
-          </span>
-          .
-        </p>
+          <div className="mt-3 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setScheduleMode("weekly")}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                state.schedule.mode === "weekly"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              По дням недели
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleMode("cycle")}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                state.schedule.mode === "cycle"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Смены (цикл)
+            </button>
+          </div>
 
-        <div className="mt-3 flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => setScheduleMode("weekly")}
-            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-              state.schedule.mode === "weekly"
-                ? "bg-primary text-primary-foreground"
-                : "border border-border text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            По дням недели
-          </button>
-          <button
-            type="button"
-            onClick={() => setScheduleMode("cycle")}
-            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-              state.schedule.mode === "cycle"
-                ? "bg-primary text-primary-foreground"
-                : "border border-border text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            Смены (цикл)
-          </button>
-        </div>
+          {state.schedule.mode === "weekly" ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-muted-foreground">
+                Отметь рабочие дни недели — подходит для 5/2 или любого другого свободного паттерна.
+              </p>
+              <div className="grid grid-cols-7 gap-1.5">
+                {WEEKDAY_LABELS.map((label, i) => {
+                  const isWorkDayOfWeek = state.schedule.weeklyWorkDays[i];
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => toggleWeekday(i)}
+                      className={`rounded-lg px-1 py-2 text-xs font-medium transition-colors ${
+                        isWorkDayOfWeek
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Подходит для смен, которые не привязаны к дням недели — например 2/2 или 4/3.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Рабочих дней подряд</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={state.schedule.cycleWorkDays}
+                    onChange={(e) => setCycleField("cycleWorkDays", e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Дней отдыха подряд</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={state.schedule.cycleRestDays}
+                    onChange={(e) => setCycleField("cycleRestDays", e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Первый день текущего рабочего блока
+                </label>
+                <input
+                  type="date"
+                  value={state.schedule.cycleAnchor}
+                  onChange={(e) => setCycleAnchor(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
-        {state.schedule.mode === "weekly" ? (
-          <div className="mt-3">
-            <p className="mb-2 text-xs text-muted-foreground">
-              Отметь рабочие дни недели — подходит для 5/2 или любого другого свободного паттерна.
-            </p>
-            <div className="grid grid-cols-7 gap-1.5">
-              {WEEKDAY_LABELS.map((label, i) => {
-                const isWorkDayOfWeek = state.schedule.weeklyWorkDays[i];
+      {category === "appearance" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Тема</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Быстрый переключатель есть и в шапке приложения — здесь то же самое, просто рядом с
+            остальным оформлением.
+          </p>
+          <div className="mt-3 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                theme === "light"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Светлая
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                theme === "dark"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Тёмная
+            </button>
+          </div>
+        </section>
+      )}
+
+      {category === "appearance" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Персонализация</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Акцентные цвета приложения — фон и текст остаются как есть, меняются только кнопки,
+            прогресс-бары и теги.
+          </p>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые наборы</p>
+            <div className="flex flex-wrap gap-2">
+              {ACCENT_PRESETS.map((preset) => {
+                const active = activePreset?.id === preset.id;
                 return (
                   <button
-                    key={label}
+                    key={preset.id}
                     type="button"
-                    onClick={() => toggleWeekday(i)}
-                    className={`rounded-lg px-1 py-2 text-xs font-medium transition-colors ${
-                      isWorkDayOfWeek
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border text-muted-foreground hover:bg-secondary"
+                    onClick={() => applyPreset(preset.colors)}
+                    title={preset.label}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                      active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
                     }`}
                   >
-                    {label}
+                    <span className="flex h-4 w-4 overflow-hidden rounded-full border border-border/60">
+                      <span className="w-1/2" style={{ background: preset.colors.primary }} />
+                      <span className="w-1/2" style={{ background: preset.colors.secondary }} />
+                    </span>
+                    {preset.label}
+                    {active && <span className="text-primary">✓</span>}
                   </button>
                 );
               })}
             </div>
           </div>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Подходит для смен, которые не привязаны к дням недели — например 2/2 или 4/3.
-            </p>
+
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Свои цвета</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Рабочих дней подряд</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={state.schedule.cycleWorkDays}
-                  onChange={(e) => setCycleField("cycleWorkDays", e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-                />
+                <label className="text-xs text-muted-foreground">Основной акцент</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={state.accentColors.primary}
+                    onChange={(e) => setCustomColor("primary", e.target.value)}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                    aria-label="Основной акцент"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {state.accentColors.primary}
+                  </span>
+                </div>
+                {primaryWarning && (
+                  <p className="mt-1.5 text-[11px] text-destructive">{primaryWarning}</p>
+                )}
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Дней отдыха подряд</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={state.schedule.cycleRestDays}
-                  onChange={(e) => setCycleField("cycleRestDays", e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">
-                Первый день текущего рабочего блока
-              </label>
-              <input
-                type="date"
-                value={state.schedule.cycleAnchor}
-                onChange={(e) => setCycleAnchor(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Персонализация</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Акцентные цвета приложения — фон и текст остаются как есть, меняются только кнопки,
-          прогресс-бары и теги.
-        </p>
-
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые наборы</p>
-          <div className="flex flex-wrap gap-2">
-            {ACCENT_PRESETS.map((preset) => {
-              const active = activePreset?.id === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyPreset(preset.colors)}
-                  title={preset.label}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
-                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
-                  }`}
-                >
-                  <span className="flex h-4 w-4 overflow-hidden rounded-full border border-border/60">
-                    <span className="w-1/2" style={{ background: preset.colors.primary }} />
-                    <span className="w-1/2" style={{ background: preset.colors.secondary }} />
+                <label className="text-xs text-muted-foreground">Вторичный акцент</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={state.accentColors.secondary}
+                    onChange={(e) => setCustomColor("secondary", e.target.value)}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                    aria-label="Вторичный акцент"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {state.accentColors.secondary}
                   </span>
-                  {preset.label}
-                  {active && <span className="text-primary">✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Свои цвета</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Основной акцент</label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="color"
-                  value={state.accentColors.primary}
-                  onChange={(e) => setCustomColor("primary", e.target.value)}
-                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
-                  aria-label="Основной акцент"
-                />
-                <span className="text-xs text-muted-foreground">{state.accentColors.primary}</span>
-              </div>
-              {primaryWarning && (
-                <p className="mt-1.5 text-[11px] text-destructive">{primaryWarning}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Вторичный акцент</label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="color"
-                  value={state.accentColors.secondary}
-                  onChange={(e) => setCustomColor("secondary", e.target.value)}
-                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
-                  aria-label="Вторичный акцент"
-                />
-                <span className="text-xs text-muted-foreground">
-                  {state.accentColors.secondary}
-                </span>
-              </div>
-              {secondaryWarning && (
-                <p className="mt-1.5 text-[11px] text-destructive">{secondaryWarning}</p>
-              )}
-            </div>
-          </div>
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            Оттенки для наведения и обеих тем (светлой/тёмной) подбираются автоматически.
-          </p>
-        </div>
-      </section>
-
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Персонализация — фон</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Настрой цвет фона за пределами карточек (или свою фотографию) и, отдельно, цвет самих
-          карточек ниже — текст везде подстраивается автоматически.
-        </p>
-
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые варианты</p>
-          <div className="flex flex-wrap gap-2">
-            {BACKGROUND_PRESETS.map((preset) => {
-              const active = activeBgPreset?.id === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyBackgroundPreset(preset.color)}
-                  title={preset.label}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
-                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
-                  }`}
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-border/60"
-                    style={{ background: preset.color ?? "var(--color-background)" }}
-                  />
-                  {preset.label}
-                  {active && <span className="text-primary">✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Свой цвет</p>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={
-                isValidHex(state.background.color)
-                  ? state.background.color
-                  : DEFAULT_BACKGROUND.color
-              }
-              onChange={(e) => setCustomBackgroundColor(e.target.value)}
-              className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
-              aria-label="Свой цвет фона"
-            />
-            <span className="text-xs text-muted-foreground">{state.background.color}</span>
-          </div>
-          {bgWarning && <p className="mt-1.5 text-[11px] text-destructive">{bgWarning}</p>}
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Оттенок подстраивается под каждую тему — почти белый на светлой, почти чёрный на тёмной
-            — так же, как акцентные цвета.
-          </p>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Своя фотография</p>
-          <input
-            ref={bgFileRef}
-            type="file"
-            accept="image/*"
-            onChange={handleBackgroundFile}
-            className="hidden"
-          />
-          {state.background.mode === "photo" && state.background.photoPath ? (
-            <div className="flex items-center gap-3">
-              {bgPreviewUrl && (
-                <img
-                  src={bgPreviewUrl}
-                  alt=""
-                  className="h-14 w-14 rounded-lg border border-border object-cover"
-                />
-              )}
-              <div className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  disabled={bgUploading}
-                  onClick={() => bgFileRef.current?.click()}
-                  className="text-left text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
-                >
-                  {bgUploading ? "Загрузка…" : "Заменить фото"}
-                </button>
-                <button
-                  type="button"
-                  onClick={removeBackgroundPhoto}
-                  className="text-left text-xs text-destructive underline hover:opacity-80"
-                >
-                  Убрать фото
-                </button>
+                </div>
+                {secondaryWarning && (
+                  <p className="mt-1.5 text-[11px] text-destructive">{secondaryWarning}</p>
+                )}
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              disabled={bgUploading}
-              onClick={() => bgFileRef.current?.click()}
-              className="w-full rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {bgUploading ? "Загрузка…" : "🖼️ Загрузить фотографию фона"}
-            </button>
-          )}
-
-          {state.background.mode === "photo" && (
-            <div className="mt-3">
-              <label className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Затемнение</span>
-                <span>{state.background.dimOpacity}%</span>
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={90}
-                value={state.background.dimOpacity}
-                onChange={(e) => setBackgroundDim(e.target.value)}
-                className="mt-1.5 w-full accent-primary"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Затемняющий слой поверх фото — подбери так, чтобы карточки и текст было удобно
-                читать.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-5 border-t border-border pt-5">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Цвет карточек</p>
-          <p className="mb-2 text-[11px] text-muted-foreground">
-            Текст внутри карточек сам подстраивается под выбранный цвет — тёмная карточка получит
-            светлый текст, светлая — тёмный.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {CARD_COLOR_PRESETS.map((preset) => {
-              const active = activeCardPreset?.id === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyCardColorPreset(preset.color)}
-                  title={preset.label}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
-                    active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
-                  }`}
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-border/60"
-                    style={{ background: preset.color ?? "var(--color-card)" }}
-                  />
-                  {preset.label}
-                  {active && <span className="text-primary">✓</span>}
-                </button>
-              );
-            })}
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Оттенки для наведения и обеих тем (светлой/тёмной) подбираются автоматически.
+            </p>
           </div>
+        </section>
+      )}
+
+      {category === "appearance" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Персонализация — фон</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Настрой цвет фона за пределами карточек (или свою фотографию) и, отдельно, цвет самих
+            карточек ниже — текст везде подстраивается автоматически.
+          </p>
 
           <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Готовые варианты</p>
+            <div className="flex flex-wrap gap-2">
+              {BACKGROUND_PRESETS.map((preset) => {
+                const active = activeBgPreset?.id === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyBackgroundPreset(preset.color)}
+                    title={preset.label}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                      active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span
+                      className="h-4 w-4 rounded-full border border-border/60"
+                      style={{ background: preset.color ?? "var(--color-background)" }}
+                    />
+                    {preset.label}
+                    {active && <span className="text-primary">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-5">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Свой цвет</p>
             <div className="flex items-center gap-2">
               <input
                 type="color"
                 value={
-                  isValidHex(state.cardColor.color)
-                    ? state.cardColor.color
-                    : DEFAULT_CARD_COLOR.color
+                  isValidHex(state.background.color)
+                    ? state.background.color
+                    : DEFAULT_BACKGROUND.color
                 }
-                onChange={(e) => setCustomCardColor(e.target.value)}
+                onChange={(e) => setCustomBackgroundColor(e.target.value)}
                 className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
-                aria-label="Свой цвет карточек"
+                aria-label="Свой цвет фона"
               />
-              <span className="text-xs text-muted-foreground">{state.cardColor.color}</span>
+              <span className="text-xs text-muted-foreground">{state.background.color}</span>
             </div>
-            {cardSimilarityWarning && (
-              <p className="mt-1.5 text-[11px] text-destructive">{cardSimilarityWarning}</p>
+            {bgWarning && <p className="mt-1.5 text-[11px] text-destructive">{bgWarning}</p>}
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Оттенок подстраивается под каждую тему — почти белый на светлой, почти чёрный на
+              тёмной — так же, как акцентные цвета.
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Своя фотография</p>
+            <input
+              ref={bgFileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleBackgroundFile}
+              className="hidden"
+            />
+            {state.background.mode === "photo" && state.background.photoPath ? (
+              <div className="flex items-center gap-3">
+                {bgPreviewUrl && (
+                  <img
+                    src={bgPreviewUrl}
+                    alt=""
+                    className="h-14 w-14 rounded-lg border border-border object-cover"
+                  />
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    disabled={bgUploading}
+                    onClick={() => bgFileRef.current?.click()}
+                    className="text-left text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                  >
+                    {bgUploading ? "Загрузка…" : "Заменить фото"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removeBackgroundPhoto}
+                    className="text-left text-xs text-destructive underline hover:opacity-80"
+                  >
+                    Убрать фото
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={bgUploading}
+                onClick={() => bgFileRef.current?.click()}
+                className="w-full rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {bgUploading ? "Загрузка…" : "🖼️ Загрузить фотографию фона"}
+              </button>
+            )}
+
+            {state.background.mode === "photo" && (
+              <div className="mt-3">
+                <label className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Затемнение</span>
+                  <span>{state.background.dimOpacity}%</span>
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={90}
+                  value={state.background.dimOpacity}
+                  onChange={(e) => setBackgroundDim(e.target.value)}
+                  className="mt-1.5 w-full accent-primary"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Затемняющий слой поверх фото — подбери так, чтобы карточки и текст было удобно
+                  читать.
+                </p>
+              </div>
             )}
           </div>
+
+          <div className="mt-5 border-t border-border pt-5">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Цвет карточек</p>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              Текст внутри карточек сам подстраивается под выбранный цвет — тёмная карточка получит
+              светлый текст, светлая — тёмный.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {CARD_COLOR_PRESETS.map((preset) => {
+                const active = activeCardPreset?.id === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyCardColorPreset(preset.color)}
+                    title={preset.label}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 ${
+                      active ? "border-primary bg-secondary" : "border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span
+                      className="h-4 w-4 rounded-full border border-border/60"
+                      style={{ background: preset.color ?? "var(--color-card)" }}
+                    />
+                    {preset.label}
+                    {active && <span className="text-primary">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Свой цвет</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={
+                    isValidHex(state.cardColor.color)
+                      ? state.cardColor.color
+                      : DEFAULT_CARD_COLOR.color
+                  }
+                  onChange={(e) => setCustomCardColor(e.target.value)}
+                  className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+                  aria-label="Свой цвет карточек"
+                />
+                <span className="text-xs text-muted-foreground">{state.cardColor.color}</span>
+              </div>
+              {cardSimilarityWarning && (
+                <p className="mt-1.5 text-[11px] text-destructive">{cardSimilarityWarning}</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {category === "account" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Резервная копия</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Сохрани весь свой прогресс (квесты, характеристики, залог, питание) в один файл — на
+            случай, если захочешь перенести его или просто иметь копию про запас.
+          </p>
+          <button
+            type="button"
+            onClick={exportBackup}
+            className="mt-3 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
+          >
+            Скачать резервную копию
+          </button>
+        </section>
+      )}
+
+      {category === "account" && (
+        <section className="panel border-destructive/30 p-6">
+          <h2 className="text-sm font-semibold text-destructive">Опасная зона</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Обнулит уровень, характеристики, квесты, залог и питание — начнёшь с чистого листа.
+            Отменить это будет нельзя, так что сначала лучше скачай резервную копию выше.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            className="mt-3 rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
+          >
+            Сбросить весь прогресс
+          </button>
+        </section>
+      )}
+
+      {category === "privacy" && (
+        <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
+          <Link to="/privacy" className="underline-offset-2 hover:text-foreground hover:underline">
+            Политика конфиденциальности
+          </Link>
+          <Link to="/terms" className="underline-offset-2 hover:text-foreground hover:underline">
+            Условия использования
+          </Link>
         </div>
-      </section>
-
-      <section className="panel p-6">
-        <h2 className="text-sm font-semibold">Резервная копия</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Сохрани весь свой прогресс (квесты, характеристики, залог, питание) в один файл — на
-          случай, если захочешь перенести его или просто иметь копию про запас.
-        </p>
-        <button
-          type="button"
-          onClick={exportBackup}
-          className="mt-3 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 hover:bg-secondary"
-        >
-          Скачать резервную копию
-        </button>
-      </section>
-
-      <section className="panel border-destructive/30 p-6">
-        <h2 className="text-sm font-semibold text-destructive">Опасная зона</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Обнулит уровень, характеристики, квесты, залог и питание — начнёшь с чистого листа.
-          Отменить это будет нельзя, так что сначала лучше скачай резервную копию выше.
-        </p>
-        <button
-          type="button"
-          onClick={() => setConfirmOpen(true)}
-          className="mt-3 rounded-full border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/10"
-        >
-          Сбросить весь прогресс
-        </button>
-      </section>
-
-      <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
-        <Link to="/privacy" className="underline-offset-2 hover:text-foreground hover:underline">
-          Политика конфиденциальности
-        </Link>
-        <Link to="/terms" className="underline-offset-2 hover:text-foreground hover:underline">
-          Условия использования
-        </Link>
-      </div>
+      )}
 
       {confirmOpen &&
         createPortal(

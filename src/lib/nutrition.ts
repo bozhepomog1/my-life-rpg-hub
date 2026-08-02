@@ -961,7 +961,8 @@ export async function parseMealPhoto(
   base64: string,
   mediaType: string,
 ): Promise<ParseMealPhotoResult> {
-  const FAILURE_NOTE = "Не получилось отправить фото на распознавание — попробуй ещё раз.";
+  const FAILURE_NOTE =
+    "Не получилось отправить фото на распознавание — попробуй ещё раз, опиши текстом выше или найди продукт вручную ниже.";
   try {
     const { data, error } = await supabase.functions.invoke<{
       items?: unknown;
@@ -999,12 +1000,17 @@ export async function parseMealPhoto(
       .slice(0, 10);
 
     if (items.length === 0) {
+      // Claude's own `note` explains WHY (no food visible, too dark, etc.) —
+      // shown with the same "what to do next" suffix either way, so the
+      // message always ends in an actionable fallback rather than just a
+      // diagnosis.
+      const reason = typeof data.note === "string" && data.note.trim() ? data.note.trim() : null;
+      const nextSteps = "Попробуй другое фото, опиши текстом выше или найди продукт вручную ниже.";
       return {
         items: [],
-        note:
-          typeof data.note === "string" && data.note.trim()
-            ? data.note.trim()
-            : "Не получилось распознать еду на фото — попробуй другое фото или найди вручную ниже.",
+        note: reason
+          ? `${reason}. ${nextSteps}`
+          : `Не получилось распознать еду на фото. ${nextSteps}`,
       };
     }
     return { items };

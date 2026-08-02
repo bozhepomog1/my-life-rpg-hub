@@ -49,6 +49,17 @@ interface QueueItem {
   estimatedGrams?: number;
 }
 
+// Hard reject threshold BEFORE attempting to decode/compress a picked
+// photo — compressImageToBase64 already shrinks anything reasonable down
+// to a small JPEG, but decoding a huge original (e.g. an uncompressed
+// multi-camera panorama, or someone picking a video file mislabeled as an
+// image) into a canvas can be slow or memory-heavy on lower-end phones
+// before compression even gets a chance to help. 20MB comfortably covers
+// any real phone-camera JPEG/HEIC while still catching genuinely
+// pathological picks early, with a clear message instead of a silent
+// hang or crash.
+const MAX_PHOTO_FILE_BYTES = 20 * 1024 * 1024;
+
 const METRICS = [
   { key: "kcal", label: "Ккал", unit: "", color: STAT_META.strength.color },
   { key: "protein", label: "Белки", unit: "г", color: STAT_META.intellect.color },
@@ -264,6 +275,23 @@ export function NutritionCalculator({ state, update }: Props) {
     setSaved(false);
     setJustAdded(null);
     setPhotoError(null);
+
+    // Reject before even attempting to decode — see MAX_PHOTO_FILE_BYTES.
+    if (file.size > MAX_PHOTO_FILE_BYTES) {
+      setPhotoError(
+        "Файл слишком большой (лимит 20 МБ) — попробуй сделать фото заново или выбрать другое.",
+      );
+      return;
+    }
+    // Some mobile browsers leave `type` empty for camera captures — only
+    // reject when it's explicitly set to something non-image, never on a
+    // missing/unknown type (that's left to compressImageToBase64's own
+    // decode failure, caught below).
+    if (file.type && !file.type.startsWith("image/")) {
+      setPhotoError("Это не похоже на изображение — выбери файл с фото.");
+      return;
+    }
+
     setPhotoBusy(true);
     try {
       const { base64, mediaType } = await compressImageToBase64(file);
@@ -271,7 +299,7 @@ export function NutritionCalculator({ state, update }: Props) {
       if (result.items.length === 0) {
         setPhotoError(
           result.note ??
-            "Не получилось распознать еду на фото — попробуй другое фото или найди вручную ниже.",
+            "Не получилось распознать еду на фото. Попробуй другое фото, опиши текстом выше или найди продукт вручную ниже.",
         );
         return;
       }
@@ -286,7 +314,9 @@ export function NutritionCalculator({ state, update }: Props) {
       await runSearch(wrapped[0].name);
     } catch (err) {
       console.warn("handlePhotoSelected: failed to process photo", err);
-      setPhotoError("Не получилось обработать фото — попробуй ещё раз или введи вручную.");
+      setPhotoError(
+        "Не получилось обработать фото — попробуй ещё раз, опиши текстом выше или найди продукт вручную ниже.",
+      );
     } finally {
       setPhotoBusy(false);
     }

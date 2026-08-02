@@ -1107,6 +1107,28 @@ export function defaultAmountFor(unit: PortionUnit): number {
   return unit === "g" || unit === "ml" ? 100 : 1;
 }
 
+/**
+ * Converts a photo-recognition weight estimate (always in grams — see
+ * PhotoFoodItem in parseMealPhoto) into a starting amount for whatever unit
+ * suggestedUnitFor() picked for the matched candidate, so the quantity step
+ * opens prefilled with the AI's own guess instead of the generic
+ * defaultAmountFor() default. Only meaningful for units with a known
+ * grams-per-unit (g, ml, tbsp, tsp, cup, plate, slice — see
+ * PORTION_UNIT_GRAMS above): a 300g photo estimate becomes "1 тарелка"
+ * for a soup, "10 кусков" for bread, "300" for a plain "г" default, etc.
+ * "pcs"/"portion" units have no fixed weight (nobody can safely convert
+ * "150g" into "how many eggs" without knowing the size of one egg here) —
+ * for those this just falls back to defaultAmountFor(), same as if no
+ * photo estimate existed, rather than guessing a count.
+ */
+export function amountForEstimatedGrams(unit: PortionUnit, estimatedGrams: number): number {
+  const gramsPerUnit = PORTION_UNIT_GRAMS[unit];
+  if (gramsPerUnit == null || !Number.isFinite(estimatedGrams) || estimatedGrams <= 0) {
+    return defaultAmountFor(unit);
+  }
+  return Math.max(1, Math.round(estimatedGrams / gramsPerUnit));
+}
+
 /** A product added to the in-progress meal draft (see NutritionCalculator), not yet saved to the diary. */
 export interface MealDraftItem {
   label: string;

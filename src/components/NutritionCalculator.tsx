@@ -11,6 +11,7 @@ import {
 } from "@/lib/game";
 import {
   addNutritionEntry,
+  amountForEstimatedGrams,
   baseGoals,
   cheatMealsRemaining,
   computeNutritionStreak,
@@ -39,6 +40,15 @@ interface Props {
   update: (fn: (s: GameState) => GameState) => void;
 }
 
+/** One item waiting for its search→pick→weight turn (see the queue state
+ * below) — a plain name from text recognition, or a name + Claude's own
+ * approximate gram estimate from photo recognition (Block 3: that estimate
+ * prefills the quantity step instead of the usual 100g/1pcs default). */
+interface QueueItem {
+  name: string;
+  estimatedGrams?: number;
+}
+
 const METRICS = [
   { key: "kcal", label: "Ккал", unit: "", color: STAT_META.strength.color },
   { key: "protein", label: "Белки", unit: "г", color: STAT_META.intellect.color },
@@ -61,16 +71,17 @@ export function NutritionCalculator({ state, update }: Props) {
   const [textInput, setTextInput] = useState("");
   const [parsingText, setParsingText] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [queue, setQueue] = useState<string[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   // How many items the CURRENT queue started with — queue itself only holds
   // what's left, so this is what lets the UI show "продукт 2 из 3".
   const [queueTotal, setQueueTotal] = useState(0);
 
   // Photo meal entry: pick/take a photo, compress it client-side (see
   // image-compress.ts), send it to parse-meal-photo for recognition, then
-  // feed the recognized item names into the SAME queue the text flow uses
-  // above — one search→pick→weight step per item, nothing photo-specific
-  // about that part.
+  // feed the recognized items (name + Claude's own gram estimate) into the
+  // SAME queue the text flow uses above — one search→pick→weight step per
+  // item, just with the weight step prefilled from the photo instead of a
+  // generic default (see addCandidate).
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -143,18 +154,28 @@ export function NutritionCalculator({ state, update }: Props) {
    * below — so nothing about precision is lost, just reordered: add first,
    * fine-tune the grams after, instead of fine-tuning before every add.
    *
-   * When a text-recognition queue is active (see handleParseText), adding a
-   * candidate also advances to the next recognized item automatically —
-   * that's the "спросить по очереди сколько грамм каждого" part of Block 4,
-   * reusing this exact same instant-add-then-edit-weight flow per item.
+   * When a text- or photo-recognition queue is active (see handleParseText/
+   * handlePhotoSelected), adding a candidate also advances to the next
+   * recognized item automatically — that's the "спросить по очереди сколько
+   * грамм каждого" part, reusing this exact same instant-add-then-edit-weight
+   * flow per item. If the queue item currently being resolved came from a
+   * photo and carries Claude's own gram estimate, that estimate becomes the
+   * starting amount (via amountForEstimatedGrams) instead of the generic
+   * default — the user still edits it below like any other value, just
+   * starting from an actual guess instead of a blank/generic 100g.
    */
   function addCandidate(candidate: ProductCandidate) {
+    const estimatedGrams = queue[0]?.estimatedGrams;
     const unit = suggestedUnitFor(candidate.label);
+    const amount =
+      estimatedGrams != null
+        ? amountForEstimatedGrams(unit, estimatedGrams)
+        : defaultAmountFor(unit);
     const item: MealDraftItem = {
       label: candidate.label,
       source: candidate.source,
       base: candidate.base,
-      amount: defaultAmountFor(unit),
+      amount,
       unit,
     };
     setDraftItems((prev) => [...prev, item]);
@@ -175,8 +196,8 @@ export function NutritionCalculator({ state, update }: Props) {
     const rest = queue.slice(1);
     setQueue(rest);
     if (rest.length > 0) {
-      setQuery(rest[0]);
-      void runSearch(rest[0]);
+      setQuery(rest[0].name);
+      void runSearch(rest[0].name);
     } else {
       setQuery("");
       setCandidates(null);
@@ -211,25 +232,28 @@ export function NutritionCalculator({ state, update }: Props) {
         return;
       }
       setTextInput("");
-      setQueue(items);
-      setQueueTotal(items.length);
-      setQuery(items[0]);
+      const wrapped: QueueItem[] = items.map((name) => ({ name }));
+      setQueue(wrapped);
+      setQueueTotal(wrapped.length);
+      setQuery(wrapped[0].name);
       searchInputRef.current?.focus();
-      await runSearch(items[0]);
+      await runSearch(wrapped[0].name);
     } finally {
       setParsingText(false);
     }
   }
 
   /**
-   * Photo meal entry, step 1: compress the picked/captured photo client-side
+   * Photo meal entry: compress the picked/captured photo client-side
    * (image-compress.ts — keeps the upload small and avoids sending a
    * multi-megabyte camera original), send it to parse-meal-photo for
-   * recognition, then feed the recognized item names into the exact same
-   * queue handleParseText populates above — one search→pick→weight step per
-   * item, no photo-specific UI beyond this point (yet — Block 3 prefills
-   * each item's weight from the AI's own gram estimate instead of the usual
-   * 100g/1pcs default; this block only wires up the names).
+   * recognition, then feed the recognized items into the exact same queue
+   * handleParseText populates above — one search→pick→weight step per item.
+   * Unlike the text flow, each queue entry here also carries Claude's own
+   * approximate gram estimate (see QueueItem/PhotoFoodItem), which
+   * addCandidate() uses to prefill the quantity step instead of the usual
+   * 100g/1pcs default — the user still edits it afterward like any other
+   * value, just starting from an actual guess.
    */
   async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -251,12 +275,15 @@ export function NutritionCalculator({ state, update }: Props) {
         );
         return;
       }
-      const names = result.items.map((i) => i.name);
-      setQueue(names);
-      setQueueTotal(names.length);
-      setQuery(names[0]);
+      const wrapped: QueueItem[] = result.items.map((i) => ({
+        name: i.name,
+        estimatedGrams: i.estimatedGrams,
+      }));
+      setQueue(wrapped);
+      setQueueTotal(wrapped.length);
+      setQuery(wrapped[0].name);
       searchInputRef.current?.focus();
-      await runSearch(names[0]);
+      await runSearch(wrapped[0].name);
     } catch (err) {
       console.warn("handlePhotoSelected: failed to process photo", err);
       setPhotoError("Не получилось обработать фото — попробуй ещё раз или введи вручную.");
@@ -403,7 +430,11 @@ export function NutritionCalculator({ state, update }: Props) {
         {queue.length > 0 ? (
           <p className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
             Продукт {queueTotal - queue.length + 1} из {queueTotal}:{" "}
-            <span className="font-medium">{queue[0]}</span> — выбери подходящий вариант ниже.{" "}
+            <span className="font-medium">{queue[0].name}</span>
+            {queue[0].estimatedGrams != null && (
+              <span className="text-primary/70"> (~{queue[0].estimatedGrams} г по фото)</span>
+            )}{" "}
+            — выбери подходящий вариант ниже.{" "}
             <button type="button" onClick={skipQueueItem} className="underline hover:no-underline">
               Пропустить
             </button>

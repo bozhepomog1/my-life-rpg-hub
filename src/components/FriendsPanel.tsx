@@ -115,14 +115,23 @@ export function FriendsPanel({ state, update }: Props) {
     const q = code.trim();
     if (!q) return;
     setSearch({ kind: "searching" });
-    const found = await findProfileByCode(q);
-    // Unlike the old email RPC, a direct table lookup has no built-in
-    // "never find yourself" guard — add it here on the client.
-    if (!found || found.user_id === myId) {
-      setSearch({ kind: "none" });
-      return;
+    try {
+      const found = await findProfileByCode(q);
+      // Unlike the old email RPC, a direct table lookup has no built-in
+      // "never find yourself" guard — add it here on the client.
+      if (!found || found.user_id === myId) {
+        setSearch({ kind: "none" });
+        return;
+      }
+      setSearch({ kind: "found", profile: found });
+    } catch (err) {
+      // findProfileByCode only ever throws for the rate limit (see
+      // profiles.ts) — everything else it already fails soft to null.
+      setSearch({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Не получилось выполнить поиск.",
+      });
     }
-    setSearch({ kind: "found", profile: found });
   }
 
   async function handleSend(toUser: string) {

@@ -94,12 +94,23 @@ export async function syncProfile(userId: string, state: GameState): Promise<voi
  *
  * Privacy is deliberately "soft" here: a private user IS still findable and
  * addable — only their progress comes back redacted until you're friends.
+ *
+ * Rate limited server-side (20/hour — see rate-limiting-migration.sql) to
+ * make brute-forcing the short_code space pointless. Unlike other failures
+ * here (network error, RLS denial), a rate-limit hit gets thrown as a
+ * distinct Error instead of quietly resolving to null — silently returning
+ * "not found" would look exactly like a wrong code instead of the
+ * deliberate throttle it actually is. Callers should catch it and show the
+ * message, same as any other user-facing action error in this app.
  */
 export async function findProfileByCode(code: string): Promise<PublicProfile | null> {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return null;
   const { data, error } = await supabase.rpc("find_profile_by_code", { p_code: normalized });
   if (error) {
+    if (error.message?.includes("RATE_LIMITED")) {
+      throw new Error("Слишком много попыток поиска по коду — подожди немного и попробуй снова.");
+    }
     console.warn("profile search failed", error);
     return null;
   }

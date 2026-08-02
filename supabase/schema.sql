@@ -554,6 +554,15 @@ $$;
 revoke all on function public.has_pending_request_with(uuid) from public, anon;
 grant execute on function public.has_pending_request_with(uuid) to authenticated;
 
+-- Rate-limited via public.check_rate_limit (section 11, further down —
+-- forward reference is fine, plpgsql bodies resolve other functions by
+-- name at call time, not at CREATE time, and section 11 has always run by
+-- the time this is actually called). 20 lookups/hour: generous for a human
+-- retrying a typo'd code, a hard stop on brute-forcing the short_code
+-- space. `language sql / stable` became `plpgsql` (no longer stable, since
+-- it now writes) so a rate-limited call can `raise exception` with a
+-- distinguishable message instead of silently returning nothing — see
+-- rate-limiting-migration.sql for the fuller writeup.
 drop function if exists public.find_profile_by_code(text);
 create or replace function public.find_profile_by_code(p_code text)
 returns table (
@@ -566,29 +575,35 @@ returns table (
   short_code text,
   is_private boolean
 )
-language sql
+language plpgsql
 security definer
-stable
 set search_path = public, pg_temp
 as $$
-  select
-    p.user_id,
-    p.username,
-    p.avatar,
-    case when not p.is_private or public.is_accepted_friend(p.user_id)
-         then p.total_xp end,
-    case when not p.is_private or public.is_accepted_friend(p.user_id)
-         then p.level end,
-    case when not p.is_private or public.is_accepted_friend(p.user_id)
-         then p.fitness_index end,
-    p.short_code,
-    p.is_private
-  from public.profiles p
-  where p_code is not null
-    and length(btrim(p_code)) > 0
-    and p.short_code = upper(btrim(p_code))
-    and p.user_id <> auth.uid()
-  limit 1;
+begin
+  if not public.check_rate_limit('find_profile_by_code', 20, 3600) then
+    raise exception 'RATE_LIMITED: too many code lookups, try again in a bit';
+  end if;
+
+  return query
+    select
+      p.user_id,
+      p.username,
+      p.avatar,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.total_xp end,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.level end,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.fitness_index end,
+      p.short_code,
+      p.is_private
+    from public.profiles p
+    where p_code is not null
+      and length(btrim(p_code)) > 0
+      and p.short_code = upper(btrim(p_code))
+      and p.user_id <> auth.uid()
+    limit 1;
+end;
 $$;
 
 revoke all on function public.find_profile_by_code(text) from public, anon;

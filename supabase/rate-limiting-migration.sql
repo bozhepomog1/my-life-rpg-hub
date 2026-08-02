@@ -105,3 +105,62 @@ $$;
 
 revoke all on function public.check_rate_limit(text, integer, integer) from public, anon;
 grant execute on function public.check_rate_limit(text, integer, integer) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────
+-- find_profile_by_code(): re-created here to add the rate-limit check.
+-- Identical to the version in schema.sql section 7 otherwise — kept in
+-- sync there too since a fresh install runs schema.sql alone.
+--
+-- A normal person looks up a friend's code once or twice per attempt
+-- (typo, retry); 20/hour is generous for that while making systematic
+-- brute force of the short_code space pointless. Was `language sql /
+-- stable` before — switched to `plpgsql` (no longer `stable`, since it now
+-- writes via check_rate_limit) so it can `raise exception` on the limit
+-- instead of silently returning nothing, which would look identical to "no
+-- such code" and hide the real reason from the user.
+-- ─────────────────────────────────────────────────────────────
+drop function if exists public.find_profile_by_code(text);
+create or replace function public.find_profile_by_code(p_code text)
+returns table (
+  user_id uuid,
+  username text,
+  avatar text,
+  total_xp integer,
+  level integer,
+  fitness_index integer,
+  short_code text,
+  is_private boolean
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.check_rate_limit('find_profile_by_code', 20, 3600) then
+    raise exception 'RATE_LIMITED: too many code lookups, try again in a bit';
+  end if;
+
+  return query
+    select
+      p.user_id,
+      p.username,
+      p.avatar,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.total_xp end,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.level end,
+      case when not p.is_private or public.is_accepted_friend(p.user_id)
+           then p.fitness_index end,
+      p.short_code,
+      p.is_private
+    from public.profiles p
+    where p_code is not null
+      and length(btrim(p_code)) > 0
+      and p.short_code = upper(btrim(p_code))
+      and p.user_id <> auth.uid()
+    limit 1;
+end;
+$$;
+
+revoke all on function public.find_profile_by_code(text) from public, anon;
+grant execute on function public.find_profile_by_code(text) to authenticated;

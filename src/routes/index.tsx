@@ -22,6 +22,7 @@ import { QuestCard } from "@/components/QuestCard";
 import { AddQuestModal } from "@/components/AddQuestModal";
 import { DepositSection } from "@/components/DepositSection";
 import { BossQuestCard } from "@/components/BossQuestCard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MarathonCard } from "@/components/MarathonCard";
 import { DisciplineCalendar } from "@/components/DisciplineCalendar";
 import { SeasonProgress } from "@/components/SeasonProgress";
@@ -535,7 +536,9 @@ function Home() {
 
         <SeasonProgress season={state.season} />
 
-        <BossQuestCard state={state} bossQuest={state.bossQuest} />
+        <ErrorBoundary sectionName="Испытание недели">
+          <BossQuestCard state={state} bossQuest={state.bossQuest} />
+        </ErrorBoundary>
 
         <MarathonCard
           state={state}

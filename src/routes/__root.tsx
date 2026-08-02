@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initSentry, captureError } from "../lib/sentry";
 import { AuthGate } from "../components/AuthGate";
 import { AuthProvider } from "../lib/auth-context";
 import { GameStateProvider } from "../lib/game-state-context";
@@ -46,6 +47,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    captureError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (
@@ -167,6 +169,12 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Client-only (initSentry() itself also guards on `typeof window`) — runs
+  // once per page load, no-ops entirely if VITE_SENTRY_DSN isn't set.
+  useEffect(() => {
+    initSentry();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -636,7 +636,192 @@ revoke all on function public.get_visible_profiles(uuid[]) from public, anon;
 grant execute on function public.get_visible_profiles(uuid[]) to authenticated;
 
 -- ─────────────────────────────────────────────────────────────
--- 10. Auth settings (do this in the Dashboard, not SQL):
+-- 10. RLS audit fixes.
+--
+--    Kept identical to rls-audit-fixes.sql (which is what an existing
+--    install runs); this section exists so a FRESH install from schema.sql
+--    alone ends up in exactly the same state. See that file's header for
+--    the full audit write-up of every table. Short version of what was
+--    wrong and is fixed below:
+--
+--    • friend_requests INSERT accepted any status — so a single direct API
+--      call with status='accepted' made you an accepted friend of any user
+--      whose uuid you knew, with zero action from them. That unlocks
+--      is_accepted_friend() → their friend_profiles row (stats, streaks,
+--      achievements) and their full profiles row even when private.
+--      Now: insert is forced to status='pending', and no self-requests.
+--    • friend_requests UPDATE let the SENDER accept their own request
+--      (same escalation, one step longer). Now: only the recipient
+--      (to_user) may update.
+--    • friend_requests UPDATE let either party rewrite from_user/to_user,
+--      forging a friendship with an uninvolved third party. WITH CHECK
+--      can't express "this column may not change", so a trigger does it.
+--    • user_emails let you store ANY address in your own row, letting you
+--      squat an unregistered address and be found as its owner. Now a
+--      SECURITY DEFINER trigger requires it to match auth.users.email.
+--    • Missing DELETE policies (profiles, friend_profiles, user_emails)
+--      and missing anon revokes on friend_requests/friend_profiles/
+--      user_emails — both fail-closed already, completed here.
+-- ─────────────────────────────────────────────────────────────
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'friend_requests_no_self'
+  ) then
+    alter table public.friend_requests
+      add constraint friend_requests_no_self check (from_user <> to_user) not valid;
+  end if;
+end $$;
+
+drop policy if exists "send friend_request" on public.friend_requests;
+create policy "send friend_request"
+  on public.friend_requests for insert
+  to authenticated
+  with check (
+    auth.uid() = from_user
+    and from_user <> to_user
+    and status = 'pending'
+  );
+
+drop policy if exists "update own friend_requests" on public.friend_requests;
+drop policy if exists "respond to received friend_request" on public.friend_requests;
+create policy "respond to received friend_request"
+  on public.friend_requests for update
+  to authenticated
+  using (auth.uid() = to_user)
+  with check (auth.uid() = to_user);
+
+create or replace function public.enforce_friend_request_update()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.from_user is distinct from old.from_user
+     or new.to_user is distinct from old.to_user then
+    raise exception 'friend_request participants cannot be changed';
+  end if;
+  if new.id is distinct from old.id or new.created_at is distinct from old.created_at then
+    raise exception 'friend_request identity/created_at cannot be changed';
+  end if;
+  if new.status not in ('accepted', 'declined') then
+    raise exception 'friend_request status can only be changed to accepted or declined';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_friend_requests_guard on public.friend_requests;
+create trigger trg_friend_requests_guard
+  before update on public.friend_requests
+  for each row execute function public.enforce_friend_request_update();
+
+create or replace function public.enforce_own_email()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+declare
+  real_email text;
+begin
+  select u.email into real_email from auth.users u where u.id = new.user_id;
+  if real_email is null then
+    raise exception 'no auth user for %', new.user_id;
+  end if;
+  if lower(btrim(new.email)) is distinct from lower(btrim(real_email)) then
+    raise exception 'user_emails.email must match the account''s own email';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_user_emails_own_address on public.user_emails;
+create trigger trg_user_emails_own_address
+  before insert or update on public.user_emails
+  for each row execute function public.enforce_own_email();
+
+drop policy if exists "delete own profile" on public.profiles;
+create policy "delete own profile"
+  on public.profiles for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "delete own extended profile" on public.friend_profiles;
+create policy "delete own extended profile"
+  on public.friend_profiles for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "delete own email" on public.user_emails;
+create policy "delete own email"
+  on public.user_emails for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+revoke all on public.friend_requests from anon;
+grant select, insert, update, delete on public.friend_requests to authenticated;
+revoke all on public.friend_profiles from anon;
+grant select, insert, update, delete on public.friend_profiles to authenticated;
+revoke all on public.user_emails from anon;
+grant select, insert, update, delete on public.user_emails to authenticated;
+revoke all on public.profiles from anon;
+grant select, insert, update, delete on public.profiles to authenticated;
+
+-- Storage policies restated with an explicit `to authenticated` and an
+-- explicit WITH CHECK on UPDATE (see section 2 — this bucket also holds
+-- avatars and backgrounds, all under the same "<user_id>/..." prefix).
+drop policy if exists "read own quest photos" on storage.objects;
+create policy "read own quest photos"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'quest-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "upload own quest photos" on storage.objects;
+create policy "upload own quest photos"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'quest-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "update own quest photos" on storage.objects;
+create policy "update own quest photos"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'quest-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  )
+  with check (
+    bucket_id = 'quest-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "delete own quest photos" on storage.objects;
+create policy "delete own quest photos"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'quest-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+alter function public.set_updated_at() set search_path = public, pg_temp;
+alter function public.generate_short_code() set search_path = public, pg_temp;
+alter function public.set_profile_short_code() set search_path = public, pg_temp;
+alter function public.prevent_short_code_change() set search_path = public, pg_temp;
+
+-- NOTE: push_subscriptions (and its RLS) lives in
+-- push-notifications-migration.sql, not here — run that file too. It is
+-- also restated in rls-audit-fixes.sql for exactly this reason.
+
+-- ─────────────────────────────────────────────────────────────
+-- 11. Auth settings (do this in the Dashboard, not SQL):
 --    Authentication → Providers → Email: enable "Email" provider.
 --    Authentication → URL Configuration: set Site URL and add your
 --    dev/prod URLs (e.g. http://localhost:3000, your deployed domain)

@@ -9,6 +9,7 @@ import { DepositSetupModal } from "@/components/DepositSetupModal";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { isValidHex } from "@/lib/color";
 import { signOut } from "@/lib/auth";
+import { downloadAccountData, deleteAccount } from "@/lib/account-data";
 import { useTheme } from "@/hooks/use-theme";
 import {
   ACCENT_PRESETS,
@@ -75,6 +76,11 @@ export function SettingsPanel({ state, update, setState }: Props) {
   const [category, setCategory] = useState<SettingsCategory>("account");
   const [newReminderHour, setNewReminderHour] = useState("9");
   const { theme, setTheme } = useTheme();
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function copyMyCode() {
     if (!myCode) return;
@@ -202,6 +208,41 @@ export function SettingsPanel({ state, update, setState }: Props) {
   function resetAll() {
     setState(defaultState());
     setConfirmOpen(false);
+  }
+
+  /** Full personal-data export — everything stored server-side, not just
+   * the local GameState that exportBackup() above dumps. */
+  async function handleExportData() {
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const error = await downloadAccountData();
+      if (error) setExportError(error);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    const result = await deleteAccount();
+    if (!result.ok) {
+      setDeleteBusy(false);
+      setDeleteError(result.message ?? "Не получилось удалить аккаунт.");
+      return;
+    }
+    // The account is gone server-side; clear the local session and cached
+    // state so the app doesn't keep rendering a now-nonexistent user, then
+    // land on a clean signed-out page.
+    setDeleteOpen(false);
+    try {
+      await signOut();
+    } catch {
+      // Session cleanup is best-effort — the account is already deleted,
+      // so a failure here shouldn't look like the deletion failed.
+    }
+    window.location.href = "/";
   }
 
   function applyPreset(colors: AccentColors) {
@@ -1050,6 +1091,31 @@ export function SettingsPanel({ state, update, setState }: Props) {
       )}
 
       {category === "account" && (
+        <section className="panel p-6">
+          <h2 className="text-sm font-semibold">Мои данные</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Выгрузит всё, что хранится о тебе на сервере: прогресс, профиль, заявки в друзья,
+            подписки на уведомления, адрес почты и список загруженных файлов — одним JSON-файлом.
+            Это шире, чем резервная копия выше: та нужна для переноса прогресса, а эта отвечает на
+            вопрос «что вообще обо мне есть».
+          </p>
+          <button
+            type="button"
+            onClick={handleExportData}
+            disabled={exportBusy}
+            className="mt-3 rounded-full border border-border px-4 py-2 text-sm font-medium transition-all enabled:hover:-translate-y-0.5 enabled:hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportBusy ? "Собираем данные…" : "Скачать мои данные"}
+          </button>
+          {exportError && (
+            <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-destructive">
+              {exportError}
+            </p>
+          )}
+        </section>
+      )}
+
+      {category === "account" && (
         <section className="panel border-destructive/30 p-6">
           <h2 className="text-sm font-semibold text-destructive">Опасная зона</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -1063,6 +1129,29 @@ export function SettingsPanel({ state, update, setState }: Props) {
           >
             Сбросить весь прогресс
           </button>
+
+          {/* Deliberately a separate block from "сбросить прогресс" above,
+              with its own heading and a stronger confirmation — the two are
+              easy to confuse, and only one of them is unrecoverable. */}
+          <div className="mt-6 border-t border-destructive/20 pt-5">
+            <h3 className="text-sm font-semibold text-destructive">Удалить аккаунт</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Полностью и безвозвратно удалит аккаунт и все связанные с ним данные: прогресс,
+              профиль, заявки в друзья, подписки на уведомления, адрес почты и все загруженные фото.
+              Восстановить или отменить это будет нельзя. У друзей ты просто пропадёшь из списка.
+              Если хочешь оставить что-то себе — сначала скачай свои данные выше.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+              className="mt-3 rounded-full bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-all hover:-translate-y-0.5 hover:opacity-90"
+            >
+              Удалить аккаунт навсегда
+            </button>
+          </div>
         </section>
       )}
 
@@ -1082,6 +1171,86 @@ export function SettingsPanel({ state, update, setState }: Props) {
           <ResetConfirmModal onCancel={() => setConfirmOpen(false)} onConfirm={resetAll} />,
           document.body,
         )}
+
+      {deleteOpen &&
+        createPortal(
+          <DeleteAccountModal
+            busy={deleteBusy}
+            error={deleteError}
+            onCancel={() => setDeleteOpen(false)}
+            onConfirm={handleDeleteAccount}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+const DELETE_CONFIRM_WORD = "УДАЛИТЬ";
+
+/** Account deletion is the one irreversible action in the app that also
+ * takes server-side data with it, so a single "are you sure" button isn't
+ * enough — the confirm button stays disabled until the word is typed out,
+ * which makes an accidental double-click impossible. */
+function DeleteAccountModal({
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const confirmed = typed.trim().toUpperCase() === DELETE_CONFIRM_WORD;
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] grid place-items-center bg-background/80 p-4 backdrop-blur-sm"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div className="panel-glow w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-destructive">Удалить аккаунт навсегда?</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Будут безвозвратно удалены весь прогресс, профиль, заявки в друзья, подписки на
+          уведомления, адрес почты и все загруженные фото. Отменить это нельзя.
+        </p>
+        <label className="mt-4 block text-xs font-medium text-muted-foreground">
+          Для подтверждения введи слово {DELETE_CONFIRM_WORD}
+        </label>
+        <input
+          type="text"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          disabled={busy}
+          autoFocus
+          placeholder={DELETE_CONFIRM_WORD}
+          className="mt-1.5 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm uppercase tracking-widest outline-none focus:border-destructive disabled:opacity-50"
+        />
+        {error && (
+          <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-destructive">{error}</p>
+        )}
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="flex-1 rounded-xl border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!confirmed || busy}
+            className="flex-1 rounded-xl bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? "Удаляем…" : "Удалить"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

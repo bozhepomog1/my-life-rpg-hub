@@ -931,6 +931,89 @@ export async function parseMealText(text: string): Promise<string[]> {
   }
 }
 
+/** One food item recognized in a photo, with Claude's own approximate weight
+ * estimate — unlike parseMealText's plain name list, the photo-recognition
+ * Edge Function (parse-meal-photo) also returns a gram estimate per item
+ * since that's the whole point of photo recognition (no scale reference, so
+ * the app can't derive weight the way it does for text/manual entry — see
+ * NutritionCalculator's queue-with-estimatedGrams handling). */
+export interface PhotoFoodItem {
+  name: string;
+  estimatedGrams: number;
+}
+
+export interface ParseMealPhotoResult {
+  items: PhotoFoodItem[];
+  /** Set when items is empty — a short, honest reason (no food visible, too
+   * dark/blurry, etc.) surfaced to the user instead of a generic failure. */
+  note?: string;
+}
+
+/**
+ * Photo meal entry: sends a compressed (see image-compress.ts) photo to the
+ * parse-meal-photo Edge Function, which calls Claude's vision API
+ * server-side and returns recognized food items with approximate weights.
+ * Same fail-soft contract as parseMealText — never throws, any failure
+ * resolves to an empty item list with a user-facing `note` explaining what
+ * to do next (retry with another photo, or fall back to text/manual entry).
+ */
+export async function parseMealPhoto(
+  base64: string,
+  mediaType: string,
+): Promise<ParseMealPhotoResult> {
+  const FAILURE_NOTE = "Не получилось отправить фото на распознавание — попробуй ещё раз.";
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      items?: unknown;
+      note?: string;
+      error?: string;
+    }>("parse-meal-photo", { body: { image: base64, mediaType } });
+
+    if (error) {
+      console.warn("parseMealPhoto: Edge Function invoke failed", error);
+      return { items: [], note: FAILURE_NOTE };
+    }
+    if (!data) {
+      console.warn("parseMealPhoto: Edge Function returned no data");
+      return { items: [], note: FAILURE_NOTE };
+    }
+    if (data.error) {
+      console.warn("parseMealPhoto: Edge Function returned an error", data.error);
+      return { items: [], note: FAILURE_NOTE };
+    }
+
+    const rawItems = Array.isArray(data.items) ? data.items : [];
+    const items: PhotoFoodItem[] = rawItems
+      .map((raw): PhotoFoodItem | null => {
+        if (typeof raw !== "object" || raw === null) return null;
+        const r = raw as Record<string, unknown>;
+        const name = typeof r.name === "string" ? r.name.trim() : "";
+        const estimatedGrams =
+          typeof r.estimatedGrams === "number" && Number.isFinite(r.estimatedGrams)
+            ? Math.max(0, Math.round(r.estimatedGrams))
+            : 0;
+        if (!name || estimatedGrams <= 0) return null;
+        return { name, estimatedGrams };
+      })
+      .filter((i): i is PhotoFoodItem => i !== null)
+      .slice(0, 10);
+
+    if (items.length === 0) {
+      return {
+        items: [],
+        note:
+          typeof data.note === "string" && data.note.trim()
+            ? data.note.trim()
+            : "Не получилось распознать еду на фото — попробуй другое фото или найди вручную ниже.",
+      };
+    }
+    return { items };
+  } catch (e) {
+    console.warn("parseMealPhoto: unexpected exception", e);
+    return { items: [], note: FAILURE_NOTE };
+  }
+}
+
 /** Units offered on the quantity step, in the app's canonical display order. */
 export const PORTION_UNITS = [
   "g",

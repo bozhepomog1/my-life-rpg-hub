@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Camera } from "lucide-react";
 import { ProgressBar } from "@/components/ProgressBar";
 import { FeedbackToast } from "@/components/FeedbackToast";
 import {
@@ -19,6 +20,7 @@ import {
   getTodayNutrition,
   looksLikeMultipleProducts,
   MONTHLY_CHEAT_LIMIT,
+  parseMealPhoto,
   parseMealText,
   PORTION_UNIT_LABELS,
   PORTION_UNITS,
@@ -30,6 +32,7 @@ import {
   type PortionUnit,
   type ProductCandidate,
 } from "@/lib/nutrition";
+import { compressImageToBase64 } from "@/lib/image-compress";
 
 interface Props {
   state: GameState;
@@ -62,6 +65,15 @@ export function NutritionCalculator({ state, update }: Props) {
   // How many items the CURRENT queue started with — queue itself only holds
   // what's left, so this is what lets the UI show "продукт 2 из 3".
   const [queueTotal, setQueueTotal] = useState(0);
+
+  // Photo meal entry: pick/take a photo, compress it client-side (see
+  // image-compress.ts), send it to parse-meal-photo for recognition, then
+  // feed the recognized item names into the SAME queue the text flow uses
+  // above — one search→pick→weight step per item, nothing photo-specific
+  // about that part.
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const [draftItems, setDraftItems] = useState<MealDraftItem[]>([]);
   // Brief inline confirmation after an instant-add — cleared by the next
@@ -209,6 +221,50 @@ export function NutritionCalculator({ state, update }: Props) {
     }
   }
 
+  /**
+   * Photo meal entry, step 1: compress the picked/captured photo client-side
+   * (image-compress.ts — keeps the upload small and avoids sending a
+   * multi-megabyte camera original), send it to parse-meal-photo for
+   * recognition, then feed the recognized item names into the exact same
+   * queue handleParseText populates above — one search→pick→weight step per
+   * item, no photo-specific UI beyond this point (yet — Block 3 prefills
+   * each item's weight from the AI's own gram estimate instead of the usual
+   * 100g/1pcs default; this block only wires up the names).
+   */
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset the input so picking the exact same file again still fires onChange.
+    e.target.value = "";
+    if (!file) return;
+
+    setSaved(false);
+    setJustAdded(null);
+    setPhotoError(null);
+    setPhotoBusy(true);
+    try {
+      const { base64, mediaType } = await compressImageToBase64(file);
+      const result = await parseMealPhoto(base64, mediaType);
+      if (result.items.length === 0) {
+        setPhotoError(
+          result.note ??
+            "Не получилось распознать еду на фото — попробуй другое фото или найди вручную ниже.",
+        );
+        return;
+      }
+      const names = result.items.map((i) => i.name);
+      setQueue(names);
+      setQueueTotal(names.length);
+      setQuery(names[0]);
+      searchInputRef.current?.focus();
+      await runSearch(names[0]);
+    } catch (err) {
+      console.warn("handlePhotoSelected: failed to process photo", err);
+      setPhotoError("Не получилось обработать фото — попробуй ещё раз или введи вручную.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   function updateDraftItem(index: number, patch: Partial<Pick<MealDraftItem, "amount" | "unit">>) {
     setDraftItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   }
@@ -307,6 +363,39 @@ export function NutritionCalculator({ state, update }: Props) {
           {parseError && (
             <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
               {parseError}
+            </p>
+          )}
+
+          <div className="mt-3 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-[10px] uppercase text-muted-foreground/70">или</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={photoBusy}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Camera size={15} />
+            {photoBusy ? "Распознаём фото…" : "Добавить по фото"}
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoSelected}
+            className="hidden"
+          />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Сфотографируй тарелку или выбери фото из галереи — распознаем продукты и прикинем вес
+            каждого, а точные калории всё равно возьмём из базы.
+          </p>
+          {photoError && (
+            <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              {photoError}
             </p>
           )}
         </div>

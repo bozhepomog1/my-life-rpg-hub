@@ -235,10 +235,11 @@ export function NutritionCalculator({ state, update }: Props) {
     setParsingText(true);
     setParseError(null);
     try {
-      const items = await parseMealText(trimmed);
+      const { items, note } = await parseMealText(trimmed);
       if (items.length === 0) {
         setParseError(
-          "Не получилось распознать отдельные продукты в тексте — попробуй переформулировать или найди их вручную ниже.",
+          note ??
+            "Не получилось распознать отдельные продукты в тексте — попробуй переформулировать или найди их вручную ниже.",
         );
         return;
       }

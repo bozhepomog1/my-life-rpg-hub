@@ -40,6 +40,16 @@ const CORS_HEADERS = {
 
 const JSON_HEADERS = { ...CORS_HEADERS, "content-type": "application/json" };
 
+// Cheap model, short prompt/response — generous enough for genuine "log a
+// few meals a day" use (even several corrections/retries), but a clear cap
+// on anything that isn't a human describing meals one at a time. Shares its
+// mechanism (public.check_rate_limit, rate-limiting-migration.sql) with
+// parse-meal-photo and find_profile_by_code — see that migration's header
+// for the full design writeup.
+const RATE_LIMIT_ACTION = "parse_meal_text";
+const RATE_LIMIT_MAX_PER_DAY = 50;
+const RATE_LIMIT_WINDOW_SECONDS = 24 * 60 * 60;
+
 // Original v1 of this function asked Claude to "return ONLY a JSON array"
 // in plain text and parsed that with JSON.parse (after stripping ``` fences).
 // That's brittle: a fast/terse model like Haiku will sometimes wrap a short
@@ -101,6 +111,32 @@ Deno.serve(async (req) => {
       status: 401,
       headers: JSON_HEADERS,
     });
+  }
+
+  // Checked (and recorded) BEFORE touching the request body or calling
+  // Claude — the whole point is to never spend the metered API call once
+  // the user is over their limit. `rateLimited: true` (plus a 200, not an
+  // error status) lets the client show a friendly explanation the same way
+  // it already does for "nothing recognized" — see nutrition.ts.
+  const { data: withinLimit, error: rateLimitError } = await supabase.rpc("check_rate_limit", {
+    p_action: RATE_LIMIT_ACTION,
+    p_limit: RATE_LIMIT_MAX_PER_DAY,
+    p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (rateLimitError) {
+    // Fail open on an infra error checking the limit (e.g. migration not
+    // yet applied) rather than blocking a legitimate request over it — but
+    // log it so a persistently-missing rate_limits table doesn't go unnoticed.
+    console.warn("parse-meal-text: rate limit check failed", rateLimitError);
+  } else if (withinLimit === false) {
+    return new Response(
+      JSON.stringify({
+        items: [],
+        rateLimited: true,
+        note: "Превышен дневной лимит распознавания текста. Попробуй позже или найди продукт вручную ниже.",
+      }),
+      { headers: JSON_HEADERS },
+    );
   }
 
   let text = "";

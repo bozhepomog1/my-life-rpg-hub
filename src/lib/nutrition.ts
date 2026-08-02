@@ -878,6 +878,14 @@ export function looksLikeMultipleProducts(query: string): boolean {
   return q.includes(",") || q.includes(" с ");
 }
 
+/** Result of a text meal-parse call — mirrors ParseMealPhotoResult below so
+ * both entry points can surface a `note` to the user the same way (empty
+ * recognition, or the daily rate limit — see parse-meal-text/index.ts). */
+export interface ParseMealTextResult {
+  items: string[];
+  note?: string;
+}
+
 /**
  * Free-text meal entry ("гречка с курицей" → ["гречка", "курица"]) — calls
  * the parse-meal-text Supabase Edge Function, which itself calls the Claude
@@ -890,19 +898,20 @@ export function looksLikeMultipleProducts(query: string): boolean {
  * truth, Claude never estimates calories itself.
  *
  * Never throws — any failure (offline, not logged in, malformed response,
- * Edge Function not deployed yet) resolves to an empty array, matching
- * searchOpenFoodFacts/searchProducts's "fail soft" convention, so the UI can
- * just show "couldn't recognize anything, try searching manually" instead
- * of crashing.
+ * Edge Function not deployed yet, over the daily rate limit) resolves to an
+ * empty item list, matching searchOpenFoodFacts/searchProducts's "fail soft"
+ * convention, with `note` carrying a user-facing reason when the Edge
+ * Function provided one (rate-limited or "nothing recognized" both do).
  */
-export async function parseMealText(text: string): Promise<string[]> {
+export async function parseMealText(text: string): Promise<ParseMealTextResult> {
   const trimmed = text.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return { items: [] };
   try {
-    const { data, error } = await supabase.functions.invoke<{ items?: unknown; error?: string }>(
-      "parse-meal-text",
-      { body: { text: trimmed } },
-    );
+    const { data, error } = await supabase.functions.invoke<{
+      items?: unknown;
+      note?: string;
+      error?: string;
+    }>("parse-meal-text", { body: { text: trimmed } });
     // Still resolves to [] on any failure (fail-soft — see doc comment
     // above), but logs *why* to the browser console instead of swallowing
     // it silently, so a real problem (function not deployed, missing
@@ -910,24 +919,28 @@ export async function parseMealText(text: string): Promise<string[]> {
     // found nothing" without needing Supabase dashboard log access.
     if (error) {
       console.warn("parseMealText: Edge Function invoke failed", error);
-      return [];
+      return { items: [] };
     }
     if (!data) {
       console.warn("parseMealText: Edge Function returned no data");
-      return [];
+      return { items: [] };
     }
     if (data.error) {
       console.warn("parseMealText: Edge Function returned an error", data.error);
-      return [];
+      return { items: [] };
     }
     if (!Array.isArray(data.items)) {
       console.warn("parseMealText: unexpected response shape", data);
-      return [];
+      return { items: [] };
     }
-    return data.items.filter((i): i is string => typeof i === "string" && i.trim().length > 0);
+    const items = data.items.filter(
+      (i): i is string => typeof i === "string" && i.trim().length > 0,
+    );
+    const note = typeof data.note === "string" && data.note.trim() ? data.note.trim() : undefined;
+    return { items, note };
   } catch (e) {
     console.warn("parseMealText: unexpected exception", e);
-    return [];
+    return { items: [] };
   }
 }
 

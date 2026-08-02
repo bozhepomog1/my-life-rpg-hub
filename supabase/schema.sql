@@ -821,7 +821,71 @@ alter function public.prevent_short_code_change() set search_path = public, pg_t
 -- also restated in rls-audit-fixes.sql for exactly this reason.
 
 -- ─────────────────────────────────────────────────────────────
--- 11. Auth settings (do this in the Dashboard, not SQL):
+-- 11. Rate limiting for expensive/sensitive per-user operations.
+--
+--    Kept identical to rate-limiting-migration.sql (what an existing
+--    install runs); this section exists so a FRESH install from schema.sql
+--    alone ends up in exactly the same state. See that file's header for
+--    the full design writeup — short version: one shared table + one
+--    SECURITY DEFINER function, called from parse-meal-text/parse-meal-photo
+--    (Edge Functions, guards against unmetered Claude API spend) and from
+--    find_profile_by_code() below in section 7 (guards against short_code
+--    brute-force enumeration).
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.rate_limits (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  action text not null,
+  window_start timestamptz not null default now(),
+  request_count integer not null default 0,
+  primary key (user_id, action)
+);
+
+alter table public.rate_limits enable row level security;
+revoke all on public.rate_limits from public, anon, authenticated;
+
+drop function if exists public.check_rate_limit(text, integer, integer);
+create or replace function public.check_rate_limit(
+  p_action text,
+  p_limit integer,
+  p_window_seconds integer
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_count integer;
+begin
+  if v_user is null then
+    return false;
+  end if;
+
+  insert into public.rate_limits (user_id, action, window_start, request_count)
+  values (v_user, p_action, now(), 1)
+  on conflict (user_id, action) do update
+    set request_count = case
+          when public.rate_limits.window_start <= now() - make_interval(secs => p_window_seconds)
+            then 1
+          else public.rate_limits.request_count + 1
+        end,
+        window_start = case
+          when public.rate_limits.window_start <= now() - make_interval(secs => p_window_seconds)
+            then now()
+          else public.rate_limits.window_start
+        end
+  returning request_count into v_count;
+
+  return v_count <= p_limit;
+end;
+$$;
+
+revoke all on function public.check_rate_limit(text, integer, integer) from public, anon;
+grant execute on function public.check_rate_limit(text, integer, integer) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────
+-- 12. Auth settings (do this in the Dashboard, not SQL):
 --    Authentication → Providers → Email: enable "Email" provider.
 --    Authentication → URL Configuration: set Site URL and add your
 --    dev/prod URLs (e.g. http://localhost:3000, your deployed domain)

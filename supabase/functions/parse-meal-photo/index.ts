@@ -44,6 +44,17 @@ const ALLOWED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "i
 // defense).
 const MAX_BASE64_CHARS = 7_000_000;
 
+// Sonnet + vision tokens cost noticeably more per call than parse-meal-text's
+// Haiku/text-only path, so this limit is tighter — still generous for a
+// human photographing a few meals a day, but a much lower ceiling on
+// automated abuse than the text limit. Shares its mechanism
+// (public.check_rate_limit, rate-limiting-migration.sql) with
+// parse-meal-text and find_profile_by_code — see that migration's header
+// for the full design writeup.
+const RATE_LIMIT_ACTION = "parse_meal_photo";
+const RATE_LIMIT_MAX_PER_DAY = 15;
+const RATE_LIMIT_WINDOW_SECONDS = 24 * 60 * 60;
+
 const SYSTEM_PROMPT = `Ты распознаёшь еду на фотографии тарелки или приёма пищи и оцениваешь примерный вес каждого продукта в граммах.
 
 На фото нет объекта для масштаба (линейки, монеты и т.п.) — оценка веса всегда лишь приблизительная, на глаз по объёму и размеру порции относительно тарелки/посуды. Будь консервативен и честен:
@@ -117,6 +128,27 @@ Deno.serve(async (req) => {
       status: 401,
       headers: JSON_HEADERS,
     });
+  }
+
+  // Checked BEFORE reading the request body or calling Claude — see
+  // parse-meal-text for the identical pattern and the rationale (never
+  // spend the metered vision API call once the user is over their limit).
+  const { data: withinLimit, error: rateLimitError } = await supabase.rpc("check_rate_limit", {
+    p_action: RATE_LIMIT_ACTION,
+    p_limit: RATE_LIMIT_MAX_PER_DAY,
+    p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (rateLimitError) {
+    console.warn("parse-meal-photo: rate limit check failed", rateLimitError);
+  } else if (withinLimit === false) {
+    return new Response(
+      JSON.stringify({
+        items: [],
+        rateLimited: true,
+        note: "Превышен дневной лимит распознавания фото. Попробуй позже, опиши текстом выше или найди продукт вручную ниже.",
+      }),
+      { headers: JSON_HEADERS },
+    );
   }
 
   let image = "";

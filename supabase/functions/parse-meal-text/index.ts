@@ -24,6 +24,9 @@
 // call per request, so it shouldn't be reachable without a valid session
 // even if verify_jwt were ever accidentally disabled).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { initEdgeSentry, captureAndFlush } from "../_shared/sentry.ts";
+
+initEdgeSentry("parse-meal-text");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 // SUPABASE_URL / SUPABASE_ANON_KEY are auto-injected into every Edge
@@ -126,8 +129,10 @@ Deno.serve(async (req) => {
   if (rateLimitError) {
     // Fail open on an infra error checking the limit (e.g. migration not
     // yet applied) rather than blocking a legitimate request over it — but
-    // log it so a persistently-missing rate_limits table doesn't go unnoticed.
-    console.warn("parse-meal-text: rate limit check failed", rateLimitError);
+    // report it so a persistently-missing rate_limits table doesn't go
+    // unnoticed (rateLimitError.message is Postgres's own error text, not
+    // anything the user typed).
+    await captureAndFlush(new Error(rateLimitError.message), { stage: "rate_limit_check" });
   } else if (withinLimit === false) {
     return new Response(
       JSON.stringify({
@@ -179,6 +184,15 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       console.warn("Claude API error", res.status, await res.text());
+      // Only the HTTP status goes to Sentry — never the response body or
+      // `text` (the user's meal description). Anthropic's own error bodies
+      // can sometimes echo back fragments of the offending request, so this
+      // deliberately doesn't forward that text at all, only the status
+      // code, matching item 3's "no nutrition content" rule.
+      await captureAndFlush(new Error(`Claude API error ${res.status}`), {
+        stage: "claude_api_call",
+        status: res.status,
+      });
       return new Response(JSON.stringify({ error: "Claude API request failed" }), {
         status: 502,
         headers: JSON_HEADERS,
@@ -207,7 +221,9 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ items }), { headers: JSON_HEADERS });
   } catch (e) {
-    console.error("parse-meal-text failed", e);
+    // Never includes `text` (the user's meal description) — just the
+    // exception itself and a stage label.
+    await captureAndFlush(e, { stage: "handler" });
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: JSON_HEADERS,

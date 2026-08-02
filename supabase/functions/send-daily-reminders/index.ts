@@ -34,6 +34,9 @@
 // here rather than something that needs bundling/vendoring.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import { initEdgeSentry, captureAndFlush } from "../_shared/sentry.ts";
+
+initEdgeSentry("send-daily-reminders");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -91,6 +94,23 @@ function dailyQuestsRemaining(state: GameStateShape): { total: number; remaining
 }
 
 Deno.serve(async (_req) => {
+  try {
+    return await handleDailyReminders();
+  } catch (e) {
+    // pg_cron doesn't retry or alert on a failed invocation on its own — a
+    // silently-broken cron run would otherwise just mean nobody gets
+    // reminders until someone happens to notice, so this is the one
+    // Edge Function here where an uncaught exception genuinely needs a
+    // human notified, not just logged for later.
+    await captureAndFlush(e, { stage: "handler" });
+    return new Response(JSON.stringify({ error: "Internal error" }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    });
+  }
+});
+
+async function handleDailyReminders(): Promise<Response> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     return new Response(
       JSON.stringify({
@@ -110,6 +130,7 @@ Deno.serve(async (_req) => {
     .select("user_id, state");
 
   if (gameStatesError) {
+    await captureAndFlush(new Error(gameStatesError.message), { stage: "fetch_game_states" });
     return new Response(JSON.stringify({ error: gameStatesError.message }), {
       status: 500,
       headers: { "content-type": "application/json" },
@@ -153,7 +174,7 @@ Deno.serve(async (_req) => {
     // Re-derive this user's exact remaining/total for the message body —
     // fetched once above per row, kept alongside eligibleUserIds would need
     // a map; simplest to just look it up again from `rows`.
-    const stateRow = rows!.find((r) => r.user_id === userId);
+    const stateRow = rows!.find((r: { user_id: string }) => r.user_id === userId);
     const { total, remaining } = dailyQuestsRemaining((stateRow?.state ?? {}) as GameStateShape);
 
     const payload = JSON.stringify({
@@ -180,6 +201,12 @@ Deno.serve(async (_req) => {
           subscriptionsRemoved++;
         } else {
           console.warn("push send failed", sub.endpoint, e);
+          // Only the push service's own hostname (e.g. fcm.googleapis.com)
+          // goes to Sentry, not the full endpoint — that URL's path is a
+          // unique-per-device subscription token, closer to a device
+          // identifier than a technical detail.
+          const origin = safeOrigin(sub.endpoint);
+          await captureAndFlush(e, { stage: "push_send", pushServiceOrigin: origin });
         }
       }
     }
@@ -195,4 +222,16 @@ Deno.serve(async (_req) => {
     }),
     { headers: { "content-type": "application/json" } },
   );
-});
+}
+
+/** Just the origin (e.g. "https://fcm.googleapis.com") of a push endpoint —
+ * the full URL's path is a unique per-device subscription token, closer to
+ * a device identifier than a technical detail, so only the push service's
+ * hostname goes to Sentry. */
+function safeOrigin(endpoint: string): string {
+  try {
+    return new URL(endpoint).origin;
+  } catch {
+    return "(unparseable endpoint)";
+  }
+}

@@ -17,6 +17,9 @@
 // runs each recognized name through the normal search step — this function
 // never invents or reports nutrition numbers itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { initEdgeSentry, captureAndFlush } from "../_shared/sentry.ts";
+
+initEdgeSentry("parse-meal-photo");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -139,7 +142,7 @@ Deno.serve(async (req) => {
     p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
   });
   if (rateLimitError) {
-    console.warn("parse-meal-photo: rate limit check failed", rateLimitError);
+    await captureAndFlush(new Error(rateLimitError.message), { stage: "rate_limit_check" });
   } else if (withinLimit === false) {
     return new Response(
       JSON.stringify({
@@ -223,6 +226,12 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       console.warn("Claude API error", res.status, await res.text());
+      // Only the HTTP status goes to Sentry — never the response body, and
+      // definitely never `image` (a photo of the user's food).
+      await captureAndFlush(new Error(`Claude API error ${res.status}`), {
+        stage: "claude_api_call",
+        status: res.status,
+      });
       return new Response(JSON.stringify({ error: "Claude API request failed" }), {
         status: 502,
         headers: JSON_HEADERS,
@@ -269,7 +278,9 @@ Deno.serve(async (req) => {
       headers: JSON_HEADERS,
     });
   } catch (e) {
-    console.error("parse-meal-photo failed", e);
+    // Never includes `image` (a photo of the user's food) — just the
+    // exception itself and a stage label.
+    await captureAndFlush(e, { stage: "handler" });
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: JSON_HEADERS,
